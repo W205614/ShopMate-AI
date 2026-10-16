@@ -25,6 +25,7 @@ async function capture(path, name, fullPage = true) {
   await page.screenshot({ path: destination + name + ".png", fullPage });
 }
 await capture("/", "storefront-desktop");
+await page.screenshot({ path: destination + "storefront-desktop-fold.jpg", quality: 85, fullPage: false });
 await page.setViewportSize({ width: 768, height: 1024 });
 await capture("/", "storefront-tablet");
 await page.setViewportSize({ width: 390, height: 844 });

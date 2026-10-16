@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { ArrowUpRight, ArrowRight } from 'lucide-vue-next'
-import { useShop } from '../../stores/shop'
-import ProductCard from '../../components/shop/ProductCard.vue'
+import { computed, ref } from "vue";
+import { ArrowUpRight, ArrowRight } from "lucide-vue-next";
+import { useShop } from "../../stores/shop";
+import ProductCard from "../../components/shop/ProductCard.vue";
 const shop = useShop(),
-  need = ref(''),
+  need = ref(""),
   submitted = ref(false),
-  hovered = ref('')
-const products = computed(() => shop.db.products.filter((p) => p.active))
-const sloganLines = computed(() => shop.db.settings.slogan.replace(/[。]$/, '').split('，'))
+  hovered = ref("");
+const products = computed(() => shop.db.products.filter((p) => p.active));
 const picks = computed(() => {
-  const q = need.value.trim().toLowerCase()
-  if (!q) return products.value.filter((p) => p.featured).slice(0, 4)
-  const words = q.split(/[\s，、,]+/)
+  const q = need.value.trim().toLowerCase();
+  if (!q) return products.value.filter((p) => p.featured).slice(0, 4);
+  const words = q.split(/[\s，、,]+/);
   return products.value
     .filter((p) =>
       words.some((w) =>
@@ -21,32 +20,45 @@ const picks = computed(() => {
           .includes(w),
       ),
     )
-    .slice(0, 4)
-})
+    .slice(0, 4);
+});
 const preview = computed(() =>
   products.value.find((p) => p.id === hovered.value),
-)
+);
 </script>
 <template>
   <div class="home">
     <section class="catalogue-intro">
       <div class="home-title">
-        <h1>{{ sloganLines[0] }}<template v-if="sloganLines.length > 1"><br />{{ sloganLines.slice(1).join('，') }}</template></h1>
-        <p>SHOPMATE<br /><span>你的日常购物伙伴</span></p>
+        <div class="home-intro-copy">
+          <h1>{{ shop.db.settings.slogan.replace(/。$/, "") }}</h1>
+          <p>日常所需，认真挑选。数码、家居、穿搭与更多。</p>
+        </div>
+        <RouterLink to="/support" class="home-help"
+          >选购有疑问？<span>问购物伙伴 <ArrowUpRight :size="18" /></span
+        ></RouterLink>
       </div>
-      <div class="intro-top">
-        <p>日常所需，认真挑选。<br />数码、家居、穿搭与更多。</p>
-        <p>不确定怎么选？<br />从一个需求开始。</p>
+      <nav class="home-departments" aria-label="首页快捷分类">
+        <RouterLink
+          v-for="category in [...shop.db.categories].sort(
+            (a, b) => a.sort - b.sort,
+          )"
+          :key="category.id"
+          :to="{ path: '/products', query: { category: category.id } }"
+          >{{ category.name }}<ArrowUpRight :size="16"
+        /></RouterLink>
+      </nav>
+      <p class="catalogue-demo">{{ shop.db.settings.notice }}</p>
+      <div class="sheet-heading">
+        <span
+          >一眼看完，慢慢挑选
+          <small class="sheet-preview">{{
+            preview?.subtitle ?? `${products.length} 款演示商品 · 六种日常生活`
+          }}</small></span
+        >
         <RouterLink to="/products" class="button home-primary"
           >浏览全部商品 <ArrowUpRight :size="18"
         /></RouterLink>
-      </div>
-      <p class="catalogue-demo">{{ shop.db.settings.notice }}</p>
-      <div class="sheet-heading">
-        <span>一眼看完，慢慢挑选</span
-        ><span>{{
-          preview?.subtitle ?? `${products.length} 款演示商品 · 六种日常生活`
-        }}</span>
       </div>
       <div class="contact-sheet" @mouseleave="hovered = ''">
         <RouterLink

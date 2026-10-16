@@ -4,7 +4,7 @@
 
 **当前版本是纯前端演示。登录、支付、物流、退款、客服回复均为模拟；没有真实模型、业务服务器或数据库。** 商品、规格、图片、价格和经营数据只用于体验交互，不能据此进行真实交易。
 
-![商城首页](docs/screenshots/storefront-desktop.png)
+![商城首页](docs/screenshots/storefront-desktop-fold.jpg)
 
 ![运营管理台](docs/screenshots/admin-desktop.png)
 

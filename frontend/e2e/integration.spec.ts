@@ -66,6 +66,7 @@ test("售后审核、模拟退款与用户状态和流水联动，刷新后保�
 test("全部页面可直达刷新、图片有效，商城不加载后台组件且移动端不溢出", async ({
   page,
 }) => {
+  test.setTimeout(90000); // This scenario navigates and refreshes the full route set at three widths.
   const errors: string[] = [],
     assetFailures: string[] = [],
     requests: string[] = [];

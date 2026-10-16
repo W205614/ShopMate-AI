@@ -21,11 +21,8 @@ onErrorCaptured((cause) => {
     <button @click="error = ''">重试</button
     ><a href="/admin/settings">前往演示设置</a>
   </div>
-  <RouterView v-else v-slot="{ Component }"
-    ><Suspense
-      ><component :is="Component" /><template #fallback
-        ><p class="page-loading" role="status">正在准备页面…</p></template
-      ></Suspense
-    ></RouterView
-  >
+  <RouterView v-else v-slot="{ Component }">
+    <component :is="Component" v-if="Component" />
+    <p v-else class="page-loading" role="status">正在准备页面…</p>
+  </RouterView>
 </template>

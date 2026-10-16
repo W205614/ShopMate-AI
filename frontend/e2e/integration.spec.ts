@@ -70,6 +70,9 @@ test("全部页面可直达刷新、图片有效，商城不加载后台组件�
     assetFailures: string[] = [],
     requests: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (message) => {
+    if (message.type() === "warning" && message.text().includes("slots expect a single root node")) errors.push(message.text());
+  });
   page.on("request", (request) => requests.push(request.url()));
   page.on("response", (response) => {
     if (

@@ -1,0 +1,32 @@
+{
+  "url": "http://127.0.0.1:18086",
+  "date": "2026-10-16",
+  "widths": [
+    1440,
+    768,
+    390
+  ],
+  "motion": [
+    {
+      "width": 1440,
+      "elements": 24
+    },
+    {
+      "width": 768,
+      "elements": 24
+    },
+    {
+      "width": 390,
+      "elements": 24
+    }
+  ],
+  "findings": [
+    {
+      "level": "WARN",
+      "id": "no-footage",
+      "width": 1440,
+      "message": "No video anywhere on the page.",
+      "fix": "Look for one honest clip with scripts/assets.mjs --video (the place, the material, the process) and use it as a muted loop with a poster frame. Defend its absence only if no clip fits the subject."
+    }
+  ]
+}

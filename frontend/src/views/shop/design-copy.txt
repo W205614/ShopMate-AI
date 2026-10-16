@@ -1,0 +1,10 @@
+ShopMate-AI storefront copy deck
+Audience: Chinese shoppers exploring a department store demonstration.
+Primary claim: Find products and answers together. Proof: 23 active products shown as a dense contact sheet, with contextual product/order consultation.
+Section argument: catalogue shows range → category index narrows the field → rule recommendation returns matching real seed products → featured products expose price and stock → support carries context.
+Hero: 好物与答案，一起找到. Supporting: 日常所需，认真挑选。数码、家居、穿搭与更多。
+Primary action: 浏览全部商品.
+Idea: ShopMate 的购物伙伴成为连接商品目录与咨询内容的线索。
+Live thing: 说出需求，查看规则匹配推荐。Uses actual seeded product names, descriptions, and category terms. Ordinary product links remain available.
+Direction: contact-sheet, seed 20261016. White, ink, biro blue. Dense edge-to-edge product sheet with compact catalogue captions. Functional commerce forms and standard product grids retain their UI conventions.
+Sample content: All seed product names, prices, stock, shipping policy, addresses, orders and FAQ replies are demonstration content. No fabricated ratings, customers, testimonials, sales claims or real payment UI.

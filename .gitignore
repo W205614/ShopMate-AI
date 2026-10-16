@@ -3,6 +3,7 @@ frontend/dist/
 frontend/test-results/
 frontend/playwright-report/
 .taste-skill/inspect/
+.taste-skill/page-audit/
 .taste-skill/assets/
 .taste-skill/*.png
 .env

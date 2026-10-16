@@ -149,7 +149,7 @@ async function send(value?: string) {
           还没有会话，从一个问题开始。
         </p>
       </aside>
-      <section class="chat-panel">
+      <section class="chat-panel" :class="{ 'has-conversation': !!conversation }">
         <header class="chat-header">
           <div>
             <h2>{{ conversation?.title ?? '今天想了解什么？' }}</h2>

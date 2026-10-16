@@ -1,5 +1,5 @@
 :root {
-  font-family: "Source Serif 4", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--body-font);
   color: #111;
   background: #fff;
   font-synthesis: none;
@@ -15,10 +15,16 @@
   --step-small: 14px;
   --step-body: 16px;
   --step-lead: 24px;
-  --step-head: clamp(28px, 3vw, 42px);
+  --step-head: var(--ui-page-title);
+  --ui-page-title: 32px;
+  --ui-section-title: 22px;
+  --ui-body: 16px;
+  --ui-small: 14px;
+  --ui-page-gutter: 28px;
+  --ui-section-gap: 32px;
   --display-font:
     "Libre Franklin", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --body-font: "Source Serif 4", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --body-font: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 16px;
   line-height: 1.6;
 }
@@ -84,7 +90,7 @@ p {
 }
 .page-loading,
 .app-failure {
-  padding: 10vh 24px;
+  padding: 64px var(--ui-page-gutter);
   max-width: 720px;
   margin: auto;
 }
@@ -105,23 +111,25 @@ p {
 }
 .auth-story {
   background: var(--surface);
-  padding: 48px;
+  padding: 40px clamp(28px, 4vw, 64px);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 32px;
   overflow: hidden;
 }
 .auth-logo {
-  font: 700 clamp(30px, 5vw, 76px)/1 var(--display-font);
+  font: 700 32px/1.2 var(--display-font);
   letter-spacing: -0.05em;
 }
 .auth-story h1 {
-  font-size: clamp(32px, 4vw, 60px);
-  max-width: 10em;
-  margin: 32px 0;
+  font-size: var(--ui-page-title);
+  max-width: 18em;
+  margin: 0 0 24px;
+  line-height: 1.4;
 }
 .auth-story img {
-  width: 48%;
+  width: calc(50% - 6px);
   aspect-ratio: 1;
   object-fit: cover;
 }
@@ -129,9 +137,7 @@ p {
   display: flex;
   gap: 12px;
   align-items: flex-end;
-}
-.auth-pictures img:last-child {
-  transform: translateY(40px);
+  max-width: 520px;
 }
 .auth-form-area {
   display: flex;
@@ -143,19 +149,19 @@ p {
   width: min(100%, 400px);
 }
 .auth-form h2 {
-  font-size: 32px;
+  font-size: 28px;
   margin: 0 0 12px;
 }
 .auth-form label {
   display: grid;
   gap: 8px;
-  margin: 22px 0;
+  margin: 20px 0;
 }
 .auth-form input {
   width: 100%;
   border: 0;
   background: var(--surface);
-  padding: 14px 16px;
+  padding: 12px 16px;
   border-radius: 0;
 }
 .auth-submit {
@@ -166,9 +172,9 @@ p {
   border: 0;
 }
 .auth-demo {
-  margin-top: 28px;
+  margin-top: 24px;
   background: var(--surface);
-  padding: 20px;
+  padding: 16px;
   font-size: 14px;
 }
 .auth-demo button {
@@ -176,6 +182,13 @@ p {
   border: 0;
   padding: 8px 12px;
   margin: 8px 8px 0 0;
+  min-height: 44px;
+}
+.auth-demo p {
+  margin-bottom: 0;
+}
+.auth-demo .demo-note {
+  margin-top: 12px;
 }
 .auth-links {
   display: flex;
@@ -188,13 +201,23 @@ p {
   color: #a02222;
   min-height: 1.5em;
 }
+.auth-error:empty {
+  display: none;
+}
 .credits-page {
   max-width: 1200px;
-  margin: 48px auto;
-  padding: 0 24px;
+  margin: 32px auto;
+  padding: 0 var(--ui-page-gutter);
 }
 .credits-page h1 {
-  font-size: 36px;
+  font-size: var(--ui-page-title);
+}
+.credits-page h2 {
+  font-size: var(--ui-section-title);
+  margin-top: var(--ui-section-gap);
+}
+.credits-page > p {
+  max-width: 75ch;
 }
 .credits-list {
   display: grid;
@@ -223,6 +246,10 @@ p {
   padding: 24px;
   text-align: center;
 }
+.status-page h1,
+.app-failure h1 {
+  font-size: var(--ui-page-title);
+}
 .status-page a {
   padding: 14px;
   background: var(--accent);
@@ -232,26 +259,37 @@ p {
   color: var(--muted);
   font-size: 14px;
 }
+@media (max-width: 800px) {
+  :root {
+    --ui-page-title: 24px;
+    --ui-section-title: 20px;
+    --ui-page-gutter: 20px;
+    --ui-section-gap: 24px;
+  }
+}
 @media (max-width: 767px) {
   .auth-page {
     grid-template-columns: 1fr;
+    align-content: start;
   }
   .auth-story {
-    padding: 24px;
-    min-height: 180px;
+    padding: 24px var(--ui-page-gutter);
+    gap: 16px;
   }
   .auth-story h1 {
-    font-size: 28px;
-    margin: 24px 0 8px;
+    margin: 0;
   }
   .auth-story .auth-pictures {
     display: none;
   }
   .auth-form-area {
-    padding: 36px 24px;
+    padding: 28px var(--ui-page-gutter);
+  }
+  .auth-form h2 {
+    font-size: var(--ui-page-title);
   }
   .auth-logo {
-    font-size: 32px;
+    font-size: 28px;
   }
   .credits-list {
     grid-template-columns: 1fr;

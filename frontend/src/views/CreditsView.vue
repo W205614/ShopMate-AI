@@ -41,8 +41,11 @@ import { assetCredits, assetLicenseLinks } from "../domain/asset-manifest";
       </article>
     </div>
     <p>
-      本地字体：Libre Franklin、Source Serif 4，均按 SIL Open Font License
-      分发；中文使用设备系统字体。<a href="/licenses/libre-franklin.txt">Libre Franklin 许可</a> · <a href="/licenses/source-serif-4.txt">Source Serif 4 许可</a>
+      本地品牌标题字体：Libre Franklin，按 SIL Open Font License
+      分发；正文与中文使用设备系统无衬线字体。<a
+        href="/licenses/libre-franklin.txt"
+        >Libre Franklin 许可</a
+      >
     </p>
   </main>
 </template>

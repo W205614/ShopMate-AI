@@ -95,6 +95,12 @@ function download() {
     <div class="admin-toolbar">
       <el-date-picker
         v-model="range"
+        popper-class="admin-date-range"
+        :popper-options="{
+          modifiers: [
+            { name: 'preventOverflow', options: { altAxis: true, tether: false, padding: 12 } },
+          ],
+        }"
         type="daterange"
         value-format="YYYY-MM-DD"
         range-separator="至"

@@ -98,9 +98,13 @@ function submit() {
       </p>
     </footer>
     <RouterLink
-      v-if="route.path !== '/support' && route.path !== '/'"
+      v-if="
+        !['/', '/support', '/cart', '/checkout'].includes(route.path) &&
+        !route.path.endsWith('/pay')
+      "
       to="/support"
       class="support-float"
+      aria-label="问问客服"
       ><MessageCircle :size="21" /><span>问问客服</span></RouterLink
     >
   </div>

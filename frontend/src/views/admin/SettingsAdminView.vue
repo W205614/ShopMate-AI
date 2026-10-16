@@ -46,7 +46,7 @@ async function reset() {
     </div>
     <el-tag effect="plain">数据版本 {{ shop.db.version }}</el-tag>
   </div>
-  <section class="admin-panel">
+  <section class="admin-panel admin-settings-panel">
     <h2>商城基础信息</h2>
     <el-form
       class="admin-settings-form"
@@ -67,7 +67,7 @@ async function reset() {
       ></el-form
     >
   </section>
-  <section class="admin-panel">
+  <section class="admin-panel admin-settings-panel">
     <h2>关于这个演示</h2>
     <dl class="admin-detail-list">
       <dt>数据保存</dt>
@@ -91,7 +91,7 @@ async function reset() {
       <dd>不支持跨浏览器或跨设备同步。更换访问域名或端口也会使用独立数据。</dd>
     </dl>
   </section>
-  <section class="admin-panel">
+  <section class="admin-panel admin-settings-panel">
     <h2>恢复初始数据</h2>
     <p class="admin-muted" style="margin-bottom: 20px">
       用于重新体验完整流程。恢复后，当前浏览器的业务修改将被初始演示数据替换。

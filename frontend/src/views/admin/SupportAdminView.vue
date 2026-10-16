@@ -76,7 +76,7 @@ async function close() {
     </div>
     <el-tag effect="plain">同一浏览器多标签页联动</el-tag>
   </div>
-  <div class="admin-chat">
+  <div class="admin-chat" :class="{ 'is-empty': !selected }">
     <aside class="admin-chat-list">
       <el-select
         v-model="filter"
@@ -179,7 +179,7 @@ async function close() {
         </div>
         <p v-else-if="selected.status === 'bot'" class="admin-note">此会话由模拟客服接待。用户转人工后，可在此回复。</p>
         <p v-else class="admin-note">会话已关闭，历史消息已保留。</p></template
-      ><el-empty v-else description="选择会话开始处理" />
+      ><el-empty v-else description="选择会话开始处理" :image-size="80" />
     </section>
   </div>
 </template>

@@ -306,6 +306,9 @@
 .admin-sku-row > * {
   min-width: 0;
 }
+.admin-action-message {
+  pointer-events: none;
+}
 .admin-app input[type="file"] {
   max-width: 100%;
   font-size: 13px;

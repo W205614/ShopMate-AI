@@ -254,7 +254,21 @@ export const methods = {
   deleteCategory: { role: "admin", args: z.tuple([id]) },
   adjustStock: {
     role: "admin",
-    args: z.tuple([id, id, integer, integer.nonnegative(), text(200)]),
+    args: z.tuple([
+      id,
+      id,
+      integer,
+      integer.nonnegative(),
+      text(200),
+      z
+        .object({
+          requestId: id,
+          mode: z.enum(["delta", "count"]).optional(),
+          expectedStock: integer.nonnegative().optional(),
+        })
+        .strict()
+        .optional(),
+    ]),
   },
   shipOrder: { role: "admin", args: z.tuple([id, text(60), text(80)]) },
   processAfterSale: {

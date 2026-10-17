@@ -1,6 +1,7 @@
 import type { Database, Role, Session } from "../domain/types";
 const emptyDatabase = (): Database => ({
-  version: 2,
+  version: 3,
+  inventoryRequests: [],
   coupons: [],
   couponClaims: [],
   reviews: [],

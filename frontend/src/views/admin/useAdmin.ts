@@ -13,12 +13,16 @@ export function useAdminAction() {
     pending.value = true;
     try {
       await action();
-      ElMessage.success(success);
+      ElMessage.success({
+        message: success,
+        customClass: "admin-action-message",
+      });
       return true;
     } catch (error) {
-      ElMessage.error(
-        error instanceof Error ? error.message : "操作失败，请重试",
-      );
+      ElMessage.error({
+        message: error instanceof Error ? error.message : "操作失败，请重试",
+        customClass: "admin-action-message",
+      });
       return false;
     } finally {
       pending.value = false;

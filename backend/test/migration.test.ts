@@ -21,6 +21,7 @@ function legacyState(): Database {
     "reviews",
     "checkoutQuotes",
     "orderRequests",
+    "inventoryRequests",
   ])
     Reflect.deleteProperty(db, field);
   for (const order of db.orders) {
@@ -40,9 +41,55 @@ function legacyState(): Database {
 }
 
 describe("v1 业务状态升级", () => {
+  it("v2 仅增量增加库存请求集合，不改旧业务，重启及恢复稳定", () => {
+    const directory = mkdtempSync(join(tmpdir(), "shopmate-stock-migration-"));
+    const path = join(directory, "v2.sqlite");
+    let sql = openDatabase(path);
+    try {
+      const old = createSeed();
+      old.version = 2;
+      Reflect.deleteProperty(old, "inventoryRequests");
+      old.orders.find((o) => o.status === "pending")!.expiresAt =
+        "2026-10-01T00:00:00Z";
+      writeDatabase(sql, old);
+      sql
+        .prepare("INSERT INTO accounts VALUES (?, ?, ?, ?, ?, ?)")
+        .run("u1", "lin", "旧用户", "user", "kept-hash", 1000);
+      sql
+        .prepare("INSERT INTO sessions VALUES (?, ?, ?)")
+        .run("kept-token", "u1", Date.now() + 86400000);
+      sql.close();
+      copyFileSync(path, join(directory, "backup.sqlite"));
+      sql = openDatabase(path);
+      const migrated = readDatabase(sql);
+      expect(migrated).toEqual({ ...old, version: 3, inventoryRequests: [] });
+      expect(
+        sql.prepare("SELECT password_hash FROM accounts WHERE id='u1'").get(),
+      ).toMatchObject({ password_hash: "kept-hash" });
+      expect(
+        sql
+          .prepare(
+            "SELECT account_id FROM sessions WHERE token_hash='kept-token'",
+          )
+          .get(),
+      ).toMatchObject({ account_id: "u1" });
+      sql.close();
+      sql = openDatabase(path);
+      expect(readDatabase(sql)).toEqual(migrated);
+      const restored = openDatabase(join(directory, "backup.sqlite"));
+      try {
+        expect(readDatabase(restored)).toEqual(migrated);
+      } finally {
+        restored.close();
+      }
+    } finally {
+      sql.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it("拒绝未来版本状态，避免旧程序覆盖新结构", () => {
     const db = createSeed();
-    db.version = 3;
+    db.version = 4;
     const before = structuredClone(db);
     expect(() => migrateDatabase(db)).toThrow("版本高于");
     expect(db).toEqual(before);
@@ -65,7 +112,7 @@ describe("v1 业务状态升级", () => {
       const start = Date.now();
       sql = openDatabase(path);
       const migrated = readDatabase(sql);
-      expect(migrated.version).toBe(2);
+      expect(migrated.version).toBe(3);
       expect(migrated.orders.map((o) => o.total)).toEqual(
         legacy.orders.map((o) => o.total),
       );
@@ -157,6 +204,7 @@ describe("v1 业务状态升级", () => {
       db.reviews,
       db.checkoutQuotes,
       db.orderRequests,
+      db.inventoryRequests,
     ])
       expect(collection).toEqual([]);
     expect(db.products).not.toHaveLength(0);

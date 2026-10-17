@@ -12,6 +12,7 @@ import {
   move,
   ledger,
   now,
+  productSku,
 } from "./repository";
 
 export const catalogApi: Pick<
@@ -146,20 +147,85 @@ export const catalogApi: Pick<
       db.categories = db.categories.filter((c) => c.id !== categoryId);
     });
   },
-  async adjustStock(productId, skuId, delta, cost, reason) {
-    await transact((db) => {
-      admin();
+  async adjustStock(productId, skuId, quantity, cost, reason, options) {
+    return transact((db) => {
+      const adminId = admin().id;
+      const mode = options?.mode ?? "delta";
       requireThat(
-        Number.isSafeInteger(delta) &&
-          delta !== 0 &&
+        Number.isSafeInteger(quantity) &&
+          (mode === "count" ? quantity >= 0 : quantity !== 0) &&
           integer(cost) &&
-          text(reason, 200),
-        "请填写非零整数变动数量、有效采购金额及原因",
+          text(reason, 200) &&
+          ["delta", "count"].includes(mode) &&
+          (!options || text(options.requestId, 100)) &&
+          (options?.expectedStock === undefined ||
+            integer(options.expectedStock)),
+        "请填写有效库存数量、采购金额、请求标识及原因",
       );
+      requireThat(
+        mode !== "count" ||
+          (integer(options?.expectedStock as number) && cost === 0),
+        "盘点必须提交读取时库存，且不能登记采购支出",
+      );
+      const fingerprint = JSON.stringify({
+        productId,
+        skuId,
+        quantity,
+        cost,
+        reason: reason.trim(),
+        mode,
+        expectedStock: options?.expectedStock ?? null,
+      });
+      const at = now();
+      db.inventoryRequests = db.inventoryRequests.filter(
+        (r) => Date.parse(r.createdAt) + 86400000 > Date.parse(at),
+      );
+      const previous =
+        options &&
+        db.inventoryRequests.find(
+          (r) => r.adminId === adminId && r.requestId === options.requestId,
+        );
+      if (previous) {
+        if (previous.fingerprint !== fingerprint)
+          throw new HttpError(
+            409,
+            "请求标识已用于其他库存操作，请核对变动记录",
+          );
+        return clone(previous.result);
+      }
+      const { sku } = productSku(db, productId, skuId),
+        beforeStock = sku.stock;
+      if (
+        options?.expectedStock !== undefined &&
+        beforeStock !== options.expectedStock
+      )
+        throw new HttpError(
+          409,
+          "库存已变化，请加载最新库存，重新核对实盘数量后提交",
+        );
+      const delta = mode === "count" ? quantity - beforeStock : quantity;
       requireThat(delta > 0 || cost === 0, "库存减少不能记录采购支出");
-      move(db, productId, skuId, delta, reason.trim());
-      if (delta > 0 && cost > 0)
-        ledger(db, "purchase", cost, skuId, reason.trim());
+      const movement = move(db, productId, skuId, delta, reason.trim());
+      Object.assign(movement, { beforeStock, afterStock: sku.stock, mode });
+      if (mode === "delta" && delta > 0 && cost > 0)
+        Object.assign(ledger(db, "purchase", cost, skuId, reason.trim()), {
+          inventoryMovementId: movement.id,
+        });
+      const result = {
+        movementId: movement.id,
+        beforeStock,
+        afterStock: sku.stock,
+        delta,
+      };
+      if (options)
+        db.inventoryRequests.push({
+          adminId,
+          requestId: options.requestId,
+          fingerprint,
+          result: clone(result),
+          createdAt: at,
+        });
+      return result;
     });
   },
   async saveSettings(input, baseline) {

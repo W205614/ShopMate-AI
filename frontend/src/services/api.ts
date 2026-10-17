@@ -1,5 +1,5 @@
 import type { ShopApi } from "../domain/api";
-import type { Role, Session } from "../domain/types";
+import type { Role, Session, StockAdjustmentResult } from "../domain/types";
 import {
   request,
   confirmSession,
@@ -27,12 +27,21 @@ export function hasPasswordChangeNotice() {
   return passwordChanged;
 }
 
-async function action<T>(method: string, args: unknown[]): Promise<T> {
+async function action<T>(
+  method: string,
+  args: unknown[],
+  validate?: (value: T) => boolean,
+): Promise<T> {
   requireFreshState();
   const response = await request<{ result: T }>(`/api/actions/${method}`, {
     args,
   });
-  if (!response || !Object.hasOwn(response, "result")) throw unknownMutation();
+  if (
+    !response ||
+    !Object.hasOwn(response, "result") ||
+    (validate && !validate(response.result))
+  )
+    throw unknownMutation();
   await synchronizeConfirmedMutation();
   return response.result;
 }
@@ -149,7 +158,22 @@ export const api: ShopApi = {
   toggleProduct: (...args) => action("toggleProduct", args),
   saveCategory: (...args) => action("saveCategory", args),
   deleteCategory: (...args) => action("deleteCategory", args),
-  adjustStock: (...args) => action("adjustStock", args),
+  adjustStock: (...args) =>
+    action<StockAdjustmentResult>(
+      "adjustStock",
+      args,
+      (result) =>
+        !!result &&
+        typeof result.movementId === "string" &&
+        result.movementId.length > 0 &&
+        result.movementId.length <= 100 &&
+        [result.beforeStock, result.afterStock, result.delta].every(
+          Number.isSafeInteger,
+        ) &&
+        result.beforeStock >= 0 &&
+        result.afterStock >= 0 &&
+        result.beforeStock + result.delta === result.afterStock,
+    ),
   shipOrder: (...args) => action("shipOrder", args),
   processAfterSale: (...args) => action("processAfterSale", args),
   createConversation: (...args) => action("createConversation", args),

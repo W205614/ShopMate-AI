@@ -363,7 +363,8 @@ export function createSeed(): Database {
     };
   });
   return {
-    version: 2,
+    version: 3,
+    inventoryRequests: [],
     coupons: [],
     couponClaims: [],
     reviews: [],

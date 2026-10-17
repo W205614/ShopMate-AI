@@ -10,6 +10,8 @@ import type {
   Role,
   Session,
   Settings,
+  StockAdjustmentOptions,
+  StockAdjustmentResult,
 } from "./types";
 
 export interface ShopApi {
@@ -80,7 +82,8 @@ export interface ShopApi {
     delta: number,
     cost: number,
     reason: string,
-  ): Promise<void>;
+    options?: StockAdjustmentOptions,
+  ): Promise<StockAdjustmentResult>;
   shipOrder(id: string, carrier: string, tracking: string): Promise<void>;
   processAfterSale(
     id: string,

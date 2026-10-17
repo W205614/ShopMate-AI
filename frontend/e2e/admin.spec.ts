@@ -61,7 +61,9 @@ test("补货增加指定 SKU 库存并写入采购流水，导出的是筛选后
   });
   await login(page);
   await page.goto("/admin/inventory");
-  await page.getByPlaceholder("搜索商品或规格").fill("明度 桌面阅读灯");
+  await page
+    .getByPlaceholder("搜索商品、规格或变动编号 / 原因")
+    .fill("明度 桌面阅读灯");
   const row = page.locator(".el-table__body-wrapper tbody tr").first();
   const before = Number(
     (await row.locator("td").nth(2).innerText()).replace(/\D/g, ""),
@@ -69,7 +71,9 @@ test("补货增加指定 SKU 库存并写入采购流水，导出的是筛选后
   await row.getByRole("button", { name: "补货 / 调整" }).click();
   const dialog = page.getByRole("dialog", { name: "调整库存" });
   await dialog.getByRole("spinbutton").nth(0).fill("7");
-  await dialog.getByRole("spinbutton").nth(1).fill("12345");
+  await dialog
+    .getByLabel("本次采购总支出（元，0 表示无采购成本）", { exact: true })
+    .fill("123.45");
   await dialog
     .getByPlaceholder("例如：到货入库 / 盘点修正")
     .fill("验收补货采购");

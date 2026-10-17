@@ -42,13 +42,18 @@ export function expireOrders(db: Database, at = now()) {
   const requests = db.orderRequests.filter(
     (r) => Date.parse(r.createdAt) + 86400000 > Date.parse(at),
   );
+  const inventoryRequests = db.inventoryRequests.filter(
+    (r) => Date.parse(r.createdAt) + 86400000 > Date.parse(at),
+  );
   if (
     quotes.length !== db.checkoutQuotes.length ||
-    requests.length !== db.orderRequests.length
+    requests.length !== db.orderRequests.length ||
+    inventoryRequests.length !== db.inventoryRequests.length
   )
     changed = true;
   db.checkoutQuotes = quotes;
   db.orderRequests = requests;
+  db.inventoryRequests = inventoryRequests;
   return changed;
 }
 export function allocateDiscount(items: OrderItem[], discount: number) {

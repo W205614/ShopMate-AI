@@ -42,6 +42,7 @@ export function visibleDatabase(
     reviews: db.reviews.filter((r) => r.userId === uid),
     checkoutQuotes: db.checkoutQuotes.filter((q) => q.userId === uid),
     orderRequests: [],
+    inventoryRequests: [],
     users: db.users.filter((u) => u.id === uid),
     carts: db.carts.filter((c) => c.userId === uid),
     addresses: db.addresses.filter((a) => a.userId === uid),

@@ -131,6 +131,27 @@ export interface InventoryMovement {
   delta: number;
   reason: string;
   createdAt: string;
+  beforeStock?: number;
+  afterStock?: number;
+  mode?: "delta" | "count";
+}
+export interface StockAdjustmentOptions {
+  requestId: string;
+  mode?: "delta" | "count";
+  expectedStock?: number;
+}
+export interface StockAdjustmentResult {
+  movementId: string;
+  beforeStock: number;
+  afterStock: number;
+  delta: number;
+}
+export interface InventoryRequest {
+  adminId: string;
+  requestId: string;
+  fingerprint: string;
+  result: StockAdjustmentResult;
+  createdAt: string;
 }
 export interface LedgerEntry {
   id: string;
@@ -139,6 +160,7 @@ export interface LedgerEntry {
   reference: string;
   note: string;
   createdAt: string;
+  inventoryMovementId?: string;
 }
 export interface Message {
   id: string;
@@ -253,6 +275,7 @@ export interface ReorderResult {
   skipped: string[];
 }
 export interface Database {
+  inventoryRequests: InventoryRequest[];
   coupons: Coupon[];
   couponClaims: CouponClaim[];
   reviews: Review[];

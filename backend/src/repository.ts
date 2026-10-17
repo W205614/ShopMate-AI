@@ -34,7 +34,9 @@ export function userId() {
   return session.id;
 }
 export function admin() {
-  if (!context.getStore()?.admin) throw new HttpError(401, "请先登录管理账号");
+  const session = context.getStore()?.admin;
+  if (!session) throw new HttpError(401, "请先登录管理账号");
+  return session;
 }
 export function getDatabase() {
   return readDatabase(context.getStore()!.sql);
@@ -81,14 +83,16 @@ export function move(
   const { sku } = productSku(db, productId, skuId);
   requireThat(integer(sku.stock + delta), "库存不足或库存数量无效");
   sku.stock += delta;
-  db.inventory.unshift({
+  const movement = {
     id: id("stock-"),
     productId,
     skuId,
     delta,
     reason,
     createdAt: now(),
-  });
+  };
+  db.inventory.unshift(movement);
+  return movement;
 }
 export function ledger(
   db: Database,
@@ -98,12 +102,14 @@ export function ledger(
   note: string,
 ) {
   requireThat(integer(amount), "金额必须是非负整数分");
-  db.ledger.unshift({
+  const entry = {
     id: id("ledger-"),
     type,
     amount,
     reference,
     note,
     createdAt: now(),
-  });
+  };
+  db.ledger.unshift(entry);
+  return entry;
 }

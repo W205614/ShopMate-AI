@@ -1,4 +1,5 @@
 import type { ShopApi } from "../../shared/domain/api";
+import { validateImages } from "../../shared/domain/images";
 import { HttpError } from "./auth";
 import {
   transact,
@@ -36,15 +37,11 @@ export const catalogApi: Pick<
         db.categories.some((c) => c.id === input.categoryId),
         "请选择有效分类",
       );
-      requireThat(
-        input.images.length > 0 &&
-          input.images.every(
-            (src) =>
-              /^\/images\/[\w.-]+$/.test(src) ||
-              /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src),
-          ),
-        "图片必须为项目 /images/ 路径或上传的 PNG/JPEG/WebP 图片",
-      );
+      try {
+        validateImages(input.images);
+      } catch (error) {
+        throw new HttpError(400, (error as Error).message);
+      }
       requireThat(
         input.skus.length > 0 &&
           input.skus.every(
@@ -109,6 +106,11 @@ export const catalogApi: Pick<
   async saveCategory(input) {
     await transact((db) => {
       admin();
+      try {
+        validateImages([input.image], 1);
+      } catch (error) {
+        throw new HttpError(400, (error as Error).message);
+      }
       requireThat(
         text(input.name, 30) &&
           text(input.description, 200) &&

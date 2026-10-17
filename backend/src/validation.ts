@@ -1,4 +1,19 @@
 import { z } from "zod";
+import {
+  imageBytes,
+  validateImages,
+  IMAGE_MAX_ENCODED_LENGTH,
+} from "../../shared/domain/images";
+const image = z
+  .string()
+  .max(IMAGE_MAX_ENCODED_LENGTH)
+  .superRefine((value, ctx) => {
+    try {
+      imageBytes(value);
+    } catch (error) {
+      ctx.addIssue({ code: "custom", message: (error as Error).message });
+    }
+  });
 export const roleSchema = z.enum(["user", "admin"]);
 export const usernameSchema = z
   .string()
@@ -60,7 +75,7 @@ const category = z
     id: id.optional(),
     name: text(30),
     description: text(200),
-    image: z.string().max(1000),
+    image,
     sort: integer.nonnegative(),
   })
   .strict();
@@ -72,7 +87,17 @@ const product = z
     description: text(3000),
     material: text(300),
     categoryId: id,
-    images: z.array(z.string().max(2_000_000)).min(1).max(12),
+    images: z
+      .array(z.string().max(IMAGE_MAX_ENCODED_LENGTH))
+      .min(1)
+      .max(12)
+      .superRefine((values, ctx) => {
+        try {
+          validateImages(values);
+        } catch (error) {
+          ctx.addIssue({ code: "custom", message: (error as Error).message });
+        }
+      }),
     skus: z
       .array(
         z

@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
-import { ElMessageBox, ElMessage } from "element-plus";
+import { computed, reactive, ref, watch } from "vue";
+import { ElMessageBox } from "element-plus";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import type { Product, ProductInput } from "../../domain/types";
 import { money } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
+import ImageEditor from "../../components/admin/ImageEditor.vue";
+import { validateDecodedImages } from "../../services/images";
+import { yuanToCents, centsToYuan } from "../../domain/amount";
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
   query = ref(""),
@@ -24,7 +27,8 @@ const form = reactive<ProductInput>({
     featured: false,
     material: "",
   }),
-  imageText = ref("");
+  priceInputs = ref<string[]>([]),
+  imageBusy = ref(false);
 const filtered = computed(() =>
   shop.db.products.filter(
     (p) =>
@@ -36,9 +40,18 @@ const filtered = computed(() =>
 const rows = computed(() =>
   filtered.value.slice((page.value - 1) * 10, page.value * 10),
 );
-const minPrice = (product: Product) => Math.min(...product.skus.map(s => s.price));
-const totalStock = (product: Product) => product.skus.reduce((total, sku) => total + sku.stock, 0);
+watch(
+  () => filtered.value.length,
+  (length) => {
+    page.value = Math.min(page.value, Math.max(1, Math.ceil(length / 10)));
+  },
+);
+const minPrice = (product: Product) =>
+  Math.min(...product.skus.map((s) => s.price));
+const totalStock = (product: Product) =>
+  product.skus.reduce((total, sku) => total + sku.stock, 0);
 function open(p?: Product) {
+  if (pending.value || imageBusy.value) return;
   Object.assign(
     form,
     p
@@ -56,66 +69,47 @@ function open(p?: Product) {
           material: "",
         },
   );
-  imageText.value = form.images.join("\n");
+  priceInputs.value = form.skus.map((s) => centsToYuan(s.price));
   dialog.value = true;
 }
 async function save() {
+  if (imageBusy.value) return;
   if (
-    !form.name.trim() ||
-    !form.subtitle.trim() ||
-    !form.material.trim() ||
-    !form.categoryId ||
-    !form.description.trim() ||
-    !imageText.value.trim() ||
-    !form.skus.length ||
-    form.skus.some(
-      (s) =>
-        !s.name.trim() ||
-        s.price < 1 ||
-        !Number.isInteger(s.price) ||
-        s.stock < 0 ||
-        !Number.isInteger(s.stock),
-    )
-  ) {
     await run(async () => {
-      throw Error(
-        "请完整填写商品名称、副标题、材质、分类、描述、图片和有效 SKU；价格以分填写，至少 1 分",
-      );
-    });
-    return;
-  }
-  const input = {
-    ...form,
-    images: imageText.value
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean),
-    skus: form.skus.map((s) => ({ ...s })),
-  };
-  if (await run(() => api.saveProduct(input), "商品已保存"))
+      if (
+        !form.name.trim() ||
+        !form.subtitle.trim() ||
+        !form.material.trim() ||
+        !form.categoryId ||
+        !form.description.trim() ||
+        !form.skus.length ||
+        form.skus.some(
+          (s) =>
+            !s.name.trim() || !Number.isSafeInteger(s.stock) || s.stock < 0,
+        )
+      )
+        throw new Error("请完整填写商品信息和有效规格库存");
+      const input = {
+        ...form,
+        images: [...form.images],
+        skus: form.skus.map((s, index) => ({
+          ...s,
+          price: yuanToCents(priceInputs.value[index] ?? ""),
+        })),
+      };
+      await validateDecodedImages(input.images);
+      await api.saveProduct(input);
+    }, "商品已保存")
+  )
     dialog.value = false;
 }
-async function upload(event: Event) {
-  const files = (event.target as HTMLInputElement).files;
-  if (!files) return;
-  for (const file of Array.from(files)) {
-    if (
-      !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
-      file.size > 2 * 1024 * 1024
-    ) {
-      ElMessage.error("请上传 2 MB 内的 PNG、JPEG 或 WebP 图片");
-      continue;
-    }
-    const value = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-    imageText.value = [imageText.value.trim(), value]
-      .filter(Boolean)
-      .join("\n");
-  }
+function addSku() {
+  form.skus.push({ id: "", name: "", price: 100, stock: 0 });
+  priceInputs.value.push("1.00");
+}
+function removeSku(index: number) {
+  form.skus.splice(index, 1);
+  priceInputs.value.splice(index, 1);
 }
 async function toggle(p: Product) {
   try {
@@ -136,7 +130,9 @@ async function toggle(p: Product) {
       <h1>商品管理</h1>
       <p>维护商品内容、规格与售价。</p>
     </div>
-    <el-button type="primary" @click="open()">新建商品</el-button>
+    <el-button type="primary" :disabled="pending || imageBusy" @click="open()"
+      >新建商品</el-button
+    >
   </div>
   <section class="admin-panel">
     <div class="admin-toolbar">
@@ -203,11 +199,17 @@ async function toggle(p: Product) {
         ></el-table-column
       ><el-table-column label="操作" width="150" fixed="right"
         ><template #default="{ row }"
-          ><el-button link type="primary" @click="open(row)">编辑</el-button
+          ><el-button
+            link
+            type="primary"
+            :disabled="pending || imageBusy"
+            @click="open(row)"
+            >编辑</el-button
           ><el-button
             link
             :type="row.active ? 'danger' : 'primary'"
-            :loading="pending" :disabled="busy"
+            :loading="pending"
+            :disabled="busy"
             @click="toggle(row)"
             >{{ row.active ? "下架" : "上架" }}</el-button
           ></template
@@ -228,7 +230,12 @@ async function toggle(p: Product) {
     :title="form.id ? '编辑商品' : '新建商品'"
     width="760px"
     :close-on-click-modal="false"
-    ><el-form label-position="top" @submit.prevent="save"
+    :close-on-press-escape="!pending && !imageBusy"
+    :show-close="!pending && !imageBusy"
+    ><el-form
+      label-position="top"
+      :disabled="busy || imageBusy"
+      @submit.prevent="save"
       ><div class="admin-form-grid">
         <el-form-item label="商品名称" required
           ><el-input v-model="form.name" maxlength="60" /></el-form-item
@@ -248,42 +255,32 @@ async function toggle(p: Product) {
             v-model="form.description"
             type="textarea"
             :rows="3" /></el-form-item
-        ><el-form-item
-          label="图片地址（每行一张，仅支持 /images/... 或上传图片）"
-          required
-          class="wide"
-          ><el-input v-model="imageText" type="textarea" :rows="2" /><input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            multiple
-            aria-label="上传商品图片"
-            style="margin-top: 12px"
-            @change="upload" />
-          <div style="margin-top: 12px">
-            <img
-              v-for="src in imageText.split('\n').filter(Boolean)"
-              :key="src"
-              class="admin-image-preview"
-              :src="src"
-              alt="商品图片预览"
-            /></div
-        ></el-form-item>
+        ><el-form-item label="商品图片" required class="wide"
+          ><ImageEditor
+            v-model="form.images"
+            label="商品图片"
+            :disabled="busy"
+            @busy="imageBusy = $event"
+        /></el-form-item>
       </div>
       <div class="admin-split-heading">
         <h2>规格与售价</h2>
-        <el-button
-          @click="form.skus.push({ id: '', name: '', price: 100, stock: 0 })"
+        <el-button :disabled="busy || imageBusy" @click="addSku"
           >新增 SKU</el-button
         >
       </div>
       <p class="admin-note">
-        价格以分填写（100 = ¥1.00）。现有库存通过库存管理调整，保留变动记录。
+        售价以元填写，最多两位小数；保存为整数分。现有库存通过库存管理调整，保留变动记录。
       </p>
       <div class="admin-sku-row" v-for="(sku, i) in form.skus" :key="i">
         <div><small>规格名称</small><el-input v-model="sku.name" /></div>
         <div>
-          <small>售价（分）</small
-          ><el-input-number v-model="sku.price" :min="1" :precision="0" />
+          <small>售价（元）</small
+          ><el-input
+            v-model="priceInputs[i]"
+            aria-label="售价（元）"
+            inputmode="decimal"
+          />
         </div>
         <div>
           <small>{{ sku.id ? "当前库存（只读）" : "初始库存" }}</small
@@ -298,8 +295,8 @@ async function toggle(p: Product) {
           type="danger"
           link
           style="margin-top: 27px"
-          :disabled="!!sku.id || form.skus.length === 1"
-          @click="form.skus.splice(i, 1)"
+          :disabled="busy || imageBusy || !!sku.id || form.skus.length === 1"
+          @click="removeSku(i)"
           >移除</el-button
         >
       </div>
@@ -310,8 +307,13 @@ async function toggle(p: Product) {
         ></el-form-item
       ></el-form
     ><template #footer
-      ><el-button @click="dialog = false">取消</el-button
-      ><el-button type="primary" :loading="pending" :disabled="busy" @click="save"
+      ><el-button :disabled="pending || imageBusy" @click="dialog = false"
+        >取消</el-button
+      ><el-button
+        type="primary"
+        :loading="pending"
+        :disabled="busy || imageBusy"
+        @click="save"
         >保存商品</el-button
       ></template
     ></el-dialog

@@ -39,6 +39,12 @@ test("部署后的公开目录可浏览筛选且不修改业务数据", async ({
         expected.filter((p) => p.skus.some((s) => s.stock > 0)).length,
       ),
     );
+    // A category can have the same count before/after filtering; wait for the
+    // asynchronous route guard to commit the URL before testing persistence.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("stock"))
+      .toBe("1");
+    await expect(page.getByLabel("仅看有货", { exact: true })).toBeChecked();
     await page.reload();
     await expect(page.getByLabel("仅看有货", { exact: true })).toBeChecked();
   }

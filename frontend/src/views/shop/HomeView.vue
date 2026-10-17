@@ -3,24 +3,36 @@ import { computed, ref } from "vue";
 import { ArrowUpRight, ArrowRight } from "lucide-vue-next";
 import { useShop } from "../../stores/shop";
 import ProductCard from "../../components/shop/ProductCard.vue";
+import {
+  catalogueCategories,
+  readCatalogueQuery,
+  searchProducts,
+} from "../../domain/catalogue";
 const shop = useShop(),
   need = ref(""),
   submitted = ref(false),
-  hovered = ref("");
+  hovered = ref(""),
+  selectedCategory = ref("");
 const products = computed(() => shop.db.products.filter((p) => p.active));
+const categories = computed(() =>
+  catalogueCategories(shop.db.categories, shop.db.products),
+);
+const selected = computed(() =>
+  categories.value.find((c) => c.id === selectedCategory.value),
+);
+const sheetProducts = computed(() =>
+  selected.value
+    ? products.value.filter((p) => p.categoryId === selected.value?.id)
+    : products.value,
+);
 const picks = computed(() => {
   const q = need.value.trim().toLowerCase();
   if (!q) return products.value.filter((p) => p.featured).slice(0, 4);
-  const words = q.split(/[\s，、,]+/);
-  return products.value
-    .filter((p) =>
-      words.some((w) =>
-        `${p.name}${p.subtitle}${p.description}${shop.db.categories.find((c) => c.id === p.categoryId)?.name}`
-          .toLowerCase()
-          .includes(w),
-      ),
-    )
-    .slice(0, 4);
+  return searchProducts(
+    products.value,
+    shop.db.categories,
+    readCatalogueQuery({ q }),
+  ).slice(0, 4);
 });
 const preview = computed(() =>
   products.value.find((p) => p.id === hovered.value),
@@ -39,30 +51,56 @@ const preview = computed(() =>
         ></RouterLink>
       </div>
       <nav class="home-departments" aria-label="首页快捷分类">
-        <RouterLink
-          v-for="category in [...shop.db.categories].sort(
-            (a, b) => a.sort - b.sort,
-          )"
+        <button
+          type="button"
+          :aria-pressed="!selected"
+          :class="{ selected: !selected }"
+          @click="
+            selectedCategory = '';
+            hovered = '';
+          "
+        >
+          全部商品 <span>{{ products.length }}</span>
+        </button>
+        <button
+          v-for="category in categories"
           :key="category.id"
-          :to="{ path: '/products', query: { category: category.id } }"
-          >{{ category.name }}<ArrowUpRight :size="16"
-        /></RouterLink>
+          type="button"
+          :aria-pressed="selected?.id === category.id"
+          :class="{ selected: selected?.id === category.id }"
+          @click="
+            selectedCategory = category.id;
+            hovered = '';
+          "
+        >
+          {{ category.name }} <span>{{ category.count }}</span>
+        </button>
       </nav>
       <p class="catalogue-demo">{{ shop.db.settings.notice }}</p>
       <div class="sheet-heading">
-        <span
-          >一眼看完，慢慢挑选
+        <span>
+          {{ selected ? selected.name : "一眼看完，慢慢挑选" }}
           <small class="sheet-preview">{{
-            preview?.subtitle ?? `${products.length} 款演示商品 · 六种日常生活`
+            preview?.subtitle ??
+            `${sheetProducts.length} 款演示商品 · ${selected ? selected.description : `${categories.length} 种日常生活`}`
           }}</small></span
         >
-        <RouterLink to="/products" class="button home-primary"
-          >浏览全部商品 <ArrowUpRight :size="18"
+        <RouterLink
+          :to="{
+            path: '/products',
+            query: selected ? { category: selected.id } : {},
+          }"
+          class="button home-primary"
+          >查看{{ selected ? selected.name : "全部商品" }}
+          <ArrowUpRight :size="18"
         /></RouterLink>
       </div>
-      <div class="contact-sheet" @mouseleave="hovered = ''">
+      <p v-if="!sheetProducts.length" class="empty-inline" role="status">
+        这个分类暂时没有上架商品，试试其他分类。
+      </p>
+      <div v-else class="contact-sheet" @mouseleave="hovered = ''">
         <RouterLink
-          v-for="(p, i) in products"
+          v-for="(p, i) in sheetProducts"
           :key="p.id"
           :to="`/products/${p.id}`"
           class="sheet-frame"
@@ -75,15 +113,6 @@ const preview = computed(() =>
             :alt="p.name"
             :loading="i < 8 ? 'eager' : 'lazy'"
           /><span>{{ p.name }}</span></RouterLink
-        ><RouterLink
-          to="/products?category=c6"
-          class="sheet-frame sheet-category"
-          style="--item-delay: 1495ms"
-          ><img
-            src="/images/p21.jpg"
-            alt="运动户外商品目录"
-            loading="lazy"
-          /><span>运动户外 · 继续发现</span></RouterLink
         >
       </div>
     </section>
@@ -96,11 +125,11 @@ const preview = computed(() =>
       </div>
       <div class="category-index">
         <RouterLink
-          v-for="c in [...shop.db.categories].sort((a, b) => a.sort - b.sort)"
+          v-for="c in categories"
           :key="c.id"
           :to="{ path: '/products', query: { category: c.id } }"
           ><span>{{ c.name }}</span
-          ><span>{{ c.description }}</span
+          ><span>{{ c.description }} · {{ c.count }} 件商品</span
           ><ArrowUpRight :size="25"
         /></RouterLink>
       </div>
@@ -120,7 +149,7 @@ const preview = computed(() =>
             <input
               id="need"
               v-model="need"
-              placeholder="比如：通勤耳机"
+              placeholder="比如：通勤 耳机"
               @input="submitted = false"
             /><button class="button" type="submit">
               查看推荐 <ArrowUpRight :size="18" />

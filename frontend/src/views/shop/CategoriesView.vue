@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { useShop } from '../../stores/shop'
-import { ArrowUpRight } from 'lucide-vue-next'
-const shop = useShop()
+import { computed } from "vue";
+import { catalogueCategories } from "../../domain/catalogue";
+import { useShop } from "../../stores/shop";
+import { ArrowUpRight } from "lucide-vue-next";
+const shop = useShop();
+const categories = computed(() =>
+  catalogueCategories(shop.db.categories, shop.db.products),
+);
 </script>
 <template>
   <div class="page-wrap">
@@ -9,9 +14,12 @@ const shop = useShop()
       <h1>按类挑选</h1>
       <p>从你熟悉的生活场景，找到下一件好物。</p>
     </div>
-    <div class="category-gallery">
+    <p v-if="!categories.length" class="empty-state">
+      暂时没有商品分类，请稍后再来。
+    </p>
+    <div v-else class="category-gallery">
       <RouterLink
-        v-for="c in [...shop.db.categories].sort((a, b) => a.sort - b.sort)"
+        v-for="c in categories"
         :key="c.id"
         :to="{ path: '/products', query: { category: c.id } }"
         ><img :src="c.image" :alt="c.name" />
@@ -20,13 +28,7 @@ const shop = useShop()
           <ArrowUpRight />
         </div>
         <p>{{ c.description }}</p>
-        <span class="secondary"
-          >{{
-            shop.db.products.filter((p) => p.active && p.categoryId === c.id)
-              .length
-          }}
-          件商品</span
-        ></RouterLink
+        <span class="secondary">{{ c.count }} 件商品</span></RouterLink
       >
     </div>
   </div>

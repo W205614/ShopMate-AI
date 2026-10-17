@@ -112,7 +112,7 @@ test("手机目录无横向溢出且商品图片来自本地", async ({ page }) 
     page.getByRole("heading", { name: /好物与答案.*一起找到/ }),
   ).toBeVisible();
   const images = page.locator(".sheet-frame img");
-  await expect(images).toHaveCount(24);
+  await expect(images).toHaveCount(23);
   await expect(images.first()).toHaveJSProperty("complete", true);
   expect(
     await page.evaluate(

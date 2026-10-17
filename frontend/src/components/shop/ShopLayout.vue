@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   Search,
   ShoppingBag,
@@ -9,26 +9,27 @@ import {
   MessageCircle,
   Menu,
   X,
-} from 'lucide-vue-next'
-import { useShop } from '../../stores/shop'
-import '../../styles/shop.css'
+} from "lucide-vue-next";
+import { queryText } from "../../domain/catalogue";
+import { useShop } from "../../stores/shop";
+import "../../styles/shop.css";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter(),
-  search = ref(String(route.query.q ?? '')),
-  menu = ref(false)
+  search = ref(queryText(route.query.q)),
+  menu = ref(false);
 watch(
   () => route.fullPath,
   () => {
-    menu.value = false
-    search.value = String(route.query.q ?? '')
+    menu.value = false;
+    search.value = queryText(route.query.q);
   },
-)
+);
 function submit() {
   router.push({
-    path: '/products',
+    path: "/products",
     query: search.value.trim() ? { q: search.value.trim() } : {},
-  })
+  });
 }
 </script>
 <template>
@@ -55,7 +56,7 @@ function submit() {
       <div class="header-actions">
         <RouterLink to="/account" aria-label="个人中心"
           ><UserRound :size="21" /><span>{{
-            shop.user?.name ?? '登录'
+            shop.user?.name ?? "登录"
           }}</span></RouterLink
         ><RouterLink to="/cart" aria-label="购物车"
           ><ShoppingBag :size="21" /><span>{{

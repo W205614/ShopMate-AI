@@ -3075,3 +3075,31 @@
   clip-path: none;
   top: 20px;
 }
+
+/* Catalogue controls share the existing contact sheet typography. */
+.home-departments { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.home-departments button {
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; flex: 1 0 auto;
+  border: 0; background: #f4f4f4; padding: 10px 14px;
+  min-height: 44px; font-size: var(--catalogue-body);
+}
+.home-departments button.selected { background: #111; color: #fff; }
+.home-departments button span { font-size: var(--catalogue-small); }
+.filter-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.filter-chips button {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+  overflow-wrap: anywhere; text-align: left; min-height: 44px;
+  padding: 8px 12px; border: 0; background: #f4f4f4; font-size: 14px;
+}
+.stock-filter { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
+.shop-site .stock-filter input { width: 18px; min-height: 18px; height: 18px; margin: 0; accent-color: #1a4be0; }
+.price-error { color: #a12222; font-size: 14px; width: 100%; }
+.pagination-note { text-align: center; margin-top: 16px; }
+.catalogue-results { min-width: 0; }
+.catalogue-results .results-top p { margin: 0; }
+@media (max-width: 700px) {
+  .home-departments { display: flex; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; }
+  .home-departments button { flex: 0 0 auto; padding: 8px 10px; font-size: 14px; }
+  .price-form { flex-wrap: wrap; min-width: 0; flex-basis: 100%; }
+  .results-top { flex-wrap: wrap; }
+}

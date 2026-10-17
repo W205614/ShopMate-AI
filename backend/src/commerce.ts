@@ -430,7 +430,7 @@ export const commerceApi: Pick<
     return transact((db) => {
       const order = ownedOrder(db, orderId),
         uid = userId(),
-        result = { added: 0, skipped: [] as string[] };
+        result = { added: 0, addedQuantity: 0, skipped: [] as string[] };
       for (const item of order.items) {
         const existing = db.carts.find(
           (c) =>
@@ -442,10 +442,20 @@ export const commerceApi: Pick<
           ...item,
           quantity: item.quantity + (existing?.quantity ?? 0),
         };
-        if (!validCart(db, requested)) {
-          result.skipped.push(
-            `${item.name} ${item.skuName}：已下架、规格失效或库存不足`,
-          );
+        const product = db.products.find((p) => p.id === item.productId);
+        const sku = product?.skus.find((s) => s.id === item.skuId);
+        const reason =
+          !product || !product.active
+            ? "商品已下架或移除"
+            : !sku
+              ? "规格已失效"
+              : !integer(item.quantity, 1) || !integer(requested.quantity, 1)
+                ? "购买数量无效"
+                : requested.quantity > sku.stock
+                  ? `库存不足（库存 ${sku.stock} 件，购物车已有 ${existing?.quantity ?? 0} 件，本次需 ${item.quantity} 件）`
+                  : "";
+        if (reason) {
+          result.skipped.push(`${item.name} ${item.skuName}：${reason}`);
           continue;
         }
         if (existing) {
@@ -461,6 +471,7 @@ export const commerceApi: Pick<
             selected: true,
           });
         result.added++;
+        result.addedQuantity += item.quantity;
       }
       return result;
     });

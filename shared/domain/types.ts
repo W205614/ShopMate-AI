@@ -249,6 +249,7 @@ export interface OrderRequest {
 }
 export interface ReorderResult {
   added: number;
+  addedQuantity: number;
   skipped: string[];
 }
 export interface Database {

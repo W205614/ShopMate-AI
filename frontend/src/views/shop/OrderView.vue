@@ -77,7 +77,7 @@ async function reorder() {
     order.value &&
     (await run(async () => {
       const result = await api.reorder(order.value!.id);
-      message = `已加入 ${result.added} 件${result.skipped.length ? `；无法加入：${result.skipped.join("、")}` : "，请到购物车确认最新价格和库存。"}`;
+      message = `已加入 ${result.added} 项，共 ${result.addedQuantity} 件${result.skipped.length ? `；无法加入：${result.skipped.join("、")}` : "，请到购物车确认最新价格和库存。"}`;
     }))
   )
     notice.value = message;

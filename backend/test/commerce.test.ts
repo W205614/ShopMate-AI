@@ -401,8 +401,53 @@ describe("批量操作、地址与部分售后", () => {
       v.products[0]!.active = true;
       v.products[0]!.skus[0]!.price++;
     });
-    expect(await api.reorder(value)).toEqual({ added: 1, skipped: [] });
+    expect(await api.reorder(value)).toEqual({
+      added: 1,
+      addedQuantity: 1,
+      skipped: [],
+    });
     expect(db().carts[0]!.quantity).toBe(1);
     expect(db().orders).toHaveLength(count);
+  });
+  it("再次购买分别统计成功条目和新增件数，合并购物车并给出明确跳过原因", async () => {
+    await api.addCart("p01", "p01-s1", 3);
+    await api.addCart("p02", "p02-s1", 2);
+    const quote = await api.quoteCheckout({
+      addressId: "a1",
+      source: { type: "cart", cartIds: db().carts.map((c) => c.id) },
+    });
+    const value = await api.createOrder({
+      quoteId: quote.id,
+      requestId: crypto.randomUUID(),
+    });
+    await api.addCart("p01", "p01-s1", 2);
+    change((v) => {
+      v.products[1]!.active = false;
+    });
+    const before = db();
+    expect(await api.reorder(value)).toEqual({
+      added: 1,
+      addedQuantity: 3,
+      skipped: [expect.stringContaining("商品已下架")],
+    });
+    expect(db().carts.find((c) => c.skuId === "p01-s1")!.quantity).toBe(5);
+    expect(db().orders).toEqual(before.orders);
+    expect(db().inventory).toEqual(before.inventory);
+    expect(db().ledger).toEqual(before.ledger);
+    change((v) => {
+      v.products[0]!.skus[0]!.stock = 5;
+      v.products[1]!.active = true;
+      v.products[1]!.skus = [];
+    });
+    const carts = db().carts;
+    expect(await api.reorder(value)).toEqual({
+      added: 0,
+      addedQuantity: 0,
+      skipped: [
+        expect.stringContaining("库存不足"),
+        expect.stringContaining("规格已失效"),
+      ],
+    });
+    expect(db().carts).toEqual(carts);
   });
 });

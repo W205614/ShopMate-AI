@@ -1,5 +1,9 @@
 import type { ShopApi } from "../../shared/domain/api";
-import type { Database, PublicReviews } from "../../shared/domain/types";
+import type {
+  Database,
+  PublicReviews,
+  CouponInput,
+} from "../../shared/domain/types";
 import {
   admin,
   id,
@@ -104,6 +108,18 @@ export const marketingApi: Pick<
         "领取与使用时间范围无效，领取截止不能晚于使用截止",
       );
       const old = db.coupons.find((c) => c.id === input.id);
+      const value: CouponInput = {
+        id: input.id,
+        name: input.name.trim(),
+        threshold: input.threshold,
+        discount: input.discount,
+        totalLimit: input.totalLimit,
+        active: input.active,
+        claimStartsAt: input.claimStartsAt,
+        claimEndsAt: input.claimEndsAt,
+        validFrom: input.validFrom,
+        validUntil: input.validUntil,
+      };
       requireThat(!input.id || old, "优惠券不存在");
       if (old && db.couponClaims.some((c) => c.couponId === old.id)) {
         requireThat(
@@ -118,12 +134,12 @@ export const marketingApi: Pick<
               "validUntil",
               "totalLimit",
             ] as const
-          ).every((key) => old[key] === input[key]),
+          ).every((key) => old[key] === value[key]),
           "已有领取记录的优惠券只能启停，请新建其他优惠券",
         );
         old.active = input.active;
-      } else if (old) Object.assign(old, input);
-      else db.coupons.unshift({ ...input, id: id("coupon-") });
+      } else if (old) Object.assign(old, value);
+      else db.coupons.unshift({ ...value, id: id("coupon-") });
     });
   },
   async claimCoupon(couponId) {

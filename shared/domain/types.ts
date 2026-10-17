@@ -193,6 +193,7 @@ export interface Settings {
   notice: string;
 }
 export interface Coupon {
+  claimedCount?: number;
   id: string;
   name: string;
   threshold: number;
@@ -204,7 +205,7 @@ export interface Coupon {
   totalLimit: number;
   active: boolean;
 }
-export type CouponInput = Omit<Coupon, "id"> & { id?: string };
+export type CouponInput = Omit<Coupon, "id" | "claimedCount"> & { id?: string };
 export interface CouponClaim {
   id: string;
   userId: string;

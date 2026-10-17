@@ -34,10 +34,20 @@ export function visibleDatabase(
   role: Role,
   sessions: { user: Session | null; admin: Session | null },
 ): Database {
-  if (role === "admin" && sessions.admin) return db;
+  const counts = new Map<string, number>();
+  for (const claim of db.couponClaims)
+    counts.set(claim.couponId, (counts.get(claim.couponId) ?? 0) + 1);
+  const projected = {
+    ...db,
+    coupons: db.coupons.map((coupon) => ({
+      ...coupon,
+      claimedCount: counts.get(coupon.id) ?? 0,
+    })),
+  };
+  if (role === "admin" && sessions.admin) return projected;
   const uid = sessions.user?.id;
   return {
-    ...db,
+    ...projected,
     couponClaims: db.couponClaims.filter((c) => c.userId === uid),
     reviews: db.reviews.filter((r) => r.userId === uid),
     checkoutQuotes: db.checkoutQuotes.filter((q) => q.userId === uid),

@@ -11,6 +11,7 @@ import {
 } from "../../services/checkoutRecovery";
 import type { CheckoutRecovery } from "../../services/checkoutRecovery";
 import { money, dateTime } from "../../domain/types";
+import { couponRules, couponUseReason } from "../../domain/coupons";
 import type {
   Address,
   AddressInput,
@@ -76,18 +77,49 @@ onUnmounted(() => {
 const hasSource = computed(
   () => source.value.type === "buyNow" || source.value.cartIds.length > 0,
 );
+const subtotal = computed(() => {
+  const input = source.value;
+  const entries =
+    input.type === "buyNow"
+      ? [input]
+      : shop.myCart.filter((i) => input.cartIds.includes(i.id));
+  if (!entries.length) return null;
+  let total = 0n;
+  for (const entry of entries) {
+    const product = shop.db.products.find((p) => p.id === entry.productId),
+      sku = product?.skus.find((s) => s.id === entry.skuId);
+    if (
+      !product?.active ||
+      !sku ||
+      !Number.isSafeInteger(entry.quantity) ||
+      entry.quantity < 1
+    )
+      return null;
+    total += BigInt(sku.price) * BigInt(entry.quantity);
+  }
+  return total > BigInt(Number.MAX_SAFE_INTEGER) ? null : Number(total);
+});
 const couponOptions = computed(() =>
   shop.db.couponClaims
     .filter((c) => c.userId === shop.userId && c.status === "available")
     .flatMap((claim) => {
       const coupon = shop.db.coupons.find((c) => c.id === claim.couponId);
-      return coupon &&
-        coupon.active &&
-        Date.parse(coupon.validFrom) <= now.value &&
-        Date.parse(coupon.validUntil) > now.value
-        ? [{ claim, coupon }]
+      return coupon
+        ? [
+            {
+              claim,
+              coupon,
+              reason: couponUseReason(coupon, subtotal.value, now.value),
+            },
+          ]
         : [];
     }),
+);
+const selectedCouponReason = computed(() =>
+  couponClaimId.value
+    ? (couponOptions.value.find((c) => c.claim.id === couponClaimId.value)
+        ?.reason ?? "优惠券已被占用或不可用")
+    : "",
 );
 watch(
   () => shop.myAddresses.map((a) => a.id).join(","),
@@ -131,7 +163,7 @@ const fingerprint = computed(() => {
     }),
     cart: input.type === "cart" ? entries : [],
     claim,
-    coupon,
+    coupon: couponRules(coupon),
     couponValid:
       !coupon ||
       (Date.parse(coupon.validFrom) <= now.value &&
@@ -146,6 +178,10 @@ async function refreshQuote() {
   stale.value = false;
   quoting.value = false;
   if (!addressId.value || !hasSource.value || submitting.value) return;
+  if (selectedCouponReason.value) {
+    error.value = selectedCouponReason.value;
+    return;
+  }
   quoting.value = true;
   try {
     const result = await api.quoteCheckout({
@@ -304,6 +340,7 @@ async function submit() {
     submitting.value ||
     quoting.value ||
     recovery.value ||
+    selectedCouponReason.value ||
     disconnected.value
   )
     return;
@@ -434,22 +471,41 @@ watch(
         </section>
         <section class="checkout-section form-stack">
           <h2>优惠券</h2>
-          <label
-            >使用优惠券<select
-              v-model="couponClaimId"
-              :disabled="submitting || disconnected"
+          <label for="checkout-coupon">使用优惠券</label>
+          <select
+            id="checkout-coupon"
+            v-model="couponClaimId"
+            aria-label="使用优惠券"
+            :disabled="submitting || disconnected"
+          >
+            <option value="">不使用优惠券</option>
+            <option
+              v-for="{ claim, coupon, reason } in couponOptions"
+              :key="claim.id"
+              :value="claim.id"
+              :disabled="!!reason"
             >
-              <option value="">不使用优惠券</option>
-              <option
-                v-for="{ claim, coupon } in couponOptions"
-                :key="claim.id"
-                :value="claim.id"
-              >
-                {{ coupon.name }} · 满 {{ money(coupon.threshold) }} 减
-                {{ money(coupon.discount) }}
-              </option>
-            </select></label
-          ><RouterLink to="/account?section=coupons" class="text-link"
+              {{ coupon.name }} · 满 {{ money(coupon.threshold) }} 减
+              {{ money(coupon.discount) }}
+              {{ reason ? ` · ${reason}` : "" }}
+            </option>
+          </select>
+          <ul
+            v-if="couponOptions.some((c) => c.reason)"
+            class="secondary"
+            aria-label="优惠券不可用原因"
+          >
+            <li
+              v-for="option in couponOptions.filter((c) => c.reason)"
+              :key="option.claim.id"
+            >
+              {{ option.coupon.name }}：{{ option.reason }}
+            </li>
+          </ul>
+          <p v-if="selectedCouponReason" class="stock-error" role="status">
+            当前选择的优惠券不可用，请取消用券并重新确认报价。
+          </p>
+          <RouterLink to="/account?section=coupons" class="text-link"
             >查看我的优惠券与领券中心</RouterLink
           >
         </section>
@@ -501,6 +557,7 @@ watch(
             !quote ||
             expired ||
             stale ||
+            !!selectedCouponReason ||
             disconnected
           "
           @click="submit"

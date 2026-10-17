@@ -4,6 +4,7 @@ import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import { dateTime, money } from "../../domain/types";
 import type { Coupon } from "../../domain/types";
+import { couponSoldOut } from "../../domain/coupons";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import { useAction } from "../../components/shop/useAction";
 import "../../styles/account-commerce.css";
@@ -12,7 +13,7 @@ const shop = useShop();
 const { busy, error, notice, run } = useAction();
 const coupons = computed(() =>
   shop.db.coupons.filter(
-    (coupon) => coupon.active && Date.parse(coupon.claimEndsAt) >= Date.now(),
+    (coupon) => coupon.active && Date.parse(coupon.claimEndsAt) > Date.now(),
   ),
 );
 function claimed(id: string) {
@@ -63,17 +64,24 @@ async function claim(id: string) {
           {{ dateTime(coupon.validUntil) }}
         </p>
         <button
-          v-if="shop.user"
+          v-if="shop.user || couponSoldOut(coupon)"
           class="button"
-          :disabled="busy || claimed(coupon.id) || notStarted(coupon)"
+          :disabled="
+            busy ||
+            claimed(coupon.id) ||
+            notStarted(coupon) ||
+            couponSoldOut(coupon)
+          "
           @click="claim(coupon.id)"
         >
           {{
             claimed(coupon.id)
               ? "已领取"
-              : notStarted(coupon)
-                ? "尚未开始"
-                : "立即领取"
+              : couponSoldOut(coupon)
+                ? "已领完"
+                : notStarted(coupon)
+                  ? "尚未开始"
+                  : "立即领取"
           }}
         </button>
         <RouterLink v-else to="/login?redirect=/coupons" class="button"

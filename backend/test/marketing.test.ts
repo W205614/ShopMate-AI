@@ -63,6 +63,96 @@ function seed() {
 }
 
 describe("profile and marketing boundaries", () => {
+  it("projects global coupon counts without private claims or persisted display fields", async () => {
+    await createAccount(
+      sql,
+      { username: "couponadmin", name: "券管理", password: "CouponAdmin123!" },
+      "admin",
+    );
+    const adminCookie = cookieOf(
+      await post("/api/auth/login", {
+        username: "couponadmin",
+        password: "CouponAdmin123!",
+        role: "admin",
+      }),
+    );
+    const a = cookieOf(
+      await post("/api/auth/register", {
+        username: "claimera",
+        name: "领取者甲",
+        password: "CouponUser123!",
+      }),
+    );
+    const b = cookieOf(
+      await post("/api/auth/register", {
+        username: "claimerb",
+        name: "领取者乙",
+        password: "CouponUser123!",
+      }),
+    );
+    expect(
+      (await post("/api/actions/saveCoupon", { args: [coupon()] }, adminCookie))
+        .status,
+    ).toBe(200);
+    const original = readDatabase(sql).coupons[0]!;
+    expect(
+      (
+        await post(
+          "/api/actions/saveCoupon",
+          { args: [{ ...original, name: "未领取可编辑券" }] },
+          adminCookie,
+        )
+      ).status,
+    ).toBe(200);
+    expect(readDatabase(sql).coupons[0]!.name).toBe("未领取可编辑券");
+    expect(
+      (await post("/api/actions/claimCoupon", { args: [original.id] }, a))
+        .status,
+    ).toBe(200);
+    const before = readDatabase(sql);
+    for (const [cookie, role, own] of [
+      ["", "user", 0],
+      [a, "user", 1],
+      [b, "user", 0],
+      [adminCookie, "admin", 1],
+    ] as const) {
+      const visible = await snapshot(cookie, role);
+      expect(visible.db.coupons[0]).toMatchObject({ claimedCount: 1 });
+      expect(visible.db.couponClaims).toHaveLength(own);
+      if (!own)
+        expect(JSON.stringify(visible.db.coupons[0])).not.toContain(
+          before.couponClaims[0]!.id,
+        );
+    }
+    expect(readDatabase(sql)).toEqual(before);
+    expect(readDatabase(sql).coupons[0]).not.toHaveProperty("claimedCount");
+    expect(
+      (
+        await post(
+          "/api/actions/saveCoupon",
+          { args: [{ ...original, claimedCount: 999 }] },
+          adminCookie,
+        )
+      ).status,
+    ).toBe(400);
+    expect(readDatabase(sql)).toEqual(before);
+    expect(
+      (
+        await post(
+          "/api/actions/saveCoupon",
+          { args: [{ ...original, discount: original.discount + 1 }] },
+          adminCookie,
+        )
+      ).status,
+    ).toBe(400);
+    for (const status of ["locked", "used"] as const) {
+      const changed = readDatabase(sql);
+      changed.couponClaims[0]!.status = status;
+      changed.couponClaims[0]!.orderId = "historical-order";
+      writeDatabase(sql, changed);
+      expect((await snapshot(b)).db.coupons[0].claimedCount).toBe(1);
+    }
+  });
   it("requires an admin and matching settings baseline over HTTP, including empty announcements", async () => {
     const baseline = readDatabase(sql).settings;
     const input = { ...baseline, notice: "", name: "HTTP 设置" };

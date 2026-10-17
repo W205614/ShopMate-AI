@@ -17,6 +17,7 @@ export {
   refreshState,
   getSyncStatus,
   hasConfirmedLogout,
+  RequestError,
 } from "./repository";
 export type { ShopApi } from "../domain/api";
 
@@ -117,7 +118,29 @@ export const api: ShopApi = {
   favorite: (...args) => action("favorite", args),
   saveAddress: (...args) => action("saveAddress", args),
   deleteAddress: (...args) => action("deleteAddress", args),
-  createOrder: (...args) => action("createOrder", args),
+  async createOrder(input) {
+    const result = await action<unknown>("createOrder", [input]);
+    if (typeof result !== "string" || !result) throw unknownMutation();
+    return result;
+  },
+  async resolveOrderRequest(input) {
+    const result = await request<{ orderId: string | null }>(
+      `/api/order-requests/${encodeURIComponent(input.requestId)}?quoteId=${encodeURIComponent(input.quoteId)}`,
+    );
+    if (
+      !result ||
+      (result.orderId !== null &&
+        (typeof result.orderId !== "string" || !result.orderId))
+    )
+      throw new Error("无法确认原请求结果，请重新核对");
+    return result.orderId;
+  },
+  async retireCheckout(input) {
+    const result = await action<unknown>("retireCheckout", [input]);
+    if (result !== null && (typeof result !== "string" || !result))
+      throw unknownMutation();
+    return result;
+  },
   payOrder: (...args) => action("payOrder", args),
   cancelOrder: (...args) => action("cancelOrder", args),
   confirmOrder: (...args) => action("confirmOrder", args),

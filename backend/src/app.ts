@@ -98,6 +98,27 @@ export async function createApp(
     const page = Number(req.query.page);
     res.json(publicReviews(readDatabase(sql), String(req.params.id), page));
   });
+  app.get("/api/order-requests/:requestId", (req, res) => {
+    const session = findSession(sql, req, "user");
+    if (!session) throw new HttpError(401, "登录已失效，请重新登录");
+    const requestId = z.string().min(1).max(128).parse(req.params.requestId);
+    const quoteId = z.string().min(1).max(128).parse(req.query.quoteId);
+    const db = readDatabase(sql);
+    const binding = db.orderRequests.find(
+      (r) => r.userId === session.id && r.requestId === requestId,
+    );
+    const candidate = binding
+      ? binding.quoteId === quoteId
+        ? binding.orderId
+        : undefined
+      : db.checkoutQuotes.find(
+          (q) => q.userId === session.id && q.id === quoteId,
+        )?.orderId;
+    const order = db.orders.find(
+      (o) => o.userId === session.id && o.id === candidate,
+    );
+    res.json({ orderId: order?.id ?? null });
+  });
   app.post("/api/auth/profile", (req, res) => {
     const session = findSession(sql, req, "user");
     if (!session) throw new HttpError(401, "登录已失效，请重新登录");

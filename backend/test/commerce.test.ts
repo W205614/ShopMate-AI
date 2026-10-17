@@ -72,6 +72,26 @@ beforeEach(() => {
 });
 
 describe("报价与订单一致性", () => {
+  it("结束恢复会关闭未消费报价，迟到请求不能复活；已有订单优先找回", async () => {
+    const quote = await api.quoteCheckout(buy());
+    const input = { quoteId: quote.id, requestId: crypto.randomUUID() };
+    expect(await api.retireCheckout(input)).toBeNull();
+    await expect(api.createOrder(input)).rejects.toThrow("过期");
+    expect(db().orders.some((o) => o.quoteId === quote.id)).toBe(false);
+    const next = await api.quoteCheckout(buy());
+    const created = { quoteId: next.id, requestId: crypto.randomUUID() };
+    const orderId = await api.createOrder(created);
+    const before = db();
+    expect(await api.retireCheckout(created)).toBe(orderId);
+    expect(db().orders).toEqual(before.orders);
+    expect(db().inventory).toEqual(before.inventory);
+    expect(db().ledger).toEqual(before.ledger);
+    uid = "u2";
+    expect(await api.retireCheckout(created)).toBeNull();
+    expect(db().checkoutQuotes.find((q) => q.id === next.id)?.orderId).toBe(
+      orderId,
+    );
+  });
   it("相同商品的不同订单行 ID 全局不同且重新读取保持稳定", async () => {
     const first = await order(),
       second = await order();

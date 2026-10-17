@@ -71,6 +71,7 @@ export const commerceApi: Pick<
   | "deleteAddress"
   | "quoteCheckout"
   | "createOrder"
+  | "retireCheckout"
   | "payOrder"
   | "cancelOrder"
   | "confirmOrder"
@@ -250,6 +251,31 @@ export const commerceApi: Pick<
       };
       db.checkoutQuotes.push(quote);
       return clone(quote);
+    });
+  },
+  async retireCheckout(input) {
+    return transact((db) => {
+      const uid = userId();
+      const binding = db.orderRequests.find(
+        (r) => r.userId === uid && r.requestId === input.requestId,
+      );
+      requireThat(
+        !binding || binding.quoteId === input.quoteId,
+        "同一请求标识不能用于不同报价",
+      );
+      const quote = db.checkoutQuotes.find(
+        (q) => q.id === input.quoteId && q.userId === uid,
+      );
+      const orderId = binding?.orderId ?? quote?.orderId;
+      if (orderId) {
+        requireThat(
+          db.orders.some((o) => o.id === orderId && o.userId === uid),
+          "订单不存在或不属于当前用户",
+        );
+        return orderId;
+      }
+      if (quote && quote.expiresAt > now()) quote.expiresAt = now();
+      return null;
     });
   },
   async createOrder(input) {

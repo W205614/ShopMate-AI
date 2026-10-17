@@ -53,6 +53,14 @@ export interface ShopApi {
   saveAddress(input: AddressInput): Promise<void>;
   deleteAddress(id: string): Promise<void>;
   createOrder(input: { quoteId: string; requestId: string }): Promise<string>;
+  resolveOrderRequest(input: {
+    quoteId: string;
+    requestId: string;
+  }): Promise<string | null>;
+  retireCheckout(input: {
+    quoteId: string;
+    requestId: string;
+  }): Promise<string | null>;
   payOrder(id: string): Promise<void>;
   cancelOrder(id: string): Promise<void>;
   confirmOrder(id: string): Promise<void>;

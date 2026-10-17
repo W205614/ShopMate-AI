@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../src/app";
-import { openDatabase, readDatabase } from "../src/database";
+import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { createAccount, tokenHash } from "../src/auth";
 
 let sql: DatabaseSync, server: Server, base: string;
@@ -49,6 +49,64 @@ afterEach(async () => {
 });
 
 describe("real authentication over HTTP", () => {
+  it("finds only the user's own checkout request without changing business state", async () => {
+    const cookie = cookieOf(await post("/api/auth/register", input));
+    const action = async (method: string, args: unknown[]) => {
+      const response = await post(`/api/actions/${method}`, { args }, cookie);
+      expect(response.status).toBe(200);
+      return (await response.json()).result;
+    };
+    await action("saveAddress", [
+      {
+        name: "收货人",
+        phone: "13800000000",
+        region: "上海",
+        detail: "测试地址",
+        isDefault: true,
+      },
+    ]);
+    const address = (await state(cookie)).db.addresses[0];
+    const quote = await action("quoteCheckout", [
+      {
+        source: {
+          type: "buyNow",
+          productId: "p01",
+          skuId: "p01-s1",
+          quantity: 1,
+        },
+        addressId: address.id,
+      },
+    ]);
+    const requestId = crypto.randomUUID();
+    const orderId = await action("createOrder", [
+      { quoteId: quote.id, requestId },
+    ]);
+    const lookup = (token = cookie, quoteId = quote.id) =>
+      fetch(`${base}/api/order-requests/${requestId}?quoteId=${quoteId}`, {
+        headers: { Cookie: token },
+      });
+    const before = readDatabase(sql);
+    expect((await lookup("")).status).toBe(401);
+    expect(await (await lookup()).json()).toEqual({ orderId });
+    expect(await (await lookup(cookie, "different-quote")).json()).toEqual({
+      orderId: null,
+    });
+    const other = cookieOf(
+      await post("/api/auth/register", { ...input, username: "bob" }),
+    );
+    expect(await (await lookup(other)).json()).toEqual({ orderId: null });
+    // Registration is the only mutation above; lookup itself must preserve all business data.
+    const afterRegistration = readDatabase(sql);
+    await lookup();
+    await lookup(other);
+    expect(readDatabase(sql)).toEqual(afterRegistration);
+    const compacted = readDatabase(sql);
+    compacted.orderRequests = [];
+    writeDatabase(sql, compacted);
+    expect(await (await lookup()).json()).toEqual({ orderId });
+    expect(readDatabase(sql)).toEqual(compacted);
+    expect(readDatabase(sql).orders).toEqual(before.orders);
+  });
   it("registers once, hashes credentials, issues a private cookie and validates passwords", async () => {
     const response = await post("/api/auth/register", input);
     expect(response.status).toBe(201);

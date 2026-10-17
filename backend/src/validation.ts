@@ -104,6 +104,10 @@ export const methods = {
     ]),
   },
   clearInvalidCart: { role: "user", args: z.tuple([]) },
+  retireCheckout: {
+    role: "user",
+    args: z.tuple([z.object({ quoteId: id, requestId: id }).strict()]),
+  },
   quoteCheckout: {
     role: "user",
     args: z.tuple([

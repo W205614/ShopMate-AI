@@ -1,8 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watch, onUnmounted } from "vue";
+import { computed, ref, watch, onUnmounted, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useShop } from "../../stores/shop";
-import { api } from "../../services/api";
+import { api, RequestError } from "../../services/api";
+import {
+  loadCheckoutRecovery,
+  saveCheckoutRecovery,
+  clearCheckoutRecovery,
+  checkoutRecoveryPath,
+} from "../../services/checkoutRecovery";
+import type { CheckoutRecovery } from "../../services/checkoutRecovery";
 import { money, dateTime } from "../../domain/types";
 import type {
   Address,
@@ -17,6 +24,21 @@ import "../../styles/commerce-flow.css";
 const shop = useShop(),
   router = useRouter(),
   route = useRoute();
+const recovery = ref<CheckoutRecovery | null>(null),
+  checking = ref(false),
+  recoveryChecked = ref(false),
+  recoveryRejected = ref(false);
+const recoveryMatches = computed(
+  () =>
+    route.path === "/checkout" &&
+    recovery.value?.checkoutPath === checkoutRecoveryPath(route.fullPath),
+);
+const disconnected = computed(() => shop.syncStatus.phase !== "ready");
+try {
+  recovery.value = loadCheckoutRecovery(shop.userId);
+} catch {
+  /* A new submission must first save its own recovery marker. */
+}
 const cartIds = ref(shop.myCart.filter((i) => i.selected).map((i) => i.id));
 const source = computed<CheckoutSource>(() =>
   route.query.productId || route.query.skuId
@@ -45,7 +67,9 @@ const now = ref(Date.now()),
   timer = window.setInterval(() => {
     now.value = Date.now();
   }, 1000);
+let alive = true;
 onUnmounted(() => {
+  alive = false;
   window.clearInterval(timer);
   generation++;
 });
@@ -115,6 +139,7 @@ const fingerprint = computed(() => {
   });
 });
 async function refreshQuote() {
+  if (recovery.value) return;
   const current = ++generation;
   quote.value = undefined;
   error.value = "";
@@ -143,7 +168,7 @@ async function refreshQuote() {
 watch(
   fingerprint,
   (value, previous) => {
-    if (submitting.value) return;
+    if (submitting.value || recovery.value) return;
     if (!previous || JSON.parse(value).choice !== JSON.parse(previous).choice) {
       void refreshQuote();
       return;
@@ -177,23 +202,136 @@ async function saveAddress(input: AddressInput) {
     saving.value = false;
   }
 }
-async function submit() {
-  if (!quote.value || expired.value || submitting.value || quoting.value)
+function currentRecovery(marker: CheckoutRecovery) {
+  return (
+    alive &&
+    shop.userId === marker.userId &&
+    recovery.value === marker &&
+    recoveryMatches.value
+  );
+}
+async function openOrder(id: string, original: CheckoutRecovery) {
+  if (!currentRecovery(original)) return;
+  const order = shop.myOrders.find((o) => o.id === id);
+  const destination =
+    order && order.status !== "pending" ? `/orders/${id}` : `/orders/${id}/pay`;
+  const failure = await router.push(destination);
+  if (failure || router.currentRoute.value.path !== destination)
+    throw Error("订单已找到，页面暂未打开，请重新核对订单");
+  if (shop.userId === original.userId)
+    clearCheckoutRecovery(original.userId, original);
+}
+async function checkRecovery() {
+  if (
+    !recovery.value ||
+    !recoveryMatches.value ||
+    checking.value ||
+    submitting.value
+  )
     return;
-  submitting.value = true;
+  checking.value = true;
   error.value = "";
+  const marker = recovery.value;
   try {
-    const id = await api.createOrder({
-      quoteId: quote.value.id,
-      requestId: requestId.value,
-    });
-    await router.push(`/orders/${id}/pay`);
+    const id = await api.resolveOrderRequest(marker);
+    if (!currentRecovery(marker)) return;
+    recoveryChecked.value = true;
+    if (id) await openOrder(id, marker);
+    else
+      notice.value =
+        "尚未查询到订单。原请求可能仍在途中，请按原请求重试或继续核对。";
   } catch (e) {
     error.value =
-      e instanceof Error ? e.message : "提交失败，请重试；重复提交不会重复下单";
+      e instanceof Error ? e.message : "无法核对上次提交，请稍后重试";
+  } finally {
+    checking.value = false;
+  }
+}
+async function retireRecovery() {
+  if (!recovery.value || submitting.value || disconnected.value) return;
+  submitting.value = true;
+  error.value = "";
+  const marker = recovery.value;
+  try {
+    const id = await api.retireCheckout(marker);
+    if (!currentRecovery(marker)) return;
+    if (id) {
+      await openOrder(id, marker);
+      return;
+    }
+    clearCheckoutRecovery(marker.userId, marker);
+    recovery.value = null;
+    quote.value = undefined;
+    stale.value = true;
+    cartIds.value = shop.myCart.filter((i) => i.selected).map((i) => i.id);
+    notice.value = "原报价已关闭，请重新获取报价并确认商品及金额。";
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "无法结束原请求，请继续核对";
+  } finally {
     submitting.value = false;
   }
 }
+async function retryOriginal() {
+  if (
+    !recovery.value ||
+    !recoveryMatches.value ||
+    submitting.value ||
+    disconnected.value
+  )
+    return;
+  submitting.value = true;
+  error.value = "";
+  const marker = recovery.value;
+  try {
+    const id = await api.createOrder({
+      quoteId: marker.quoteId,
+      requestId: marker.requestId,
+    });
+    await openOrder(id, marker);
+  } catch (e) {
+    error.value =
+      e instanceof Error ? e.message : "提交结果暂无法确认，请核对原请求";
+    recoveryRejected.value =
+      e instanceof RequestError && e.outcome === "rejected" && e.status === 400;
+  } finally {
+    submitting.value = false;
+  }
+}
+async function submit() {
+  if (
+    !quote.value ||
+    expired.value ||
+    submitting.value ||
+    quoting.value ||
+    recovery.value ||
+    disconnected.value
+  )
+    return;
+  try {
+    const marker: CheckoutRecovery = {
+      userId: shop.userId,
+      quoteId: quote.value.id,
+      requestId: requestId.value,
+      checkoutPath: checkoutRecoveryPath(route.fullPath),
+      createdAt: Date.now(),
+    };
+    saveCheckoutRecovery(marker);
+    recovery.value = marker;
+    await retryOriginal();
+  } catch {
+    error.value =
+      "无法保存结算恢复标识，请允许浏览器会话存储后重试；尚未提交订单。";
+  }
+}
+onMounted(() => {
+  if (recovery.value && recoveryMatches.value) void checkRecovery();
+});
+watch(
+  () => route.fullPath,
+  () => {
+    if (recovery.value && recoveryMatches.value) void checkRecovery();
+  },
+);
 </script>
 <template>
   <div class="page-wrap">
@@ -208,14 +346,46 @@ async function submit() {
       </p>
     </div>
     <ActionNotice :error="error" :notice="notice" />
-    <div v-if="hasSource" class="cart-layout checkout-layout" data-ui>
+    <section v-if="recovery" class="checkout-section" aria-label="核对上次提交">
+      <h2>核对上次提交</h2>
+      <p>恢复期间保留原报价和请求标识，不会自动下新订单或付款。</p>
+      <template v-if="recoveryMatches">
+        <button
+          class="button"
+          :disabled="checking || submitting"
+          @click="checkRecovery"
+        >
+          {{ checking ? "正在核对…" : "核对订单" }}
+        </button>
+        <button
+          class="text-link"
+          :disabled="checking || submitting || disconnected"
+          @click="retryOriginal"
+        >
+          {{ submitting ? "正在处理…" : "按原请求重试" }}
+        </button>
+        <button
+          v-if="recoveryChecked || recoveryRejected"
+          class="text-link"
+          :disabled="checking || submitting || disconnected"
+          @click="retireRecovery"
+        >
+          关闭原报价并重新确认
+        </button>
+      </template>
+      <RouterLink v-else :to="recovery.checkoutPath" class="button"
+        >返回原结算核对</RouterLink
+      >
+      <RouterLink to="/orders" class="text-link">查看我的订单</RouterLink>
+    </section>
+    <div v-else-if="hasSource" class="cart-layout checkout-layout" data-ui>
       <div>
         <section class="checkout-section">
           <div class="section-heading">
             <h2>寄到这里</h2>
             <button
               class="text-link"
-              :disabled="submitting || saving"
+              :disabled="submitting || saving || disconnected"
               @click="edit()"
             >
               添加地址
@@ -242,7 +412,7 @@ async function submit() {
                   type="radio"
                   name="address"
                   :value="a.id"
-                  :disabled="submitting || saving"
+                  :disabled="submitting || saving || disconnected"
                 />
                 <div>
                   <strong>{{ a.name }} · {{ a.phone }}</strong>
@@ -253,7 +423,7 @@ async function submit() {
               <button
                 class="text-link"
                 :aria-label="`编辑 ${a.name} 的地址`"
-                :disabled="submitting || saving"
+                :disabled="submitting || saving || disconnected"
                 @click="edit(a)"
               >
                 编辑
@@ -265,7 +435,10 @@ async function submit() {
         <section class="checkout-section form-stack">
           <h2>优惠券</h2>
           <label
-            >使用优惠券<select v-model="couponClaimId" :disabled="submitting">
+            >使用优惠券<select
+              v-model="couponClaimId"
+              :disabled="submitting || disconnected"
+            >
               <option value="">不使用优惠券</option>
               <option
                 v-for="{ claim, coupon } in couponOptions"
@@ -322,14 +495,20 @@ async function submit() {
         <button
           class="button"
           :disabled="
-            submitting || quoting || saving || !quote || expired || stale
+            submitting ||
+            quoting ||
+            saving ||
+            !quote ||
+            expired ||
+            stale ||
+            disconnected
           "
           @click="submit"
         >
           {{ submitting ? "正在提交…" : "提交订单" }}</button
         ><button
           class="text-link"
-          :disabled="submitting || quoting || !addressId"
+          :disabled="submitting || quoting || !addressId || disconnected"
           @click="refreshQuote"
         >
           {{ quoting ? "正在更新报价…" : "重新获取报价" }}

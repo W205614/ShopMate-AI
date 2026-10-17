@@ -40,6 +40,21 @@ const rows = computed(() =>
 function update(id: string, patch: { quantity?: number; selected?: boolean }) {
   return run(() => api.updateCart(id, patch));
 }
+async function editQuantity(id: string, event: Event) {
+  const input = event.target as HTMLInputElement;
+  const row = rows.value.find((r) => r.item.id === id);
+  if (!row) return;
+  const quantity = Number(input.value),
+    stock = row.sku?.stock ?? 0;
+  await run(async () => {
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > stock)
+      throw new Error(`数量须为 1 至 ${stock} 的整数`);
+    await api.updateCart(id, { quantity });
+  });
+  input.value = String(
+    shop.myCart.find((item) => item.id === id)?.quantity ?? row.item.quantity,
+  );
+}
 function remove(id: string) {
   return run(() => api.removeCart(id), "已移除商品");
 }
@@ -120,21 +135,60 @@ function clearInvalid() {
             <p v-if="!r.product?.active || !r.sku" class="stock-error">
               商品已下架或规格失效
             </p>
+            <p v-else-if="r.sku.stock === 0" class="stock-error">
+              暂时缺货，已为你保留购物车条目
+            </p>
             <p v-else-if="r.sku.stock < r.item.quantity" class="stock-error">
               库存不足，仅剩 {{ r.sku.stock }} 件
             </p>
+            <button
+              v-if="
+                r.product?.active &&
+                r.sku &&
+                r.sku.stock > 0 &&
+                r.item.quantity > r.sku.stock
+              "
+              class="text-link"
+              :disabled="busy"
+              @click="update(r.item.id, { quantity: r.sku.stock })"
+            >
+              调整至可购数量（{{ r.sku.stock }} 件）
+            </button>
           </div>
           <div class="cart-row-end">
             <div class="quantity-control">
               <button
-                :disabled="busy || r.item.quantity <= 1"
+                :disabled="
+                  busy ||
+                  !r.product?.active ||
+                  !r.sku?.stock ||
+                  r.item.quantity <= 1
+                "
                 aria-label="减少数量"
-                @click="update(r.item.id, { quantity: r.item.quantity - 1 })"
+                @click="
+                  update(r.item.id, {
+                    quantity: Math.min(r.item.quantity - 1, r.sku?.stock ?? 0),
+                  })
+                "
               >
                 <Minus :size="15" /></button
-              ><span>{{ r.item.quantity }}</span
-              ><button
-                :disabled="busy || r.item.quantity >= (r.sku?.stock ?? 0)"
+              ><input
+                type="number"
+                inputmode="numeric"
+                min="1"
+                :max="r.sku?.stock ?? 0"
+                step="1"
+                :value="r.item.quantity"
+                :aria-label="`${r.product?.name ?? '失效商品'} ${r.sku?.name ?? ''} 数量`"
+                :disabled="busy || !r.product?.active || !r.sku?.stock"
+                @change="editQuantity(r.item.id, $event)"
+              />
+              <button
+                :disabled="
+                  busy ||
+                  !r.product?.active ||
+                  r.item.quantity >= (r.sku?.stock ?? 0)
+                "
                 aria-label="增加数量"
                 @click="update(r.item.id, { quantity: r.item.quantity + 1 })"
               >

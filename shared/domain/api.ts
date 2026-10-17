@@ -1,5 +1,9 @@
 import type {
   AddressInput,
+  CheckoutInput,
+  CheckoutQuote,
+  CouponInput,
+  ReorderResult,
   CategoryInput,
   FaqInput,
   ProductInput,
@@ -16,6 +20,29 @@ export interface ShopApi {
   }): Promise<Session>;
   login(role: Role, username: string, password: string): Promise<Session>;
   logout(role: Role): Promise<void>;
+  updateProfile(name: string): Promise<Session>;
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
+  batchCart(input: {
+    ids: string[];
+    action: "select" | "remove";
+    selected?: boolean;
+  }): Promise<void>;
+  clearInvalidCart(): Promise<void>;
+  quoteCheckout(input: CheckoutInput): Promise<CheckoutQuote>;
+  reorder(id: string): Promise<ReorderResult>;
+  saveCoupon(input: CouponInput): Promise<void>;
+  claimCoupon(id: string): Promise<void>;
+  toggleCoupon(id: string): Promise<void>;
+  submitReview(input: {
+    orderId: string;
+    orderItemId: string;
+    rating: number;
+    content: string;
+  }): Promise<void>;
+  deleteReview(id: string): Promise<void>;
+  moderateReview(id: string, hidden: boolean): Promise<void>;
+  cancelAfterSale(id: string): Promise<void>;
+  submitReturn(id: string, carrier: string, tracking: string): Promise<void>;
   addCart(productId: string, skuId: string, quantity: number): Promise<void>;
   updateCart(
     id: string,
@@ -25,7 +52,7 @@ export interface ShopApi {
   favorite(productId: string): Promise<void>;
   saveAddress(input: AddressInput): Promise<void>;
   deleteAddress(id: string): Promise<void>;
-  createOrder(addressId: string): Promise<string>;
+  createOrder(input: { quoteId: string; requestId: string }): Promise<string>;
   payOrder(id: string): Promise<void>;
   cancelOrder(id: string): Promise<void>;
   confirmOrder(id: string): Promise<void>;
@@ -33,6 +60,7 @@ export interface ShopApi {
     orderId: string,
     reason: string,
     description: string,
+    lines: { orderItemId: string; quantity: number }[],
   ): Promise<void>;
   saveProduct(input: ProductInput): Promise<void>;
   toggleProduct(id: string): Promise<void>;

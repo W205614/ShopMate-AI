@@ -1,9 +1,11 @@
 import express from "express";
+import { z } from "zod";
+import { marketingApi, publicReviews } from "./marketing";
 import type { ErrorRequestHandler } from "express";
 import type { DatabaseSync } from "node:sqlite";
 import { ZodError } from "zod";
 import type { Database, Role, Session } from "../../shared/domain/types";
-import { readDatabase } from "./database";
+import { readDatabase, transaction, writeDatabase } from "./database";
 import {
   Account,
   HttpError,
@@ -19,7 +21,13 @@ import { context, admin, transact } from "./repository";
 import { commerceApi } from "./commerce";
 import { catalogApi } from "./catalog";
 import { supportApi } from "./support";
-import { loginSchema, methods, registerSchema, roleSchema } from "./validation";
+import {
+  loginSchema,
+  methods,
+  passwordSchema,
+  registerSchema,
+  roleSchema,
+} from "./validation";
 
 export function visibleDatabase(
   db: Database,
@@ -30,6 +38,10 @@ export function visibleDatabase(
   const uid = sessions.user?.id;
   return {
     ...db,
+    couponClaims: db.couponClaims.filter((c) => c.userId === uid),
+    reviews: db.reviews.filter((r) => r.userId === uid),
+    checkoutQuotes: db.checkoutQuotes.filter((q) => q.userId === uid),
+    orderRequests: [],
     users: db.users.filter((u) => u.id === uid),
     carts: db.carts.filter((c) => c.userId === uid),
     addresses: db.addresses.filter((a) => a.userId === uid),
@@ -82,6 +94,64 @@ export async function createApp(
       sessions,
     });
   });
+  app.get("/api/products/:id/reviews", (req, res) => {
+    const page = Number(req.query.page);
+    res.json(publicReviews(readDatabase(sql), String(req.params.id), page));
+  });
+  app.post("/api/auth/profile", (req, res) => {
+    const session = findSession(sql, req, "user");
+    if (!session) throw new HttpError(401, "登录已失效，请重新登录");
+    const { name } = z
+      .object({ name: registerSchema.shape.name })
+      .strict()
+      .parse(req.body);
+    transaction(sql, () => {
+      sql
+        .prepare("UPDATE accounts SET name=? WHERE id=? AND role='user'")
+        .run(name, session.id);
+      const db = readDatabase(sql);
+      const user = db.users.find((u) => u.id === session.id);
+      if (!user) throw new HttpError(400, "账号数据不完整");
+      user.name = name;
+      db.revision++;
+      writeDatabase(sql, db);
+    });
+    res.json({ ...session, name });
+  });
+  app.post("/api/auth/password", async (req, res) => {
+    const session = findSession(sql, req, "user");
+    if (!session) throw new HttpError(401, "登录已失效，请重新登录");
+    rateLimit(sql, `password:${session.id}`, 5, 15 * 60 * 1000);
+    const input = z
+      .object({
+        currentPassword: z.string().min(1).max(128),
+        newPassword: passwordSchema,
+      })
+      .strict()
+      .parse(req.body);
+    const account = sql
+      .prepare("SELECT * FROM accounts WHERE id=? AND role='user'")
+      .get(session.id) as unknown as Account;
+    if (!(await checkPassword(input.currentPassword, account.password_hash)))
+      throw new HttpError(400, "原密码错误");
+    const nextHash = await hashPassword(input.newPassword);
+    transaction(sql, () => {
+      const current = sql
+        .prepare("SELECT password_hash FROM accounts WHERE id=?")
+        .get(session.id) as { password_hash: string } | undefined;
+      if (
+        !findSession(sql, req, "user") ||
+        current?.password_hash !== account.password_hash
+      )
+        throw new HttpError(409, "账号状态已变更，请重新登录后操作");
+      sql
+        .prepare("UPDATE accounts SET password_hash=? WHERE id=?")
+        .run(nextHash, session.id);
+      sql.prepare("DELETE FROM sessions WHERE account_id=?").run(session.id);
+    });
+    clearSession(sql, req, res, "user", secure);
+    res.json({ ok: true });
+  });
   app.post("/api/auth/register", async (req, res) => {
     rateLimit(sql, `register:${req.ip}`, 10, 60 * 60 * 1000);
     const input = registerSchema.parse(req.body);
@@ -115,6 +185,7 @@ export async function createApp(
     ...commerceApi,
     ...catalogApi,
     ...supportApi,
+    ...marketingApi,
     async resetDemo() {
       admin();
       await transact(() => undefined, true);

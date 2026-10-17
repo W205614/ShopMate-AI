@@ -153,6 +153,12 @@ async function login() {
         <p v-if="registering" class="secondary">
           账号以字母开头，支持字母、数字和下划线，3–32 位。
         </p>
+        <p
+          v-if="route.query.changed === '1' && role === 'user' && !registering"
+          role="status"
+        >
+          密码已修改，请使用新密码重新登录。
+        </p>
         <p role="alert" class="auth-error">{{ error }}</p>
         <button class="auth-submit" type="submit" :disabled="busy">
           {{

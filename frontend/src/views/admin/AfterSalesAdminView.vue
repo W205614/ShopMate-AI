@@ -6,6 +6,8 @@ import { api } from "../../services/api";
 import { afterSaleLabels, money, dateTime } from "../../domain/types";
 import type { AfterSale } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
+import { eventLabel } from "../../components/shop/commerceLabels";
+import "../../styles/account-commerce.css";
 const shop = useShop(),
   { busy, run } = useAdminAction(),
   status = ref(""),
@@ -87,6 +89,10 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
         ><template #default="{ row }">{{
           row.requiresReturn ? "退货退款" : "仅退款"
         }}</template></el-table-column
+      ><el-table-column label="本次退款" min-width="110"
+        ><template #default="{ row }">{{
+          money(row.refundAmount)
+        }}</template></el-table-column
       ><el-table-column label="状态" width="110"
         ><template #default="{ row }"
           ><el-tag effect="plain">{{
@@ -121,12 +127,24 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
         </dd>
         <dt>退款金额</dt>
         <dd>
-          {{
-            money(
-              shop.db.orders.find((o) => o.id === selected?.orderId)?.total ||
-                0,
-            )
-          }}
+          {{ money(selected.refundAmount) }}
+        </dd>
+        <dt>申请商品</dt>
+        <dd>
+          <div v-for="line in selected.lines" :key="line.orderItemId">
+            {{
+              shop.db.orders
+                .find((o) => o.id === selected?.orderId)
+                ?.items.find((i) => i.id === line.orderItemId)?.name ??
+              "历史商品"
+            }}
+            × {{ line.quantity }} · {{ money(line.amount) }}
+          </div>
+        </dd>
+        <dt>退货物流</dt>
+        <dd>
+          {{ selected.returnCarrier || "尚未填写" }}
+          {{ selected.returnTracking }}
         </dd>
         <dt>申请原因</dt>
         <dd>{{ selected.reason }}</dd>
@@ -143,13 +161,31 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
             v-model="note"
             type="textarea"
             :rows="3"
-            :disabled="['refunded', 'rejected'].includes(selected.status)"
+            :disabled="
+              ['refunded', 'rejected', 'cancelled'].includes(selected.status)
+            "
             placeholder="填写审核或收货情况；拒绝时必填" /></el-form-item></el-form
       ><el-alert
         v-if="selected.status === 'approved' && selected.requiresReturn"
-        title="等待用户退货。收到退货后确认收货，再执行模拟退款。"
+        title="等待用户填写退货物流。提交单号并收到退货后，才能确认收货和退款。"
         type="info"
-        :closable="false" /></template
+        :closable="false"
+      />
+      <ul class="admin-commerce-events" aria-label="售后进度">
+        <li v-for="(event, index) in selected.events" :key="index">
+          <time
+            >{{ dateTime(event.at) }} ·
+            {{
+              event.actor === "admin"
+                ? "管理员"
+                : event.actor === "user"
+                  ? "用户"
+                  : "系统"
+            }}</time
+          >{{ eventLabel(event.action)
+          }}<span v-if="event.note"> · {{ event.note }}</span>
+        </li>
+      </ul></template
     ><template #footer
       ><el-button @click="dialog = false">关闭</el-button
       ><template v-if="selected?.status === 'requested'"
@@ -159,7 +195,11 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
           >批准申请</el-button
         ></template
       ><el-button
-        v-if="selected?.status === 'approved' && selected.requiresReturn"
+        v-if="
+          selected?.status === 'returning' &&
+          selected.requiresReturn &&
+          selected.returnTracking
+        "
         type="primary"
         :loading="busy"
         @click="action('receive')"

@@ -1,6 +1,11 @@
 import type { Database, Role, Session } from "../domain/types";
 let database: Database = {
-  version: 1,
+  version: 2,
+  coupons: [],
+  couponClaims: [],
+  reviews: [],
+  checkoutQuotes: [],
+  orderRequests: [],
   revision: 0,
   users: [],
   products: [],

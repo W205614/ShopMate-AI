@@ -10,6 +10,8 @@ import {
   ShoppingBag,
   RotateCcw,
   Receipt,
+  Ticket,
+  Star,
   MessagesSquare,
   BookOpen,
   Settings2,
@@ -31,6 +33,8 @@ const icons = [
   ShoppingBag,
   RotateCcw,
   Receipt,
+  Ticket,
+  Star,
   MessagesSquare,
   BookOpen,
   Settings2,
@@ -44,6 +48,8 @@ const links = [
   ["/admin/orders", "订单管理", "Orders"],
   ["/admin/after-sales", "售后管理", "After sales"],
   ["/admin/finance", "收支流水", "Finance"],
+  ["/admin/coupons", "优惠券管理", "Coupons"],
+  ["/admin/reviews", "评价管理", "Reviews"],
   ["/admin/support", "客服工作台", "Support"],
   ["/admin/knowledge", "FAQ 管理", "Knowledge"],
   ["/admin/settings", "演示设置", "Settings"],
@@ -58,7 +64,12 @@ async function logout() {
 </script>
 <template>
   <div class="admin-app" data-ui>
-    <button v-if="expanded" class="admin-nav-scrim" aria-label="关闭导航" @click="expanded = false" />
+    <button
+      v-if="expanded"
+      class="admin-nav-scrim"
+      aria-label="关闭导航"
+      @click="expanded = false"
+    />
     <aside class="admin-sidebar" :class="{ expanded }">
       <RouterLink class="admin-brand" to="/admin"
         >ShopMate<span>运营管理台</span></RouterLink
@@ -105,3 +116,9 @@ async function logout() {
     </div>
   </div>
 </template>
+<style scoped>
+.admin-sidebar nav {
+  overflow-y: auto;
+  min-height: 0;
+}
+</style>

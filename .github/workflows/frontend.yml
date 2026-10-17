@@ -43,11 +43,12 @@ jobs:
           APP_PORT: "18087"
           APP_ORIGINS: http://127.0.0.1:18087
         run: docker compose -p shopmate-auth-ci up -d --build --wait
-      - name: Verify authentication and catalogue through Nginx and API containers
+      - name: Verify authentication and traditional commerce through containers
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:18087
           E2E_ADMIN_PASSWORD: CIContainer123!
-        run: npm run test:e2e -- e2e/auth.spec.ts e2e/catalogue-smoke.spec.ts --output=test-results-container
+          E2E_MUTATIONS_ALLOWED: "1"
+        run: npm run test:e2e -- e2e/auth.spec.ts e2e/catalogue-smoke.spec.ts e2e/traditional-container.spec.ts --output=test-results-container
       - name: Container diagnostics
         if: failure()
         working-directory: .

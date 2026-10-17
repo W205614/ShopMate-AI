@@ -4,7 +4,8 @@ import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import { orderLabels, money, dateTime } from "../../domain/types";
 import type { Order } from "../../domain/types";
-const totalQuantity = (order: Order) => order.items.reduce((total, item) => total + item.quantity, 0);
+const totalQuantity = (order: Order) =>
+  order.items.reduce((total, item) => total + item.quantity, 0);
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
   { busy, run } = useAdminAction(),
@@ -28,6 +29,17 @@ const rows = computed(() =>
 const selected = computed(() =>
   shop.db.orders.find((o) => o.id === selectedId.value),
 );
+function canShip(order: Order) {
+  return (
+    order.status === "paid" &&
+    order.items.some((item) => item.quantity > item.refundedQuantity) &&
+    !shop.db.afterSales.some(
+      (a) =>
+        a.orderId === order.id &&
+        !["refunded", "rejected", "cancelled"].includes(a.status),
+    )
+  );
+}
 function view(o: Order) {
   selectedId.value = o.id;
   detail.value = true;
@@ -90,16 +102,19 @@ async function submit() {
           >{{ row.items[0]?.name
           }}<small style="display: block; color: #7a828f"
             >共
-            {{
-              totalQuantity(row)
-            }}
+            {{ totalQuantity(row) }}
             件</small
           ></template
         ></el-table-column
       ><el-table-column label="金额" min-width="110"
-        ><template #default="{ row }">{{
-          money(row.total)
-        }}</template></el-table-column
+        ><template #default="{ row }"
+          >{{ money(row.total)
+          }}<small
+            v-if="row.refundedAmount"
+            style="display: block; color: #7a828f"
+            >已退 {{ money(row.refundedAmount) }}</small
+          ></template
+        ></el-table-column
       ><el-table-column label="状态" width="100"
         ><template #default="{ row }"
           ><el-tag effect="plain">{{
@@ -114,7 +129,7 @@ async function submit() {
         ><template #default="{ row }"
           ><el-button type="primary" link @click="view(row)">详情</el-button
           ><el-button
-            v-if="row.status === 'paid'"
+            v-if="canShip(row)"
             type="primary"
             link
             @click="shipping(row)"
@@ -152,18 +167,27 @@ async function submit() {
         <div>
           {{ i.name
           }}<small style="display: block"
-            >{{ i.skuName }} × {{ i.quantity }}</small
+            >{{ i.skuName }} × {{ i.quantity
+            }}<span v-if="i.refundedQuantity">
+              · 已退 {{ i.refundedQuantity }} 件 / 剩余
+              {{ i.quantity - i.refundedQuantity }} 件</span
+            ></small
           >
         </div>
-        <b>{{ money(i.price * i.quantity) }}</b>
+        <b>{{ money(i.total) }}</b>
       </div>
       <div class="admin-stats-line">
-        订单总额 <strong>{{ money(selected.total) }}</strong>
+        实付金额 <strong>{{ money(selected.total) }}</strong
+        ><span v-if="selected.discount"
+          >（优惠 {{ money(selected.discount) }}）</span
+        ><span v-if="selected.refundedAmount">
+          · 已退 {{ money(selected.refundedAmount) }}</span
+        >
       </div></template
     ><template #footer
       ><el-button @click="detail = false">关闭</el-button
       ><el-button
-        v-if="selected?.status === 'paid'"
+        v-if="selected && canShip(selected)"
         type="primary"
         @click="shipping(selected)"
         >填写发货信息</el-button

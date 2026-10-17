@@ -1,26 +1,27 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   ArrowUpRight,
   Heart,
   Minus,
   Plus,
   MessageCircle,
-} from 'lucide-vue-next'
-import { useShop } from '../../stores/shop'
-import { api } from '../../services/api'
-import { money } from '../../domain/types'
-import { useAction } from '../../components/shop/useAction'
-import ActionNotice from '../../components/shop/ActionNotice.vue'
-import ProductCard from '../../components/shop/ProductCard.vue'
+} from "lucide-vue-next";
+import { useShop } from "../../stores/shop";
+import { api } from "../../services/api";
+import { money } from "../../domain/types";
+import { useAction } from "../../components/shop/useAction";
+import ActionNotice from "../../components/shop/ActionNotice.vue";
+import ProductCard from "../../components/shop/ProductCard.vue";
+import ProductReviews from "../../components/shop/ProductReviews.vue";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter(),
-  selected = ref(''),
+  selected = ref(""),
   image = ref(0),
   quantity = ref(1),
-  { busy, error, notice, run } = useAction()
+  { busy, error, notice, run } = useAction();
 const product = computed(() =>
     shop.db.products.find((p) => p.id === route.params.id),
   ),
@@ -41,39 +42,58 @@ const product = computed(() =>
           p.id !== product.value?.id,
       )
       .slice(0, 4),
-  )
+  );
 watch(
   () => route.params.id,
   () => {
-    selected.value = ''
-    image.value = 0
-    quantity.value = 1
-    error.value = ''
-    notice.value = ''
+    selected.value = "";
+    image.value = 0;
+    quantity.value = 1;
+    error.value = "";
+    notice.value = "";
   },
-)
+);
 function requireLogin() {
-  if (shop.user) return true
-  router.push({ path: '/login', query: { redirect: route.fullPath } })
-  return false
+  if (shop.user) return true;
+  router.push({ path: "/login", query: { redirect: route.fullPath } });
+  return false;
 }
 function selectSku(id: string) {
-  selected.value = id
-  quantity.value = 1
+  selected.value = id;
+  quantity.value = 1;
 }
 async function add() {
-  if (!requireLogin() || !product.value || !sku.value) return
+  if (!requireLogin() || !product.value || !sku.value) return;
   await run(
     () => api.addCart(product.value!.id, sku.value!.id, quantity.value),
-    '已加入购物车，可以继续选购。',
-  )
+    "已加入购物车，可以继续选购。",
+  );
+}
+function buyNow() {
+  if (!requireLogin() || !product.value || !sku.value) return;
+  if (
+    !Number.isInteger(quantity.value) ||
+    quantity.value < 1 ||
+    quantity.value > sku.value.stock
+  ) {
+    error.value = "请选择库存范围内的整数数量";
+    return;
+  }
+  router.push({
+    path: "/checkout",
+    query: {
+      productId: product.value.id,
+      skuId: sku.value.id,
+      quantity: String(quantity.value),
+    },
+  });
 }
 async function toggleFavorite() {
   if (requireLogin() && product.value)
     await run(
       () => api.favorite(product.value!.id),
-      favorite.value ? '已取消收藏' : '已加入收藏',
-    )
+      favorite.value ? "已取消收藏" : "已加入收藏",
+    );
 }
 </script>
 <template>
@@ -131,7 +151,7 @@ async function toggleFavorite() {
             </button>
           </div>
           <p class="secondary">
-            {{ sku?.stock ? `当前库存 ${sku.stock} 件` : '当前规格暂时售罄' }}
+            {{ sku?.stock ? `当前库存 ${sku.stock} 件` : "当前规格暂时售罄" }}
           </p>
         </div>
         <div class="quantity-row">
@@ -160,11 +180,18 @@ async function toggleFavorite() {
         </div>
         <div class="purchase-actions">
           <button
+            class="button secondary-button"
+            :disabled="busy || !product.active || !sku?.stock"
+            @click="buyNow"
+          >
+            立即购买
+          </button>
+          <button
             class="button"
             :disabled="busy || !product.active || !sku?.stock"
             @click="add"
           >
-            {{ busy ? '处理中…' : '加入购物车' }}
+            {{ busy ? "处理中…" : "加入购物车" }}
             <ArrowUpRight :size="20" /></button
           ><button
             class="favorite-button"
@@ -203,6 +230,7 @@ async function toggleFavorite() {
         </div>
       </div>
     </div>
+    <ProductReviews :product-id="product.id" />
     <section v-if="related.length" class="related-products">
       <div class="section-heading">
         <h2>也许你还会喜欢</h2>

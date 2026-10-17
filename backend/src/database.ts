@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { Database } from "../../shared/domain/types";
 import { createSeed } from "../../shared/domain/seed";
+import { migrateDatabase } from "./migration";
 
 // Keep the existing catalog; historical demo people and orders are not real accounts.
 export function initialDatabase(): Database {
@@ -52,6 +53,10 @@ export function openDatabase(path: string) {
   sql
     .prepare("INSERT OR IGNORE INTO state VALUES (1, ?)")
     .run(JSON.stringify(initialDatabase()));
+  transaction(sql, () => {
+    const db = readDatabase(sql);
+    if (migrateDatabase(db)) writeDatabase(sql, db);
+  });
   return sql;
 }
 

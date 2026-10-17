@@ -84,6 +84,85 @@ const product = z
   })
   .strict();
 export const methods = {
+  batchCart: {
+    role: "user",
+    args: z.tuple([
+      z
+        .object({
+          ids: z.array(id).min(1).max(500),
+          action: z.enum(["select", "remove"]),
+          selected: z.boolean().optional(),
+        })
+        .strict(),
+    ]),
+  },
+  clearInvalidCart: { role: "user", args: z.tuple([]) },
+  quoteCheckout: {
+    role: "user",
+    args: z.tuple([
+      z
+        .object({
+          source: z.discriminatedUnion("type", [
+            z
+              .object({
+                type: z.literal("cart"),
+                cartIds: z.array(id).min(1).max(500),
+              })
+              .strict(),
+            z
+              .object({
+                type: z.literal("buyNow"),
+                productId: id,
+                skuId: id,
+                quantity: integer.positive(),
+              })
+              .strict(),
+          ]),
+          addressId: id,
+          couponClaimId: id.optional(),
+        })
+        .strict(),
+    ]),
+  },
+  reorder: { role: "user", args: z.tuple([id]) },
+  saveCoupon: {
+    role: "admin",
+    args: z.tuple([
+      z
+        .object({
+          id: id.optional(),
+          name: text(60),
+          threshold: integer.positive(),
+          discount: integer.positive(),
+          claimStartsAt: z.string().datetime({ offset: true }),
+          claimEndsAt: z.string().datetime({ offset: true }),
+          validFrom: z.string().datetime({ offset: true }),
+          validUntil: z.string().datetime({ offset: true }),
+          totalLimit: integer.positive(),
+          active: z.boolean(),
+        })
+        .strict(),
+    ]),
+  },
+  claimCoupon: { role: "user", args: z.tuple([id]) },
+  toggleCoupon: { role: "admin", args: z.tuple([id]) },
+  submitReview: {
+    role: "user",
+    args: z.tuple([
+      z
+        .object({
+          orderId: id,
+          orderItemId: id,
+          rating: integer.min(1).max(5),
+          content: text(1000).min(5),
+        })
+        .strict(),
+    ]),
+  },
+  deleteReview: { role: "user", args: z.tuple([id]) },
+  moderateReview: { role: "admin", args: z.tuple([id, z.boolean()]) },
+  cancelAfterSale: { role: "user", args: z.tuple([id]) },
+  submitReturn: { role: "user", args: z.tuple([id, text(60), text(80)]) },
   addCart: { role: "user", args: z.tuple([id, id, integer.positive()]) },
   updateCart: {
     role: "user",
@@ -101,13 +180,26 @@ export const methods = {
   favorite: { role: "user", args: z.tuple([id]) },
   saveAddress: { role: "user", args: z.tuple([address]) },
   deleteAddress: { role: "user", args: z.tuple([id]) },
-  createOrder: { role: "user", args: z.tuple([id]) },
+  createOrder: {
+    role: "user",
+    args: z.tuple([z.object({ quoteId: id, requestId: id }).strict()]),
+  },
   payOrder: { role: "user", args: z.tuple([id]) },
   cancelOrder: { role: "user", args: z.tuple([id]) },
   confirmOrder: { role: "user", args: z.tuple([id]) },
   requestAfterSale: {
     role: "user",
-    args: z.tuple([id, text(100), text(1000)]),
+    args: z.tuple([
+      id,
+      text(100),
+      text(1000),
+      z
+        .array(
+          z.object({ orderItemId: id, quantity: integer.positive() }).strict(),
+        )
+        .min(1)
+        .max(500),
+    ]),
   },
   createConversation: {
     role: "user",

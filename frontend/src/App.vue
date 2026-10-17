@@ -2,6 +2,7 @@
 import { ref, watch, onErrorCaptured } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useShop } from "./stores/shop";
+import { hasPasswordChangeNotice } from "./services/api";
 const shop = useShop();
 const route = useRoute(),
   router = useRouter();
@@ -13,11 +14,16 @@ watch(
     if (
       (role === "user" && !shop.userSession) ||
       (role === "admin" && !shop.adminSession)
-    )
+    ) {
+      const changed = role === "user" && hasPasswordChangeNotice();
       void router.replace({
         path: role === "admin" ? "/admin/login" : "/login",
-        query: { redirect: route.fullPath },
+        query: {
+          redirect: route.fullPath,
+          ...(changed ? { changed: "1" } : {}),
+        },
       });
+    }
   },
 );
 const error = ref("");

@@ -77,6 +77,11 @@ const router = createRouter({
           meta: { title: "个人中心", auth: "user" },
         },
         {
+          path: "coupons",
+          component: () => import("./views/shop/CouponsView.vue"),
+          meta: { title: "领券中心" },
+        },
+        {
           path: "after-sales",
           component: () => import("./views/shop/AfterSalesView.vue"),
           meta: { title: "售后进度", auth: "user" },
@@ -132,6 +137,16 @@ const router = createRouter({
           path: "finance",
           component: () => import("./views/admin/FinanceAdminView.vue"),
           meta: { title: "收支流水" },
+        },
+        {
+          path: "coupons",
+          component: () => import("./views/admin/CouponsAdminView.vue"),
+          meta: { title: "优惠券管理" },
+        },
+        {
+          path: "reviews",
+          component: () => import("./views/admin/ReviewsAdminView.vue"),
+          meta: { title: "评价管理" },
         },
         {
           path: "support",

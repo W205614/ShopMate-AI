@@ -1,24 +1,29 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useShop } from '../../stores/shop'
-import { api } from '../../services/api'
-import { money } from '../../domain/types'
-import { Minus, Plus, Trash2, ArrowRight } from 'lucide-vue-next'
-import { useAction } from '../../components/shop/useAction'
-import ActionNotice from '../../components/shop/ActionNotice.vue'
+import { computed } from "vue";
+import { useShop } from "../../stores/shop";
+import { api } from "../../services/api";
+import { money } from "../../domain/types";
+import { Minus, Plus, Trash2, ArrowRight } from "lucide-vue-next";
+import { useAction } from "../../components/shop/useAction";
+import ActionNotice from "../../components/shop/ActionNotice.vue";
 const shop = useShop(),
-  { busy, error, notice, run } = useAction()
+  { busy, error, notice, run } = useAction();
 const rows = computed(() =>
     shop.myCart.map((item) => {
-      const product = shop.db.products.find((p) => p.id === item.productId)
+      const product = shop.db.products.find((p) => p.id === item.productId);
       return {
         item,
         product,
         sku: product?.skus.find((s) => s.id === item.skuId),
-      }
+      };
     }),
   ),
   selected = computed(() => rows.value.filter((r) => r.item.selected)),
+  eligible = computed(() =>
+    rows.value.filter(
+      (r) => r.product?.active && r.sku && r.sku.stock >= r.item.quantity,
+    ),
+  ),
   total = computed(() =>
     selected.value.reduce(
       (sum, r) => sum + (r.sku?.price ?? 0) * r.item.quantity,
@@ -31,19 +36,39 @@ const rows = computed(() =>
       selected.value.every(
         (r) => r.product?.active && r.sku && r.sku.stock >= r.item.quantity,
       ),
-  )
+  );
 function update(id: string, patch: { quantity?: number; selected?: boolean }) {
-  return run(() => api.updateCart(id, patch))
+  return run(() => api.updateCart(id, patch));
 }
 function remove(id: string) {
-  return run(() => api.removeCart(id), '已移除商品')
+  return run(() => api.removeCart(id), "已移除商品");
 }
 async function selectAll(event: Event) {
-  const checked = (event.target as HTMLInputElement).checked
+  const checked = (event.target as HTMLInputElement).checked;
   await run(async () => {
-    for (const r of rows.value)
-      await api.updateCart(r.item.id, { selected: checked })
-  })
+    await api.batchCart({
+      ids: rows.value.map((r) => r.item.id),
+      action: "select",
+      selected: checked,
+    });
+  });
+}
+function removeSelected() {
+  if (window.confirm("确认删除所选商品？"))
+    return run(
+      () =>
+        api.batchCart({
+          ids: selected.value.map((r) => r.item.id),
+          action: "remove",
+        }),
+      "已删除所选商品",
+    );
+}
+function clearInvalid() {
+  return run(
+    () => api.clearInvalidCart(),
+    "已清理下架商品和失效规格；缺货商品仍保留",
+  );
 }
 </script>
 <template>
@@ -58,11 +83,18 @@ async function selectAll(event: Event) {
         <label class="check-label cart-select-all"
           ><input
             type="checkbox"
-            :checked="selected.length === rows.length"
+            :checked="
+              eligible.length > 0 && eligible.every((r) => r.item.selected)
+            "
             :disabled="busy"
             @change="selectAll"
           />全选 <span class="secondary">{{ rows.length }} 种商品</span></label
         >
+        <div class="button-row">
+          <button :disabled="busy || !selected.length" @click="removeSelected">
+            删除所选</button
+          ><button :disabled="busy" @click="clearInvalid">清理失效商品</button>
+        </div>
         <article v-for="r in rows" :key="r.item.id" class="cart-row">
           <input
             type="checkbox"
@@ -81,9 +113,9 @@ async function selectAll(event: Event) {
           /></RouterLink>
           <div class="cart-product">
             <RouterLink :to="`/products/${r.item.productId}`">{{
-              r.product?.name ?? '失效商品'
+              r.product?.name ?? "失效商品"
             }}</RouterLink>
-            <p class="secondary">{{ r.sku?.name ?? '规格已失效' }}</p>
+            <p class="secondary">{{ r.sku?.name ?? "规格已失效" }}</p>
             <strong>{{ money(r.sku?.price ?? 0) }}</strong>
             <p v-if="!r.product?.active || !r.sku" class="stock-error">
               商品已下架或规格失效

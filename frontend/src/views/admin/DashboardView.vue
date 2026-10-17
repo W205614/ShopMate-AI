@@ -65,7 +65,7 @@ const ranking = computed(() =>
         )
         .flatMap((o) => o.items)
         .filter((i) => i.productId === p.id)
-        .reduce((n, i) => n + i.quantity, 0);
+        .reduce((n, i) => n + i.quantity - i.refundedQuantity, 0);
       return { ...p, count };
     })
     .sort((a, b) => b.count - a.count)

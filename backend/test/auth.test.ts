@@ -135,9 +135,31 @@ describe("real authentication over HTTP", () => {
     ).toBe(200);
     const address = (await state(aCookie)).db.addresses[0];
     await action("addCart", ["p01", "p01-s1", 1], aCookie);
-    const order = await (
-      await action("createOrder", [address.id], aCookie)
+    const ownCart = (await state(aCookie)).db.carts;
+    const quote = await (
+      await action(
+        "quoteCheckout",
+        [
+          {
+            addressId: address.id,
+            source: {
+              type: "cart",
+              cartIds: ownCart.map((c: { id: string }) => c.id),
+            },
+          },
+        ],
+        aCookie,
+      )
     ).json();
+    expect(quote.result.total).toBe(39900);
+    const order = await (
+      await action(
+        "createOrder",
+        [{ quoteId: quote.result.id, requestId: "auth-order" }],
+        aCookie,
+      )
+    ).json();
+    expect(typeof order.result).toBe("string");
     expect((await action("payOrder", [order.result], bCookie)).status).toBe(
       400,
     );

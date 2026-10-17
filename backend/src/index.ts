@@ -2,8 +2,18 @@ import { openDatabase } from "./database";
 import { createApp } from "./app";
 import { createAccount } from "./auth";
 import { registerSchema } from "./validation";
+import { expirePendingOrders } from "./commerce";
 
 const sql = openDatabase(process.env.DATABASE_PATH ?? "data/shopmate.sqlite");
+expirePendingOrders(sql);
+const expiryTimer = setInterval(() => {
+  try {
+    expirePendingOrders(sql);
+  } catch (error) {
+    console.error("订单超时处理失败", error);
+  }
+}, 60000);
+expiryTimer.unref();
 if (!sql.prepare("SELECT id FROM accounts WHERE role='admin'").get()) {
   const username = process.env.ADMIN_USERNAME ?? "admin";
   const password = process.env.ADMIN_PASSWORD;
@@ -32,6 +42,7 @@ const server = app.listen(
   () => console.log("ShopMate API ready"),
 );
 function shutdown() {
+  clearInterval(expiryTimer);
   server.close(() => {
     sql.close();
     process.exit(0);

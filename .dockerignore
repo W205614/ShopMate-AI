@@ -2,6 +2,7 @@
 **/node_modules
 **/dist
 **/test-results
+**/test-results-container
 **/playwright-report
 .taste-skill
 .env*

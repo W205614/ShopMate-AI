@@ -40,7 +40,16 @@ beforeEach(async () => {
 });
 async function newOrder(product = "p01", quantity = 1) {
   await api.addCart(product, `${product}-s1`, quantity);
-  return api.createOrder("a1");
+  const quote = await api.quoteCheckout({
+    addressId: "a1",
+    source: {
+      type: "cart",
+      cartIds: getDatabase()
+        .carts.filter((c) => c.userId === "u1" && c.selected)
+        .map((c) => c.id),
+    },
+  });
+  return api.createOrder({ quoteId: quote.id, requestId: crypto.randomUUID() });
 }
 
 describe("交易与库存", () => {
@@ -110,12 +119,23 @@ describe("交易与库存", () => {
     const before = getDatabase().products[0]!.skus[0]!.stock;
     await api.payOrder(orderId);
     await api.shipOrder(orderId, "演示物流", "DEMO-TEST");
-    await api.requestAfterSale(orderId, "不再需要", "演示退款流程");
+    await api.requestAfterSale(
+      orderId,
+      "不再需要",
+      "演示退款流程",
+      getDatabase()
+        .orders.find((o) => o.id === orderId)!
+        .items.map((i) => ({ orderItemId: i.id, quantity: i.quantity })),
+    );
     const sale = getDatabase().afterSales[0]!;
     await api.processAfterSale(sale.id, "approve");
     await expect(api.processAfterSale(sale.id, "refund")).rejects.toThrow(
       "退货收货",
     );
+    await expect(api.processAfterSale(sale.id, "receive")).rejects.toThrow(
+      "退货单号",
+    );
+    await api.submitReturn(sale.id, "退货物流", "RETURN-DEMO");
     await api.processAfterSale(sale.id, "receive");
     await Promise.all([
       api.processAfterSale(sale.id, "refund"),
@@ -131,7 +151,14 @@ describe("交易与库存", () => {
   it("未发货退款无需退货，售后期间禁止发货", async () => {
     const orderId = await newOrder();
     await api.payOrder(orderId);
-    await api.requestAfterSale(orderId, "取消购买", "尚未发货");
+    await api.requestAfterSale(
+      orderId,
+      "取消购买",
+      "尚未发货",
+      getDatabase()
+        .orders.find((o) => o.id === orderId)!
+        .items.map((i) => ({ orderItemId: i.id, quantity: i.quantity })),
+    );
     await expect(api.shipOrder(orderId, "演示", "123")).rejects.toThrow("售后");
     const sale = getDatabase().afterSales[0]!;
     expect(sale.requiresReturn).toBe(false);
@@ -152,7 +179,17 @@ describe("身份、管理与客服", () => {
       conversationId = await api.createConversation();
     await api.login("user", "chen", "demo123");
     await expect(api.payOrder(orderId)).rejects.toThrow("不属于当前用户");
-    await expect(api.createOrder("a1")).rejects.toThrow("自己的有效");
+    await expect(
+      api.quoteCheckout({
+        addressId: "a1",
+        source: {
+          type: "buyNow",
+          productId: "p01",
+          skuId: "p01-s1",
+          quantity: 1,
+        },
+      }),
+    ).rejects.toThrow("自己的有效");
     await expect(api.sendMessage(conversationId, "你好")).rejects.toThrow(
       "会话不存在",
     );

@@ -1,52 +1,183 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useShop } from '../../stores/shop'
-import { api } from '../../services/api'
-import type { Address, AddressInput } from '../../domain/types'
-import { UserRound, ArrowUpRight } from 'lucide-vue-next'
-import ProductCard from '../../components/shop/ProductCard.vue'
-import ActionNotice from '../../components/shop/ActionNotice.vue'
-import { useAction } from '../../components/shop/useAction'
+import { computed, reactive, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useShop } from "../../stores/shop";
+import { api } from "../../services/api";
+import type {
+  Address,
+  AddressInput,
+  Coupon,
+  CouponClaim,
+} from "../../domain/types";
+import { dateTime, money } from "../../domain/types";
+import { UserRound, ArrowUpRight } from "lucide-vue-next";
+import ProductCard from "../../components/shop/ProductCard.vue";
+import ActionNotice from "../../components/shop/ActionNotice.vue";
+import { useAction } from "../../components/shop/useAction";
+import "../../styles/account-commerce.css";
+
 const shop = useShop(),
   route = useRoute(),
-  router = useRouter(),
-  section = ref(route.query.section === 'addresses' ? 'addresses' : 'overview'),
-  editing = ref(false),
-  form = reactive<AddressInput>({
-    name: '',
-    phone: '',
-    region: '',
-    detail: '',
-    isDefault: false,
-  }),
-  { busy, error, notice, run } = useAction(),
-  favorites = computed(() =>
-    shop.db.products.filter(
-      (p) => p.active && shop.db.favorites[shop.userId]?.includes(p.id),
+  router = useRouter();
+const sections = [
+  ["overview", "我的收藏"],
+  ["addresses", "收货地址"],
+  ["profile", "个人资料"],
+  ["security", "账号安全"],
+  ["coupons", "我的优惠券"],
+  ["pending-reviews", "待评价"],
+  ["reviews", "我的评价"],
+];
+const section = computed(() =>
+  sections.some(([key]) => key === route.query.section)
+    ? String(route.query.section)
+    : "overview",
+);
+const editing = ref(false);
+const form = reactive<AddressInput>({
+  name: "",
+  phone: "",
+  region: "",
+  detail: "",
+  isDefault: false,
+});
+const profileName = ref(shop.user?.name ?? "");
+watch(
+  () => shop.user?.name,
+  (name) => {
+    profileName.value = name ?? "";
+  },
+);
+const password = reactive({ current: "", next: "", confirm: "" });
+const { busy, error, notice, run } = useAction();
+const favorites = computed(() =>
+  shop.db.products.filter((p) =>
+    shop.db.favorites[shop.userId]?.includes(p.id),
+  ),
+);
+const coupons = computed(() =>
+  shop.db.couponClaims
+    .filter((c) => c.userId === shop.userId)
+    .map((claim) => ({
+      claim,
+      coupon: shop.db.coupons.find((c) => c.id === claim.couponId),
+    })),
+);
+const myReviews = computed(() =>
+  shop.db.reviews
+    .filter((r) => r.userId === shop.userId)
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+);
+const pendingReviews = computed(() =>
+  shop.myOrders
+    .filter(
+      (order) =>
+        order.status === "completed" &&
+        !shop.db.afterSales.some(
+          (a) =>
+            a.orderId === order.id &&
+            !["refunded", "rejected", "cancelled"].includes(a.status),
+        ),
+    )
+    .flatMap((order) =>
+      order.items
+        .filter(
+          (item) =>
+            item.quantity > item.refundedQuantity &&
+            !myReviews.value.some(
+              (review) =>
+                review.orderId === order.id && review.orderItemId === item.id,
+            ),
+        )
+        .map((item) => ({ order, item })),
     ),
-  )
+);
+const reviewForm = reactive({
+  orderId: "",
+  orderItemId: "",
+  rating: 5,
+  content: "",
+});
+
+function selectSection(value: string) {
+  void router.replace({ query: { ...route.query, section: value } });
+}
+function couponStatus(claim: CouponClaim, coupon?: Coupon) {
+  if (claim.status === "locked") return "订单占用中";
+  if (claim.status === "used") return "已使用";
+  if (!coupon || Date.now() > Date.parse(coupon.validUntil)) return "已过期";
+  if (!coupon.active) return "已停用";
+  if (Date.now() < Date.parse(coupon.validFrom)) return "未到使用时间";
+  return "可使用";
+}
+function fullyRefunded(orderId: string, itemId: string) {
+  const item = shop.db.orders
+    .find((o) => o.id === orderId)
+    ?.items.find((i) => i.id === itemId);
+  return item && item.refundedQuantity === item.quantity;
+}
 function edit(a?: Address) {
   Object.assign(form, {
     id: a?.id,
-    name: a?.name ?? '',
-    phone: a?.phone ?? '',
-    region: a?.region ?? '',
-    detail: a?.detail ?? '',
+    name: a?.name ?? "",
+    phone: a?.phone ?? "",
+    region: a?.region ?? "",
+    detail: a?.detail ?? "",
     isDefault: a?.isDefault ?? shop.myAddresses.length === 0,
-  })
-  editing.value = true
+  });
+  editing.value = true;
 }
 async function save() {
-  if (await run(() => api.saveAddress({ ...form }), '收货地址已保存'))
-    editing.value = false
+  if (await run(() => api.saveAddress({ ...form }), "收货地址已保存"))
+    editing.value = false;
 }
 async function remove(id: string) {
-  if (window.confirm('确认删除这个收货地址？'))
-    await run(() => api.deleteAddress(id), '地址已删除')
+  if (window.confirm("确认删除这个收货地址？"))
+    await run(() => api.deleteAddress(id), "地址已删除");
 }
 async function logout() {
-  if (await run(() => shop.logout('user'))) await router.push('/')
+  if (await run(() => shop.logout("user"))) await router.push("/");
+}
+async function removeFavorite(id: string) {
+  await run(() => api.favorite(id), "已取消收藏");
+}
+async function saveProfile() {
+  await run(() => api.updateProfile(profileName.value), "昵称已更新");
+}
+async function changePassword() {
+  if (password.next !== password.confirm)
+    return void (await run(async () => {
+      throw Error("两次输入的新密码不一致");
+    }));
+  if (await run(() => api.changePassword(password.current, password.next))) {
+    Object.assign(password, { current: "", next: "", confirm: "" });
+  }
+}
+async function submitReview() {
+  if (
+    await run(
+      () =>
+        api.submitReview({
+          orderId: reviewForm.orderId,
+          orderItemId: reviewForm.orderItemId,
+          rating: reviewForm.rating,
+          content: reviewForm.content,
+        }),
+      "评价已发布",
+    )
+  ) {
+    Object.assign(reviewForm, {
+      orderId: "",
+      orderItemId: "",
+      rating: 5,
+      content: "",
+    });
+  }
+}
+async function deleteReview(id: string) {
+  if (window.confirm("删除评价后将不再公开展示，且不能重新评价。确认删除？"))
+    await run(() => api.deleteReview(id), "评价已删除");
 }
 </script>
 <template>
@@ -64,32 +195,28 @@ async function logout() {
     <div class="account-shortcuts">
       <RouterLink to="/orders"
         ><span>我的订单</span><strong>{{ shop.myOrders.length }}</strong
-        ><ArrowUpRight /></RouterLink
-      ><RouterLink to="/after-sales"
+        ><ArrowUpRight
+      /></RouterLink>
+      <RouterLink to="/after-sales"
         ><span>售后服务</span
         ><strong>{{
           shop.db.afterSales.filter((a) => a.userId === shop.userId).length
         }}</strong
-        ><ArrowUpRight /></RouterLink
-      ><RouterLink to="/support"
-        ><span>客服会话</span
-        ><strong>{{
-          shop.db.conversations.filter((c) => c.userId === shop.userId).length
-        }}</strong
+        ><ArrowUpRight
+      /></RouterLink>
+      <RouterLink to="/coupons"
+        ><span>领券中心</span><strong>{{ coupons.length }}</strong
         ><ArrowUpRight
       /></RouterLink>
     </div>
-    <div class="tabs">
+    <div class="tabs commerce-tabs" aria-label="个人中心功能">
       <button
-        :class="{ selected: section === 'overview' }"
-        @click="section = 'overview'"
+        v-for="[key, label] in sections"
+        :key="key"
+        :class="{ selected: section === key }"
+        @click="selectSection(key!)"
       >
-        我的收藏</button
-      ><button
-        :class="{ selected: section === 'addresses' }"
-        @click="section = 'addresses'"
-      >
-        收货地址
+        {{ label }}
       </button>
     </div>
     <ActionNotice :error="error" :notice="notice" />
@@ -99,7 +226,22 @@ async function logout() {
         <span>{{ favorites.length }} 件收藏</span>
       </div>
       <div v-if="favorites.length" class="product-grid">
-        <ProductCard v-for="p in favorites" :key="p.id" :product="p" />
+        <article v-for="p in favorites" :key="p.id" class="favorite-entry">
+          <ProductCard v-if="p.active" :product="p" />
+          <div v-else class="inactive-favorite">
+            <img :src="p.images[0]" :alt="p.name" />
+            <h3>{{ p.name }}</h3>
+            <p>商品已下架，暂不可购买</p>
+          </div>
+          <button
+            class="text-link"
+            :disabled="busy"
+            :aria-label="`取消收藏 ${p.name}`"
+            @click="removeFavorite(p.id)"
+          >
+            取消收藏
+          </button>
+        </article>
       </div>
       <div v-else class="empty-state">
         <h2>收藏夹等你来填满</h2>
@@ -107,7 +249,7 @@ async function logout() {
         <RouterLink to="/products" class="button">浏览商品</RouterLink>
       </div>
     </section>
-    <section v-else data-ui>
+    <section v-else-if="section === 'addresses'" data-ui>
       <div class="section-heading">
         <h2>收货地址</h2>
         <button class="button" @click="edit()">添加地址</button>
@@ -117,15 +259,16 @@ async function logout() {
         class="address-form form-stack"
         @submit.prevent="save"
       >
-        <h3>{{ form.id ? '编辑地址' : '添加收货地址' }}</h3>
+        <h3>{{ form.id ? "编辑地址" : "添加收货地址" }}</h3>
         <div class="form-two">
           <label
             >收货人<input
               v-model.trim="form.name"
               required
               maxlength="30"
-              autocomplete="name" /></label
-          ><label
+              autocomplete="name"
+          /></label>
+          <label
             >联系电话<input
               v-model.trim="form.phone"
               required
@@ -141,15 +284,17 @@ async function logout() {
             required
             maxlength="80"
             placeholder="例如：上海市 徐汇区"
-            autocomplete="address-level2" /></label
-        ><label
+            autocomplete="address-level2"
+        /></label>
+        <label
           >详细地址<input
             v-model.trim="form.detail"
             required
             maxlength="150"
             placeholder="街道、门牌号等"
-            autocomplete="street-address" /></label
-        ><label class="check-label"
+            autocomplete="street-address"
+        /></label>
+        <label class="check-label"
           ><input
             v-model="form.isDefault"
             type="checkbox"
@@ -157,10 +302,12 @@ async function logout() {
         >
         <div class="button-row">
           <button class="button" :disabled="busy">
-            {{ busy ? '保存中…' : '保存地址' }}</button
+            {{ busy ? "保存中…" : "保存地址" }}</button
           ><button type="button" @click="editing = false">取消</button>
         </div>
-        <p class="secondary">地址保存到服务端，仅当前账号与授权管理员可访问。</p>
+        <p class="secondary">
+          地址保存到服务端，仅当前账号与授权管理员可访问。
+        </p>
       </form>
       <div v-if="shop.myAddresses.length" class="address-grid">
         <article v-for="a in shop.myAddresses" :key="a.id" class="address-card">
@@ -178,6 +325,232 @@ async function logout() {
       <div v-else-if="!editing" class="empty-state">
         <h2>还没有收货地址</h2>
         <p>添加收货地址后，就可以完成下单。</p>
+      </div>
+    </section>
+    <section v-else-if="section === 'profile'" data-ui>
+      <div class="section-heading"><h2>个人资料</h2></div>
+      <form class="form-stack commerce-form" @submit.prevent="saveProfile">
+        <label
+          >账号<input
+            :value="shop.user?.username"
+            disabled
+            autocomplete="username"
+        /></label>
+        <label
+          >昵称<input
+            v-model.trim="profileName"
+            required
+            maxlength="30"
+            autocomplete="nickname"
+        /></label>
+        <p class="secondary">昵称为 1–30 字；公开评价中会脱敏显示。</p>
+        <button class="button" :disabled="busy">保存昵称</button>
+      </form>
+    </section>
+    <section v-else-if="section === 'security'" data-ui>
+      <div class="section-heading"><h2>修改登录密码</h2></div>
+      <form class="form-stack commerce-form" @submit.prevent="changePassword">
+        <input
+          class="sr-only"
+          :value="shop.user?.username"
+          autocomplete="username"
+          aria-label="当前账号"
+          readonly
+        />
+        <label
+          >原密码<input
+            v-model="password.current"
+            type="password"
+            required
+            maxlength="128"
+            autocomplete="current-password"
+        /></label>
+        <label
+          >新密码<input
+            v-model="password.next"
+            type="password"
+            required
+            minlength="10"
+            maxlength="128"
+            pattern="(?=.*[A-Za-z])(?=.*[0-9]).{10,128}"
+            autocomplete="new-password"
+        /></label>
+        <label
+          >确认新密码<input
+            v-model="password.confirm"
+            type="password"
+            required
+            minlength="10"
+            maxlength="128"
+            autocomplete="new-password"
+        /></label>
+        <p class="secondary">
+          密码须为 10–128
+          位并包含字母和数字。修改成功后，所有已登录设备需要重新登录。
+        </p>
+        <button class="button" :disabled="busy">修改密码并重新登录</button>
+      </form>
+    </section>
+    <section v-else-if="section === 'coupons'">
+      <div class="section-heading">
+        <h2>我的优惠券</h2>
+        <RouterLink to="/coupons" class="text-link">前往领券中心 ↗</RouterLink>
+      </div>
+      <div v-if="coupons.length" class="coupon-grid">
+        <article
+          v-for="{ claim, coupon } in coupons"
+          :key="claim.id"
+          class="commerce-coupon"
+        >
+          <span class="commerce-badge">{{ couponStatus(claim, coupon) }}</span>
+          <h3>{{ coupon?.name ?? "优惠券" }}</h3>
+          <strong>{{ money(coupon?.discount ?? 0) }}</strong>
+          <p>满 {{ money(coupon?.threshold ?? 0) }} 可用 · 每单限用一张</p>
+          <p v-if="coupon" class="secondary">
+            使用时间：{{ dateTime(coupon.validFrom) }} 至
+            {{ dateTime(coupon.validUntil) }}
+          </p>
+          <RouterLink
+            v-if="claim.orderId"
+            :to="`/orders/${claim.orderId}`"
+            class="text-link"
+            >查看关联订单</RouterLink
+          >
+          <RouterLink
+            v-else-if="couponStatus(claim, coupon) === '可使用'"
+            to="/products"
+            class="text-link"
+            >去选购</RouterLink
+          >
+        </article>
+      </div>
+      <div v-else class="empty-state">
+        <h2>还没有优惠券</h2>
+        <p>领取优惠券后，可在结算时选择使用。</p>
+        <RouterLink to="/coupons" class="button">去领券</RouterLink>
+      </div>
+    </section>
+    <section v-else-if="section === 'pending-reviews'" data-ui>
+      <div class="section-heading">
+        <h2>分享使用感受</h2>
+        <span>{{ pendingReviews.length }} 件待评价</span>
+      </div>
+      <div v-if="pendingReviews.length" class="commerce-list">
+        <article
+          v-for="{ order, item } in pendingReviews"
+          :key="`${order.id}:${item.id}`"
+          class="commerce-list-card"
+        >
+          <h3>{{ item.name }}</h3>
+          <p>{{ item.skuName }} · 订单 {{ order.id }}</p>
+          <button
+            v-if="
+              reviewForm.orderId !== order.id ||
+              reviewForm.orderItemId !== item.id
+            "
+            class="button"
+            :disabled="busy"
+            @click="
+              Object.assign(reviewForm, {
+                orderId: order.id,
+                orderItemId: item.id,
+                rating: 5,
+                content: '',
+              })
+            "
+          >
+            写评价
+          </button>
+          <form
+            v-else
+            class="form-stack commerce-form"
+            @submit.prevent="submitReview"
+          >
+            <label
+              >评分<select v-model.number="reviewForm.rating" aria-label="评分">
+                <option
+                  v-for="score in [5, 4, 3, 2, 1]"
+                  :key="score"
+                  :value="score"
+                >
+                  {{ score }} 星
+                </option>
+              </select></label
+            >
+            <label
+              >评价内容<textarea
+                v-model.trim="reviewForm.content"
+                required
+                minlength="5"
+                maxlength="1000"
+                rows="4"
+                placeholder="分享真实的使用体验，5–1000 字"
+              />
+            </label>
+            <div class="button-row">
+              <button class="button" :disabled="busy">发布评价</button
+              ><button type="button" @click="reviewForm.orderItemId = ''">
+                取消
+              </button>
+            </div>
+          </form>
+        </article>
+      </div>
+      <div v-else class="empty-state">
+        <h2>暂无待评价商品</h2>
+        <p>
+          确认收货后，尚有未退款数量的商品可在这里评价。有进行中售后时暂不可评价。
+        </p>
+        <RouterLink to="/orders" class="button">查看订单</RouterLink>
+      </div>
+    </section>
+    <section v-else>
+      <div class="section-heading">
+        <h2>我的评价</h2>
+        <span>{{ myReviews.length }} 条记录</span>
+      </div>
+      <div v-if="myReviews.length" class="commerce-list">
+        <article
+          v-for="review in myReviews"
+          :key="review.id"
+          class="commerce-list-card"
+        >
+          <div class="commerce-list-heading">
+            <h3>
+              {{
+                shop.db.products.find((p) => p.id === review.productId)?.name ??
+                "历史商品"
+              }}
+            </h3>
+            <span class="commerce-badge">{{
+              review.deleted ? "已删除" : review.hidden ? "已隐藏" : "已发布"
+            }}</span>
+          </div>
+          <p>{{ review.rating }} 星 · {{ dateTime(review.createdAt) }}</p>
+          <p class="review-content">{{ review.content }}</p>
+          <p
+            v-if="fullyRefunded(review.orderId, review.orderItemId)"
+            class="secondary"
+          >
+            商品已全部退款，评价仅保留在你的历史记录中。
+          </p>
+          <div class="button-row">
+            <RouterLink :to="`/orders/${review.orderId}`" class="text-link"
+              >查看订单</RouterLink
+            ><button
+              v-if="!review.deleted"
+              class="text-link"
+              :disabled="busy"
+              @click="deleteReview(review.id)"
+            >
+              删除评价
+            </button>
+          </div>
+        </article>
+      </div>
+      <div v-else class="empty-state">
+        <h2>还没有评价记录</h2>
+        <p>购买并确认收货后，留下你的使用感受。</p>
       </div>
     </section>
   </div>

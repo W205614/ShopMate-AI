@@ -1,5 +1,9 @@
 import type { ShopApi } from "../../shared/domain/api";
+import type { DatabaseSync } from "node:sqlite";
+import type { Database, Order } from "../../shared/domain/types";
+import { readDatabase, writeDatabase, transaction } from "./database";
 import {
+  context,
   transact,
   userId,
   productSku,
@@ -14,20 +18,66 @@ import {
   ledger,
   admin,
 } from "./repository";
+import {
+  activeAfterSale,
+  checkoutSnapshot,
+  expireOrders,
+  refundThrough,
+  releaseCoupon,
+} from "./commerce-rules";
+
+export function expirePendingOrders(sql: DatabaseSync) {
+  return transaction(sql, () => {
+    const db = readDatabase(sql);
+    const changed = expireOrders(db);
+    if (changed) {
+      db.revision++;
+      writeDatabase(sql, db);
+    }
+    return changed;
+  });
+}
+const addEvent = (
+  order: Order,
+  action: string,
+  actor: "user" | "admin" | "system",
+  note?: string,
+) => order.events.push({ at: now(), actor, action, ...(note ? { note } : {}) });
+const validCart = (
+  db: Database,
+  item: { productId: string; skuId: string; quantity: number },
+) => {
+  const product = db.products.find((p) => p.id === item.productId),
+    sku = product?.skus.find((s) => s.id === item.skuId);
+  return (
+    !!product?.active &&
+    !!sku &&
+    item.quantity > 0 &&
+    item.quantity <= sku.stock
+  );
+};
+const hasSale = (db: Database, orderId: string) =>
+  db.afterSales.some((a) => a.orderId === orderId && activeAfterSale(a.status));
 
 export const commerceApi: Pick<
   ShopApi,
   | "addCart"
   | "updateCart"
   | "removeCart"
+  | "batchCart"
+  | "clearInvalidCart"
   | "favorite"
   | "saveAddress"
   | "deleteAddress"
+  | "quoteCheckout"
   | "createOrder"
   | "payOrder"
   | "cancelOrder"
   | "confirmOrder"
+  | "reorder"
   | "requestAfterSale"
+  | "cancelAfterSale"
+  | "submitReturn"
   | "shipOrder"
   | "processAfterSale"
 > = {
@@ -68,33 +118,75 @@ export const commerceApi: Pick<
       );
       requireThat(item, "购物车条目不存在");
       if (patch.quantity !== undefined) {
-        const { sku } = productSku(db, item.productId, item.skuId);
+        const { sku, product } = productSku(db, item.productId, item.skuId);
         requireThat(
-          integer(patch.quantity, 1) && patch.quantity <= sku.stock,
+          product.active &&
+            integer(patch.quantity, 1) &&
+            patch.quantity <= sku.stock,
           "数量必须为正整数且不能超过库存",
         );
         item.quantity = patch.quantity;
       }
-      if (patch.selected !== undefined) item.selected = patch.selected;
+      if (patch.selected !== undefined) {
+        requireThat(typeof patch.selected === "boolean", "勾选状态无效");
+        requireThat(!patch.selected || validCart(db, item), "商品当前不可结算");
+        item.selected = patch.selected;
+      }
     });
   },
   async removeCart(cartId) {
+    await commerceApi.batchCart({ ids: [cartId], action: "remove" });
+  },
+  async batchCart(input) {
     await transact((db) => {
       const uid = userId();
-      db.carts = db.carts.filter((c) => !(c.id === cartId && c.userId === uid));
+      requireThat(new Set(input.ids).size === input.ids.length, "条目不能重复");
+      const items = input.ids.map((cartId) =>
+        db.carts.find((c) => c.id === cartId && c.userId === uid),
+      );
+      requireThat(items.every(Boolean), "购物车条目不存在或不属于当前用户");
+      if (input.action === "remove")
+        db.carts = db.carts.filter(
+          (c) => !(c.userId === uid && input.ids.includes(c.id)),
+        );
+      else {
+        requireThat(
+          input.action === "select" && typeof input.selected === "boolean",
+          "批量操作无效",
+        );
+        for (const item of items)
+          item!.selected = input.selected && validCart(db, item!);
+      }
+    });
+  },
+  async clearInvalidCart() {
+    await transact((db) => {
+      const uid = userId();
+      db.carts = db.carts.filter(
+        (c) =>
+          c.userId !== uid ||
+          !!db.products.find(
+            (p) =>
+              p.id === c.productId &&
+              p.active &&
+              p.skus.some((s) => s.id === c.skuId),
+          ),
+      );
     });
   },
   async favorite(productId) {
     await transact((db) => {
-      const uid = userId();
-      requireThat(
-        db.products.some((p) => p.id === productId && p.active),
-        "商品不存在或已下架",
-      );
-      const favorites = db.favorites[uid] ?? [];
-      db.favorites[uid] = favorites.includes(productId)
-        ? favorites.filter((p) => p !== productId)
-        : [...favorites, productId];
+      const uid = userId(),
+        favorites = db.favorites[uid] ?? [];
+      if (favorites.includes(productId))
+        db.favorites[uid] = favorites.filter((p) => p !== productId);
+      else {
+        requireThat(
+          db.products.some((p) => p.id === productId && p.active),
+          "商品不存在或已下架",
+        );
+        db.favorites[uid] = [...favorites, productId];
+      }
     });
   },
   async saveAddress(input) {
@@ -111,85 +203,149 @@ export const commerceApi: Pick<
         ? db.addresses.find((a) => a.id === input.id && a.userId === uid)
         : undefined;
       requireThat(!input.id || existing, "地址不存在或不属于当前用户");
-      if (input.isDefault)
-        db.addresses
-          .filter((a) => a.userId === uid)
-          .forEach((a) => {
-            a.isDefault = false;
-          });
       const value = {
         ...input,
+        name: input.name.trim(),
+        region: input.region.trim(),
+        detail: input.detail.trim(),
         id: existing?.id ?? id("addr-"),
         userId: uid,
-        isDefault:
-          input.isDefault || !db.addresses.some((a) => a.userId === uid),
       };
       if (existing) Object.assign(existing, value);
       else db.addresses.push(value);
+      const own = db.addresses.filter((a) => a.userId === uid);
+      const chosen =
+        (input.isDefault
+          ? own.find((a) => a.id === value.id)
+          : own.find((a) => a.isDefault)) ?? own[0];
+      for (const address of own) address.isDefault = address === chosen;
     });
   },
   async deleteAddress(addressId) {
     await transact((db) => {
       const uid = userId();
-      db.addresses = db.addresses.filter(
-        (a) => !(a.id === addressId && a.userId === uid),
+      requireThat(
+        db.addresses.some((a) => a.id === addressId && a.userId === uid),
+        "地址不存在或不属于当前用户",
       );
-      if (!db.addresses.some((a) => a.userId === uid && a.isDefault)) {
-        const first = db.addresses.find((a) => a.userId === uid);
-        if (first) first.isDefault = true;
-      }
+      db.addresses = db.addresses.filter((a) => a.id !== addressId);
+      const own = db.addresses.filter((a) => a.userId === uid),
+        chosen = own.find((a) => a.isDefault) ?? own[0];
+      for (const a of own) a.isDefault = a === chosen;
     });
   },
-  async createOrder(addressId) {
+  async quoteCheckout(input) {
+    return transact((db) => {
+      const uid = userId();
+      expireOrders(db);
+      const snapshot = checkoutSnapshot(db, uid, input),
+        createdAt = now();
+      const quote = {
+        id: id("quote-"),
+        userId: uid,
+        input: clone(input),
+        ...snapshot,
+        createdAt,
+        expiresAt: new Date(Date.parse(createdAt) + 300000).toISOString(),
+      };
+      db.checkoutQuotes.push(quote);
+      return clone(quote);
+    });
+  },
+  async createOrder(input) {
     return transact((db) => {
       const uid = userId(),
-        selected = db.carts.filter((c) => c.userId === uid && c.selected);
-      const address = db.addresses.find(
-        (a) => a.id === addressId && a.userId === uid,
+        at = now();
+      expireOrders(db, at);
+      requireThat(
+        text(input.requestId, 128) && text(input.quoteId, 128),
+        "报价或请求标识无效",
       );
-      requireThat(address, "请选择自己的有效收货地址");
-      requireThat(selected.length, "请先选择要结算的商品");
-      const items = selected.map((c) => {
-        const { product, sku } = productSku(db, c.productId, c.skuId);
+      const previous = db.orderRequests.find(
+        (r) => r.userId === uid && r.requestId === input.requestId,
+      );
+      if (previous) {
         requireThat(
-          product.active && integer(c.quantity, 1) && c.quantity <= sku.stock,
-          `${product.name}已下架或库存不足，请返回购物车调整`,
+          previous.quoteId === input.quoteId,
+          "同一请求标识不能用于不同报价",
         );
-        return {
-          productId: product.id,
-          skuId: sku.id,
-          name: product.name,
-          skuName: sku.name,
-          image: product.images[0]!,
-          price: sku.price,
-          quantity: c.quantity,
-        };
-      });
-      const orderId = id("SM");
-      const total = items.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0,
+        return previous.orderId;
+      }
+      const quote = db.checkoutQuotes.find(
+        (q) => q.id === input.quoteId && q.userId === uid,
       );
-      requireThat(integer(total, 1), "订单金额无效");
+      requireThat(quote, "报价不存在或已过期，请重新确认");
+      if (quote.orderId) {
+        db.orderRequests.push({
+          userId: uid,
+          requestId: input.requestId,
+          quoteId: quote.id,
+          orderId: quote.orderId,
+          createdAt: at,
+        });
+        return quote.orderId;
+      }
+      requireThat(quote.expiresAt > at, "报价已过期，请重新确认");
+      const snapshot = checkoutSnapshot(db, uid, quote.input);
+      requireThat(
+        snapshot.fingerprint === quote.fingerprint,
+        "商品、地址、优惠券或购物车已变化，请重新确认报价",
+      );
+      const orderId = id("SM");
       db.orders.unshift({
         id: orderId,
         userId: uid,
-        items,
-        total,
+        items: clone(quote.items).map((item) => ({
+          ...item,
+          id: `${orderId}-${item.id}`,
+        })),
+        subtotal: quote.subtotal,
+        discount: quote.discount,
+        total: quote.total,
+        refundedAmount: 0,
         status: "pending",
-        address: clone(address),
-        createdAt: now(),
+        address: clone(quote.address),
+        createdAt: at,
+        expiresAt: new Date(Date.parse(at) + 1800000).toISOString(),
+        events: [{ at, actor: "user", action: "created" }],
+        coupon: clone(quote.coupon),
+        quoteId: quote.id,
       });
-      db.carts = db.carts.filter((c) => !selected.some((s) => s.id === c.id));
+      if (quote.coupon) {
+        const claim = db.couponClaims.find(
+          (c) => c.id === quote.coupon!.claimId,
+        )!;
+        claim.status = "locked";
+        claim.orderId = orderId;
+      }
+      if (quote.input.source.type === "cart") {
+        const ids = quote.input.source.cartIds;
+        db.carts = db.carts.filter(
+          (c) => !(c.userId === uid && ids.includes(c.id)),
+        );
+      }
+      quote.orderId = orderId;
+      db.orderRequests.push({
+        userId: uid,
+        requestId: input.requestId,
+        quoteId: quote.id,
+        orderId,
+        createdAt: at,
+      });
       return orderId;
     });
   },
   async payOrder(orderId) {
+    // Persist deadline closure before rejecting payment, rather than rolling it back with the error.
+    expirePendingOrders(context.getStore()!.sql);
     await transact((db) => {
       const order = ownedOrder(db, orderId);
       if (["paid", "shipped", "completed", "refunded"].includes(order.status))
         return;
-      requireThat(order.status === "pending", "当前订单不能付款");
+      requireThat(
+        order.status === "pending",
+        "当前订单不能付款（已取消或付款超时）",
+      );
       for (const item of order.items) {
         const { product, sku } = productSku(db, item.productId, item.skuId);
         requireThat(
@@ -205,8 +361,19 @@ export const commerceApi: Pick<
           -item.quantity,
           `订单付款 ${order.id}`,
         );
+      if (order.coupon) {
+        const claim = db.couponClaims.find(
+          (c) => c.id === order.coupon!.claimId,
+        );
+        requireThat(
+          claim?.status === "locked" && claim.orderId === order.id,
+          "订单优惠券状态无效",
+        );
+        claim.status = "used";
+      }
       order.status = "paid";
       order.paidAt = now();
+      addEvent(order, "paid", "user");
       ledger(db, "payment", order.total, order.id, "模拟订单收款");
     });
   },
@@ -216,6 +383,10 @@ export const commerceApi: Pick<
       if (order.status === "cancelled") return;
       requireThat(order.status === "pending", "只有待付款订单可以取消");
       order.status = "cancelled";
+      order.cancelledAt = now();
+      order.cancelReason = "用户取消";
+      addEvent(order, "cancelled", "user", "用户取消");
+      releaseCoupon(db, order);
     });
   },
   async confirmOrder(orderId) {
@@ -223,18 +394,52 @@ export const commerceApi: Pick<
       const order = ownedOrder(db, orderId);
       if (order.status === "completed") return;
       requireThat(order.status === "shipped", "只有待收货订单可以确认收货");
-      requireThat(
-        !db.afterSales.some(
-          (a) =>
-            a.orderId === orderId &&
-            !["rejected", "refunded"].includes(a.status),
-        ),
-        "售后处理中，暂不能确认收货",
-      );
+      requireThat(!hasSale(db, orderId), "售后处理中，暂不能确认收货");
       order.status = "completed";
+      order.completedAt = now();
+      addEvent(order, "completed", "user");
     });
   },
-  async requestAfterSale(orderId, reason, description) {
+  async reorder(orderId) {
+    return transact((db) => {
+      const order = ownedOrder(db, orderId),
+        uid = userId(),
+        result = { added: 0, skipped: [] as string[] };
+      for (const item of order.items) {
+        const existing = db.carts.find(
+          (c) =>
+            c.userId === uid &&
+            c.productId === item.productId &&
+            c.skuId === item.skuId,
+        );
+        const requested = {
+          ...item,
+          quantity: item.quantity + (existing?.quantity ?? 0),
+        };
+        if (!validCart(db, requested)) {
+          result.skipped.push(
+            `${item.name} ${item.skuName}：已下架、规格失效或库存不足`,
+          );
+          continue;
+        }
+        if (existing) {
+          existing.quantity += item.quantity;
+          existing.selected = true;
+        } else
+          db.carts.push({
+            id: id("cart-"),
+            userId: uid,
+            productId: item.productId,
+            skuId: item.skuId,
+            quantity: item.quantity,
+            selected: true,
+          });
+        result.added++;
+      }
+      return result;
+    });
+  },
+  async requestAfterSale(orderId, reason, description, lines) {
     await transact((db) => {
       const order = ownedOrder(db, orderId);
       requireThat(
@@ -245,12 +450,28 @@ export const commerceApi: Pick<
         text(reason, 100) && text(description, 1000),
         "请填写售后原因与说明",
       );
+      requireThat(!hasSale(db, orderId), "该订单已有售后申请，请查看处理进度");
       requireThat(
-        !db.afterSales.some(
-          (a) => a.orderId === orderId && a.status !== "rejected",
-        ),
-        "该订单已有售后申请，请查看处理进度",
+        lines.length > 0 &&
+          new Set(lines.map((l) => l.orderItemId)).size === lines.length,
+        "请选择不重复的售后商品",
       );
+      const details = lines.map((line) => {
+        const item = order.items.find((i) => i.id === line.orderItemId);
+        requireThat(
+          item &&
+            integer(line.quantity, 1) &&
+            line.quantity <= item.quantity - item.refundedQuantity,
+          "售后商品或数量无效，不能超过剩余可退数量",
+        );
+        return {
+          ...line,
+          amount:
+            refundThrough(item, item.refundedQuantity + line.quantity) -
+            refundThrough(item, item.refundedQuantity),
+        };
+      });
+      const at = now();
       db.afterSales.unshift({
         id: id("as-"),
         orderId,
@@ -259,8 +480,51 @@ export const commerceApi: Pick<
         description: description.trim(),
         status: "requested",
         requiresReturn: order.status !== "paid",
-        createdAt: now(),
+        createdAt: at,
         note: "",
+        lines: details,
+        refundAmount: details.reduce((n, l) => n + l.amount, 0),
+        events: [{ at, actor: "user", action: "requested" }],
+      });
+      addEvent(order, "afterSaleRequested", "user");
+    });
+  },
+  async cancelAfterSale(afterSaleId) {
+    await transact((db) => {
+      const sale = db.afterSales.find(
+        (a) => a.id === afterSaleId && a.userId === userId(),
+      );
+      requireThat(sale, "售后不存在或不属于当前用户");
+      requireThat(
+        ["requested", "approved"].includes(sale.status) && !sale.returnTracking,
+        "当前售后不可撤销",
+      );
+      sale.status = "cancelled";
+      sale.events.push({ at: now(), actor: "user", action: "cancelled" });
+    });
+  },
+  async submitReturn(afterSaleId, carrier, tracking) {
+    await transact((db) => {
+      const sale = db.afterSales.find(
+        (a) => a.id === afterSaleId && a.userId === userId(),
+      );
+      requireThat(sale, "售后不存在或不属于当前用户");
+      requireThat(
+        sale.requiresReturn && sale.status === "approved",
+        "当前售后不可提交退货单号",
+      );
+      requireThat(
+        text(carrier, 60) && text(tracking, 80),
+        "请填写退货承运商与单号",
+      );
+      sale.returnCarrier = carrier.trim();
+      sale.returnTracking = tracking.trim();
+      sale.status = "returning";
+      sale.events.push({
+        at: now(),
+        actor: "user",
+        action: "returning",
+        note: `${sale.returnCarrier} ${sale.returnTracking}`,
       });
     });
   },
@@ -270,12 +534,7 @@ export const commerceApi: Pick<
       const order = db.orders.find((o) => o.id === orderId);
       requireThat(order, "订单不存在");
       requireThat(order.status === "paid", "只有待发货订单可以发货");
-      requireThat(
-        !db.afterSales.some(
-          (a) => a.orderId === orderId && a.status !== "rejected",
-        ),
-        "售后处理中，不能发货",
-      );
+      requireThat(!hasSale(db, orderId), "售后处理中，不能发货");
       requireThat(
         text(carrier, 60) && text(tracking, 80),
         "请填写物流公司与单号",
@@ -284,6 +543,7 @@ export const commerceApi: Pick<
       order.carrier = carrier.trim();
       order.tracking = tracking.trim();
       order.shippedAt = now();
+      addEvent(order, "shipped", "admin", `${order.carrier} ${order.tracking}`);
     });
   },
   async processAfterSale(afterSaleId, action, note = "") {
@@ -301,11 +561,15 @@ export const commerceApi: Pick<
         sale.status = action === "approve" ? "approved" : "rejected";
       } else if (action === "receive") {
         requireThat(
-          sale.requiresReturn && sale.status === "approved",
-          "只有已批准的退货申请可以记录收货",
+          sale.requiresReturn &&
+            sale.status === "returning" &&
+            sale.returnTracking &&
+            sale.returnCarrier,
+          "只有已提交退货单号的申请可以记录收货",
         );
         sale.status = "received";
       } else {
+        requireThat(action === "refund", "售后操作无效");
         requireThat(
           sale.requiresReturn
             ? sale.status === "received"
@@ -316,19 +580,51 @@ export const commerceApi: Pick<
           ["paid", "shipped", "completed"].includes(order.status),
           "订单当前不能退款",
         );
-        for (const item of order.items)
+        let amount = 0;
+        for (const line of sale.lines) {
+          const item = order.items.find((i) => i.id === line.orderItemId);
+          requireThat(
+            item &&
+              integer(line.quantity, 1) &&
+              item.refundedQuantity + line.quantity <= item.quantity,
+            "退款数量超出购买数量",
+          );
+          const expected =
+            refundThrough(item, item.refundedQuantity + line.quantity) -
+            refundThrough(item, item.refundedQuantity);
+          requireThat(expected === line.amount, "退款分摊金额无效");
+          amount += expected;
+        }
+        requireThat(
+          amount === sale.refundAmount &&
+            order.refundedAmount + amount <= order.total,
+          "退款金额超出实付金额",
+        );
+        for (const line of sale.lines) {
+          const item = order.items.find((i) => i.id === line.orderItemId)!;
           move(
             db,
             item.productId,
             item.skuId,
-            item.quantity,
+            line.quantity,
             `售后退款回补 ${order.id}`,
           );
-        ledger(db, "refund", order.total, order.id, "模拟售后退款");
+          item.refundedQuantity += line.quantity;
+        }
+        ledger(db, "refund", amount, order.id, `模拟售后退款 ${sale.id}`);
         sale.status = "refunded";
-        order.status = "refunded";
+        order.refundedAmount += amount;
+        if (order.items.every((i) => i.refundedQuantity === i.quantity))
+          order.status = "refunded";
+        addEvent(order, "refund", "admin", `退款 ${amount} 分`);
       }
       if (note.trim()) sale.note = note.trim();
+      sale.events.push({
+        at: now(),
+        actor: "admin",
+        action,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      });
     });
   },
 };

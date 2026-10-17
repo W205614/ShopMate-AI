@@ -326,6 +326,10 @@ export function createSeed(): Database {
       userId: address.userId,
       items: [
         {
+          id: `SM${String(index + 1).padStart(6, "0")}-line-1`,
+          discount: 0,
+          total: sku.price,
+          refundedQuantity: 0,
           productId: p.id,
           skuId: sku.id,
           name: p.name,
@@ -336,6 +340,13 @@ export function createSeed(): Database {
         },
       ],
       total: sku.price,
+      subtotal: sku.price,
+      discount: 0,
+      refundedAmount: 0,
+      events: [{ at: at(7 - index), actor: "system", action: "created" }],
+      ...(status === "pending"
+        ? { expiresAt: new Date(now + 1800000).toISOString() }
+        : {}),
       status,
       address: { ...address },
       createdAt: at(7 - index),
@@ -352,7 +363,12 @@ export function createSeed(): Database {
     };
   });
   return {
-    version: 1,
+    version: 2,
+    coupons: [],
+    couponClaims: [],
+    reviews: [],
+    checkoutQuotes: [],
+    orderRequests: [],
     revision: 0,
     users,
     categories: names.map((name, index) => ({

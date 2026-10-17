@@ -53,7 +53,17 @@ export interface Address {
 }
 export type OrderStatus =
   "pending" | "paid" | "shipped" | "completed" | "cancelled" | "refunded";
+export interface BusinessEvent {
+  at: string;
+  actor: "user" | "admin" | "system";
+  action: string;
+  note?: string;
+}
 export interface OrderItem {
+  id: string;
+  discount: number;
+  total: number;
+  refundedQuantity: number;
   productId: string;
   skuId: string;
   name: string;
@@ -63,6 +73,16 @@ export interface OrderItem {
   quantity: number;
 }
 export interface Order {
+  subtotal: number;
+  discount: number;
+  refundedAmount: number;
+  events: BusinessEvent[];
+  expiresAt?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  cancelReason?: string;
+  coupon?: { claimId: string; name: string; discount: number };
+  quoteId?: string;
   id: string;
   userId: string;
   items: OrderItem[];
@@ -76,8 +96,24 @@ export interface Order {
   shippedAt?: string;
 }
 export type AfterSaleStatus =
-  "requested" | "approved" | "received" | "refunded" | "rejected";
+  | "requested"
+  | "approved"
+  | "returning"
+  | "received"
+  | "refunded"
+  | "rejected"
+  | "cancelled";
+export interface AfterSaleLine {
+  orderItemId: string;
+  quantity: number;
+  amount: number;
+}
 export interface AfterSale {
+  lines: AfterSaleLine[];
+  refundAmount: number;
+  events: BusinessEvent[];
+  returnCarrier?: string;
+  returnTracking?: string;
   id: string;
   orderId: string;
   userId: string;
@@ -134,7 +170,93 @@ export interface Settings {
   slogan: string;
   notice: string;
 }
+export interface Coupon {
+  id: string;
+  name: string;
+  threshold: number;
+  discount: number;
+  claimStartsAt: string;
+  claimEndsAt: string;
+  validFrom: string;
+  validUntil: string;
+  totalLimit: number;
+  active: boolean;
+}
+export type CouponInput = Omit<Coupon, "id"> & { id?: string };
+export interface CouponClaim {
+  id: string;
+  userId: string;
+  couponId: string;
+  claimedAt: string;
+  status: "available" | "locked" | "used";
+  orderId?: string;
+}
+export interface Review {
+  id: string;
+  userId: string;
+  orderId: string;
+  orderItemId: string;
+  productId: string;
+  rating: number;
+  content: string;
+  createdAt: string;
+  hidden: boolean;
+  deleted: boolean;
+}
+export interface PublicReview {
+  id: string;
+  displayName: string;
+  rating: number;
+  content: string;
+  createdAt: string;
+}
+export interface PublicReviews {
+  items: PublicReview[];
+  total: number;
+  page: number;
+  pages: number;
+  averageRating: number;
+}
+export type CheckoutSource =
+  | { type: "cart"; cartIds: string[] }
+  | { type: "buyNow"; productId: string; skuId: string; quantity: number };
+export interface CheckoutInput {
+  source: CheckoutSource;
+  addressId: string;
+  couponClaimId?: string;
+}
+export interface CheckoutQuote {
+  id: string;
+  userId: string;
+  input: CheckoutInput;
+  items: OrderItem[];
+  address: Address;
+  subtotal: number;
+  discount: number;
+  total: number;
+  createdAt: string;
+  expiresAt: string;
+  fingerprint: string;
+  coupon?: { claimId: string; name: string; discount: number };
+  orderId?: string;
+}
+export interface OrderRequest {
+  userId: string;
+  requestId: string;
+  quoteId: string;
+  orderId: string;
+  createdAt: string;
+}
+export interface ReorderResult {
+  added: number;
+  skipped: string[];
+}
 export interface Database {
+  coupons: Coupon[];
+  couponClaims: CouponClaim[];
+  reviews: Review[];
+  checkoutQuotes: CheckoutQuote[];
+  orderRequests: OrderRequest[];
   version: number;
   revision: number;
   users: User[];
@@ -166,6 +288,8 @@ export const orderLabels: Record<OrderStatus, string> = {
 export const afterSaleLabels: Record<AfterSaleStatus, string> = {
   requested: "待审核",
   approved: "已批准",
+  returning: "退货运输中",
+  cancelled: "已撤销",
   received: "已收货",
   refunded: "已退款",
   rejected: "已拒绝",

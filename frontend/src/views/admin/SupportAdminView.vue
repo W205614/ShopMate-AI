@@ -5,16 +5,41 @@ import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import { dateTime } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
-import { useAdminQuery } from "./useAdminList";
+import { useAdminQuery, useAdminPagination } from "./useAdminList";
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
-  filter = useAdminQuery().field("status", {
+  filters = useAdminQuery(),
+  statusField = filters.field("status", {
     values: ["bot", "waiting", "human", "closed"],
   }),
-  selectedId = ref(""),
+  queryField = filters.field("q", { replace: true }),
+  detailId = filters.field("detail", { resetPage: false }),
+  autoSelectedId = ref(""),
   drafts = ref<Record<string, string>>({}),
   confirming = ref(false),
   messageBox = ref<HTMLElement>();
+const filter = computed({
+  get: () => statusField.value,
+  set: (value) => {
+    void filters
+      .update({ status: value, detail: "" }, { resetPage: true })
+      .catch(() => undefined);
+  },
+});
+const query = computed({
+  get: () => queryField.value,
+  set: (value) => {
+    void filters
+      .update({ q: value, detail: "" }, { resetPage: true, replace: true })
+      .catch(() => undefined);
+  },
+});
+const selectedId = computed({
+  get: () => detailId.value || autoSelectedId.value,
+  set: (value) => {
+    detailId.value = value;
+  },
+});
 let alive = true,
   ownerEpoch = 0,
   cancelConfirmation: (() => void) | undefined;
@@ -23,6 +48,7 @@ watch(
   () => {
     ownerEpoch++;
     drafts.value = {};
+    autoSelectedId.value = "";
     selectedId.value = "";
     cancelConfirmation?.();
   },
@@ -39,18 +65,61 @@ const labels = {
     closed: "已关闭",
   },
   roles = { user: "用户", assistant: "模拟客服", agent: "人工客服" };
-const conversations = computed(() =>
-  [...shop.db.conversations]
-    .filter((c) => !filter.value || c.status === filter.value)
-    .sort((a, b) => {
-      if (a.status === "waiting" && b.status !== "waiting") return -1;
-      if (b.status === "waiting" && a.status !== "waiting") return 1;
-      return b.createdAt.localeCompare(a.createdAt);
-    }),
+const allConversations = computed(() =>
+  [...shop.db.conversations].sort((a, b) => {
+    if (a.status === "waiting" && b.status !== "waiting") return -1;
+    if (b.status === "waiting" && a.status !== "waiting") return 1;
+    return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
+  }),
 );
+const conversations = computed(() =>
+  allConversations.value.filter(
+    (c) =>
+      (!filter.value || c.status === filter.value) &&
+      (!query.value.trim() ||
+        [
+          c.id,
+          c.title,
+          c.orderId ?? "",
+          shop.db.users.find((u) => u.id === c.userId)?.name ?? "",
+        ].some((value) =>
+          value.toLowerCase().includes(query.value.trim().toLowerCase()),
+        )),
+  ),
+);
+const { page: storedPage, rows: visibleConversations } = useAdminPagination(
+  conversations,
+  filters,
+);
+const page = computed({
+  get: () => storedPage.value,
+  set: (value) => {
+    void filters
+      .update({ page: value > 1 ? String(value) : "", detail: "" })
+      .catch(() => undefined);
+  },
+});
 const selected = computed(() =>
   conversations.value.find((c) => c.id === selectedId.value),
 );
+const target = computed(() =>
+  shop.db.conversations.find((c) => c.id === detailId.value),
+);
+function locate() {
+  const index = allConversations.value.findIndex(
+    (c) => c.id === selectedId.value,
+  );
+  if (index < 0) return;
+  const nextPage = Math.floor(index / 10) + 1;
+  void filters
+    .update({
+      q: "",
+      status: "",
+      page: nextPage > 1 ? String(nextPage) : "",
+      detail: selectedId.value,
+    })
+    .catch(() => undefined);
+}
 const text = computed({
   get: () => (selected.value ? (drafts.value[selected.value.id] ?? "") : ""),
   set: (value) => {
@@ -58,15 +127,15 @@ const text = computed({
   },
 });
 watch(
-  [() => selected.value?.id, () => selected.value?.status, filter],
+  [() => selected.value?.id, () => selected.value?.status, filter, query, page],
   () => cancelConfirmation?.(),
   { flush: "sync" },
 );
 watch(
-  conversations,
+  visibleConversations,
   (list) => {
-    if (!list.some((c) => c.id === selectedId.value))
-      selectedId.value = list[0]?.id ?? "";
+    if (!list.some((c) => c.id === autoSelectedId.value))
+      autoSelectedId.value = list[0]?.id ?? "";
   },
   { immediate: true },
 );
@@ -156,6 +225,12 @@ async function close() {
   </div>
   <div class="admin-chat" :class="{ 'is-empty': !selected }">
     <aside class="admin-chat-list">
+      <el-input
+        v-model="query"
+        placeholder="搜索会话 / 用户 / 商品 / 订单"
+        clearable
+        style="margin-bottom: 12px"
+      />
       <el-select
         v-model="filter"
         placeholder="全部会话"
@@ -167,7 +242,7 @@ async function close() {
           :label="label"
           :value="key" /></el-select
       ><button
-        v-for="c in conversations"
+        v-for="c in visibleConversations"
         :key="c.id"
         class="admin-conversation"
         :class="{ active: c.id === selectedId }"
@@ -185,6 +260,13 @@ async function close() {
         description="暂无会话"
         :image-size="70"
       />
+      <el-pagination
+        v-model:current-page="page"
+        size="small"
+        :page-size="10"
+        :total="conversations.length"
+        layout="prev,pager,next"
+      />
     </aside>
     <section class="admin-chat-body">
       <template v-if="selected"
@@ -192,7 +274,7 @@ async function close() {
           <div>
             <h2>{{ selected.title }}</h2>
             <span class="admin-note"
-              >{{ labels[selected.status] }} ·
+              >{{ selected.id }} · {{ labels[selected.status] }} ·
               {{
                 shop.db.users.find((u) => u.id === selected?.userId)?.name
               }}</span
@@ -237,6 +319,12 @@ async function close() {
             <div v-if="m.orderId" class="admin-note">订单：{{ m.orderId }}</div>
           </article>
         </div>
+        <el-button
+          v-if="!visibleConversations.some((c) => c.id === selected?.id)"
+          link
+          @click="locate"
+          >定位到该会话页</el-button
+        >
         <div
           v-if="['waiting', 'human'].includes(selected.status) || text"
           class="admin-compose"
@@ -268,7 +356,15 @@ async function close() {
               : "会话已关闭，历史消息已保留。"
           }}
         </p></template
-      ><el-empty v-else description="选择会话开始处理" :image-size="80" />
+      >
+      <div v-else-if="detailId">
+        <el-alert
+          :title="target ? '目标会话不符合当前筛选' : '没有找到该会话'"
+          type="warning"
+          :closable="false"
+        /><el-button v-if="target" @click="locate">清除筛选并定位</el-button>
+      </div>
+      <el-empty v-else description="选择会话开始处理" :image-size="80" />
     </section>
   </div>
 </template>

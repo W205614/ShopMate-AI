@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
-import { ElMessageBox } from "element-plus";
+import { computed, reactive, ref, watch, nextTick } from "vue";
+import { ElMessageBox, type TableInstance } from "element-plus";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import type { Category, CategoryInput } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 import ImageEditor from "../../components/admin/ImageEditor.vue";
 import { validateDecodedImages } from "../../services/images";
+import { useAdminQuery, useAdminPagination } from "./useAdminList";
+import { useAdminEditor } from "./useAdminEditor";
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
-  dialog = ref(false),
+  filters = useAdminQuery(),
+  query = filters.field("q", { replace: true }),
+  direction = filters.field("sort", { values: ["asc", "desc"] }),
   imageBusy = ref(false);
 const form = reactive<CategoryInput>({
   name: "",
@@ -17,17 +21,48 @@ const form = reactive<CategoryInput>({
   image: "",
   sort: 0,
 });
-const rows = computed(() =>
-  [...shop.db.categories].sort((a, b) => a.sort - b.sort),
+const filtered = computed(() =>
+  shop.db.categories
+    .filter(
+      (c) =>
+        !query.value.trim() ||
+        [c.name, c.description].some((value) =>
+          value.toLowerCase().includes(query.value.trim().toLowerCase()),
+        ),
+    )
+    .sort((a, b) => (a.sort - b.sort) * (direction.value === "desc" ? -1 : 1)),
 );
+const { page, rows } = useAdminPagination(filtered, filters);
+const { dialog, detailId, missing, open, capture, finish, assertCurrent } =
+  useAdminEditor(
+    computed(() => shop.db.categories),
+    filters,
+    load,
+    () => pending.value || imageBusy.value,
+    () => shop.adminSession?.id,
+  );
+const table = ref<TableInstance>();
+function sortChanged({ order }: { order: string | null }) {
+  const next =
+    order === "ascending" ? "asc" : order === "descending" ? "desc" : "";
+  if (next !== direction.value) direction.value = next;
+}
+watch(direction, async () => {
+  await nextTick();
+  if (direction.value)
+    table.value?.sort(
+      "sort",
+      direction.value === "asc" ? "ascending" : "descending",
+    );
+  else table.value?.clearSort();
+});
 const images = computed({
   get: () => (form.image ? [form.image] : []),
   set: (values: string[]) => {
     form.image = values[0] ?? "";
   },
 });
-function open(c?: Category) {
-  if (pending.value || imageBusy.value) return;
+function load(c?: Category) {
   Object.assign(
     form,
     c
@@ -40,10 +75,10 @@ function open(c?: Category) {
           sort: shop.db.categories.length + 1,
         },
   );
-  dialog.value = true;
 }
 async function save() {
   if (imageBusy.value) return;
+  const target = capture();
   if (!form.name.trim() || !form.description.trim() || !form.image.trim())
     return void run(async () => {
       throw Error("请填写分类名称、描述和图片地址");
@@ -52,10 +87,11 @@ async function save() {
     await run(async () => {
       const input = { ...form };
       await validateDecodedImages([input.image], 1);
+      assertCurrent(target);
       await api.saveCategory(input);
     }, "分类已保存")
   )
-    dialog.value = false;
+    finish(target);
 }
 async function remove(c: Category) {
   try {
@@ -81,7 +117,27 @@ async function remove(c: Category) {
     >
   </div>
   <section class="admin-panel">
-    <el-table :data="rows" empty-text="暂无分类"
+    <div class="admin-toolbar">
+      <el-input
+        v-model="query"
+        placeholder="搜索分类名称或描述"
+        clearable
+      /><span class="admin-note">{{ filtered.length }} 个分类</span>
+    </div>
+    <el-table
+      ref="table"
+      :data="rows"
+      @sort-change="sortChanged"
+      :default-sort="{
+        prop: 'sort',
+        order:
+          direction === 'asc'
+            ? 'ascending'
+            : direction === 'desc'
+              ? 'descending'
+              : undefined,
+      }"
+      empty-text="暂无符合条件的分类"
       ><el-table-column label="分类" min-width="210"
         ><template #default="{ row }"
           ><div class="admin-product-cell">
@@ -96,7 +152,7 @@ async function remove(c: Category) {
       /><el-table-column
         prop="sort"
         label="排序"
-        sortable
+        sortable="custom"
         width="100"
       /><el-table-column label="商品数" width="110"
         ><template #default="{ row }">{{
@@ -116,15 +172,29 @@ async function remove(c: Category) {
         ></el-table-column
       ></el-table
     >
+    <div class="admin-pagination">
+      <el-pagination
+        v-model:current-page="page"
+        :page-size="10"
+        :total="filtered.length"
+        layout="prev,pager,next,total"
+      />
+    </div>
   </section>
   <el-dialog
     v-model="dialog"
-    :title="form.id ? '编辑分类' : '新建分类'"
+    :title="detailId ? '编辑分类' : '新建分类'"
     width="500px"
     :close-on-click-modal="!pending && !imageBusy"
     :close-on-press-escape="!pending && !imageBusy"
     :show-close="!pending && !imageBusy"
-    ><el-form
+    ><el-alert
+      v-if="missing"
+      title="没有找到该分类"
+      type="warning"
+      :closable="false"
+    /><el-form
+      v-else
       label-position="top"
       :disabled="busy || imageBusy"
       @submit.prevent="save"
@@ -148,6 +218,7 @@ async function remove(c: Category) {
       ><el-button :disabled="pending || imageBusy" @click="dialog = false"
         >取消</el-button
       ><el-button
+        v-if="!missing"
         type="primary"
         :loading="pending"
         :disabled="busy || imageBusy"

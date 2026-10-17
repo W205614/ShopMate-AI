@@ -5,10 +5,13 @@ import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import type { Faq, FaqInput } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
+import { useAdminQuery, useAdminPagination } from "./useAdminList";
+import { useAdminEditor } from "./useAdminEditor";
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
-  query = ref(""),
-  dialog = ref(false),
+  filters = useAdminQuery(),
+  query = filters.field("q", { replace: true }),
+  status = filters.field("status", { values: ["active", "inactive"] }),
   keywords = ref("");
 const form = reactive<FaqInput>({
   question: "",
@@ -16,16 +19,26 @@ const form = reactive<FaqInput>({
   keywords: [],
   active: true,
 });
-const rows = computed(() =>
+const filtered = computed(() =>
   shop.db.faqs.filter(
     (f) =>
-      !query.value ||
-      f.question.includes(query.value) ||
-      f.answer.includes(query.value) ||
-      f.keywords.some((k) => k.includes(query.value)),
+      (!status.value || f.active === (status.value === "active")) &&
+      (!query.value ||
+        f.question.includes(query.value) ||
+        f.answer.includes(query.value) ||
+        f.keywords.some((k) => k.includes(query.value))),
   ),
 );
-function open(f?: Faq) {
+const { page, rows } = useAdminPagination(filtered, filters);
+const { dialog, detailId, missing, open, capture, finish, assertCurrent } =
+  useAdminEditor(
+    computed(() => shop.db.faqs),
+    filters,
+    load,
+    () => pending.value,
+    () => shop.adminSession?.id,
+  );
+function load(f?: Faq) {
   Object.assign(
     form,
     f
@@ -33,9 +46,9 @@ function open(f?: Faq) {
       : { id: undefined, question: "", answer: "", keywords: [], active: true },
   );
   keywords.value = form.keywords.join("，");
-  dialog.value = true;
 }
 async function save() {
+  const target = capture();
   const list = [
     ...new Set(
       keywords.value
@@ -49,12 +62,12 @@ async function save() {
       throw Error("请填写问题、回答及至少一个关键词");
     });
   if (
-    await run(
-      () => api.saveFaq({ ...form, keywords: list }),
-      "FAQ 已保存，模拟客服即时生效",
-    )
+    await run(() => {
+      assertCurrent(target);
+      return api.saveFaq({ ...form, keywords: list });
+    }, "FAQ 已保存，模拟客服即时生效")
   )
-    dialog.value = false;
+    finish(target);
 }
 async function remove(f: Faq) {
   try {
@@ -76,7 +89,9 @@ async function toggle(f: Faq) {
       <h1>FAQ 管理</h1>
       <p>维护规则回复，让常见问题得到一致解答。</p>
     </div>
-    <el-button type="primary" @click="open()">新增问答</el-button>
+    <el-button type="primary" :disabled="pending" @click="open()"
+      >新增问答</el-button
+    >
   </div>
   <div class="admin-callout">
     此处为关键词规则演示，不涉及向量检索或大模型训练。启用的问答参与模拟客服匹配。
@@ -88,6 +103,11 @@ async function toggle(f: Faq) {
         clearable
         placeholder="搜索问题、回答或关键词"
       />
+      <el-select v-model="status" placeholder="全部启停状态" clearable
+        ><el-option label="已启用" value="active" /><el-option
+          label="已停用"
+          value="inactive" /></el-select
+      ><span class="admin-note">{{ filtered.length }} 条问答</span>
     </div>
     <el-table :data="rows" empty-text="暂无匹配的问答"
       ><el-table-column
@@ -112,19 +132,40 @@ async function toggle(f: Faq) {
             @change="toggle(row)" /></template></el-table-column
       ><el-table-column label="操作" width="130" fixed="right"
         ><template #default="{ row }"
-          ><el-button link type="primary" @click="open(row)">编辑</el-button
+          ><el-button link type="primary" :disabled="pending" @click="open(row)"
+            >编辑</el-button
           ><el-button link type="danger" @click="remove(row)"
             >删除</el-button
           ></template
         ></el-table-column
       ></el-table
     >
+    <div class="admin-pagination">
+      <el-pagination
+        v-model:current-page="page"
+        :page-size="10"
+        :total="filtered.length"
+        layout="prev,pager,next,total"
+      />
+    </div>
   </section>
   <el-dialog
     v-model="dialog"
-    :title="form.id ? '编辑问答' : '新增问答'"
+    :title="detailId ? '编辑问答' : '新增问答'"
     width="620px"
-    ><el-form label-position="top" @submit.prevent="save"
+    :close-on-click-modal="!pending"
+    :close-on-press-escape="!pending"
+    :show-close="!pending"
+    ><el-alert
+      v-if="missing"
+      title="没有找到该问答"
+      type="warning"
+      :closable="false"
+    /><el-form
+      v-else
+      label-position="top"
+      :disabled="pending"
+      @submit.prevent="save"
       ><el-form-item label="常见问题" required
         ><el-input v-model="form.question" maxlength="100" /></el-form-item
       ><el-form-item label="匹配关键词（用逗号分隔）" required
@@ -139,8 +180,13 @@ async function toggle(f: Faq) {
           maxlength="2000" /></el-form-item
       ><el-checkbox v-model="form.active">启用问答</el-checkbox></el-form
     ><template #footer
-      ><el-button @click="dialog = false">取消</el-button
-      ><el-button type="primary" :loading="pending" :disabled="busy" @click="save"
+      ><el-button :disabled="pending" @click="dialog = false">取消</el-button
+      ><el-button
+        v-if="!missing"
+        type="primary"
+        :loading="pending"
+        :disabled="busy"
+        @click="save"
         >保存</el-button
       ></template
     ></el-dialog

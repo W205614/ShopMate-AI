@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
-import { ElMessageBox } from "element-plus";
+import { computed, reactive, ref, watch, nextTick } from "vue";
+import { ElMessageBox, type TableInstance } from "element-plus";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import type { Product, ProductInput } from "../../domain/types";
@@ -9,13 +9,15 @@ import { useAdminAction } from "./useAdmin";
 import ImageEditor from "../../components/admin/ImageEditor.vue";
 import { validateDecodedImages } from "../../services/images";
 import { yuanToCents, centsToYuan } from "../../domain/amount";
+import { useAdminQuery, useAdminPagination } from "./useAdminList";
+import { useAdminEditor } from "./useAdminEditor";
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
-  query = ref(""),
-  category = ref(""),
-  status = ref(""),
-  dialog = ref(false),
-  page = ref(1);
+  filters = useAdminQuery(),
+  query = filters.field("q", { replace: true }),
+  category = filters.field("category"),
+  status = filters.field("status", { values: ["true", "false"] }),
+  priceSort = filters.field("sort", { values: ["asc", "desc"] });
 const form = reactive<ProductInput>({
     name: "",
     subtitle: "",
@@ -30,28 +32,48 @@ const form = reactive<ProductInput>({
   priceInputs = ref<string[]>([]),
   imageBusy = ref(false);
 const filtered = computed(() =>
-  shop.db.products.filter(
-    (p) =>
-      (!query.value || p.name.includes(query.value)) &&
-      (!category.value || p.categoryId === category.value) &&
-      (!status.value || String(p.active) === status.value),
-  ),
-);
-const rows = computed(() =>
-  filtered.value.slice((page.value - 1) * 10, page.value * 10),
-);
-watch(
-  () => filtered.value.length,
-  (length) => {
-    page.value = Math.min(page.value, Math.max(1, Math.ceil(length / 10)));
-  },
+  shop.db.products
+    .filter(
+      (p) =>
+        (!query.value || p.name.includes(query.value)) &&
+        (!category.value || p.categoryId === category.value) &&
+        (!status.value || String(p.active) === status.value),
+    )
+    .sort((a, b) =>
+      priceSort.value
+        ? (minPrice(a) - minPrice(b)) * (priceSort.value === "desc" ? -1 : 1)
+        : 0,
+    ),
 );
 const minPrice = (product: Product) =>
   Math.min(...product.skus.map((s) => s.price));
 const totalStock = (product: Product) =>
   product.skus.reduce((total, sku) => total + sku.stock, 0);
-function open(p?: Product) {
-  if (pending.value || imageBusy.value) return;
+const { page, rows } = useAdminPagination(filtered, filters);
+const { dialog, detailId, missing, open, capture, finish, assertCurrent } =
+  useAdminEditor(
+    computed(() => shop.db.products),
+    filters,
+    load,
+    () => pending.value || imageBusy.value,
+    () => shop.adminSession?.id,
+  );
+const table = ref<TableInstance>();
+function sortChanged({ order }: { order: string | null }) {
+  const next =
+    order === "ascending" ? "asc" : order === "descending" ? "desc" : "";
+  if (next !== priceSort.value) priceSort.value = next;
+}
+watch(priceSort, async () => {
+  await nextTick();
+  if (priceSort.value)
+    table.value?.sort(
+      "price",
+      priceSort.value === "asc" ? "ascending" : "descending",
+    );
+  else table.value?.clearSort();
+});
+function load(p?: Product) {
   Object.assign(
     form,
     p
@@ -70,10 +92,10 @@ function open(p?: Product) {
         },
   );
   priceInputs.value = form.skus.map((s) => centsToYuan(s.price));
-  dialog.value = true;
 }
 async function save() {
   if (imageBusy.value) return;
+  const target = capture();
   if (
     await run(async () => {
       if (
@@ -98,10 +120,11 @@ async function save() {
         })),
       };
       await validateDecodedImages(input.images);
+      assertCurrent(target);
       await api.saveProduct(input);
     }, "商品已保存")
   )
-    dialog.value = false;
+    finish(target);
 }
 function addSku() {
   form.skus.push({ id: "", name: "", price: 100, stock: 0 });
@@ -161,7 +184,20 @@ async function toggle(p: Product) {
           value="false" /></el-select
       ><span class="admin-note">共 {{ filtered.length }} 件商品</span>
     </div>
-    <el-table :data="rows" empty-text="没有符合条件的商品"
+    <el-table
+      ref="table"
+      :data="rows"
+      @sort-change="sortChanged"
+      :default-sort="{
+        prop: 'price',
+        order:
+          priceSort === 'asc'
+            ? 'ascending'
+            : priceSort === 'desc'
+              ? 'descending'
+              : undefined,
+      }"
+      empty-text="没有符合条件的商品"
       ><el-table-column label="商品" min-width="260"
         ><template #default="{ row }"
           ><div class="admin-product-cell">
@@ -177,13 +213,9 @@ async function toggle(p: Product) {
         }}</template></el-table-column
       ><el-table-column
         label="起售价"
+        prop="price"
         min-width="110"
-        :sort-method="
-          (a: Product, b: Product) =>
-            Math.min(...a.skus.map((s) => s.price)) -
-            Math.min(...b.skus.map((s) => s.price))
-        "
-        sortable
+        sortable="custom"
         ><template #default="{ row }">{{
           money(minPrice(row))
         }}</template></el-table-column
@@ -227,12 +259,18 @@ async function toggle(p: Product) {
   </section>
   <el-dialog
     v-model="dialog"
-    :title="form.id ? '编辑商品' : '新建商品'"
+    :title="detailId ? '编辑商品' : '新建商品'"
     width="760px"
     :close-on-click-modal="false"
     :close-on-press-escape="!pending && !imageBusy"
     :show-close="!pending && !imageBusy"
-    ><el-form
+    ><el-alert
+      v-if="missing"
+      title="没有找到该商品"
+      type="warning"
+      :closable="false"
+    /><el-form
+      v-else
       label-position="top"
       :disabled="busy || imageBusy"
       @submit.prevent="save"
@@ -310,6 +348,7 @@ async function toggle(p: Product) {
       ><el-button :disabled="pending || imageBusy" @click="dialog = false"
         >取消</el-button
       ><el-button
+        v-if="!missing"
         type="primary"
         :loading="pending"
         :disabled="busy || imageBusy"

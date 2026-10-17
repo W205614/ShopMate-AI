@@ -1,0 +1,16 @@
+{
+  "orderId": "SM8aa159156615457092f05a220ca39d1e",
+  "productId": "p-94c31c654da4469ea2551e3a25659bc6",
+  "creates": 1,
+  "total": 29002,
+  "refunds": [
+    9667,
+    9667,
+    9668
+  ],
+  "finalStock": 7,
+  "inventorySum": 7,
+  "paymentCount": 1,
+  "refundCount": 3,
+  "pageErrors": []
+}

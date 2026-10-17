@@ -31,16 +31,22 @@
 | `batchCart`、`clearInvalidCart` | 原子批量操作与失效条目清理 |
 | `quoteCheckout({ source, addressId, couponClaimId? })` | `source.type` 为 `cart` 或 `buyNow`，返回服务端报价 |
 | `createOrder({ quoteId, requestId })` | 校验报价一致性并幂等创建订单 |
-| `reorder(orderId)` | 按现状加购，返回已加入条目数和跳过原因 |
+| `GET /api/order-requests/:requestId?quoteId=...` | 只读找回当前用户的下单结果，不公开他人订单 |
+| `retireCheckout({ quoteId, requestId })` | 关闭本人未消费报价，放弃旧请求前防止迟到下单；已消费则返回原订单 |
+| `reorder(orderId)` | 按现状加购，分别返回加入项数、件数和跳过原因 |
+| `adjustStock(productId, skuId, delta, cost, reason, options?)` | 保留旧参数，追加请求标识、盘点模式和预期库存；盘点不计采购 |
+| `saveSettings(input, baseline)` | 事务内比较编辑基线，冲突保留本地草稿 |
 | `saveCoupon`、`toggleCoupon`、`claimCoupon` | 管理员配置与用户领取 |
 | `requestAfterSale(orderId, reason, description, lines)` | 行 ID 和数量输入，退款金额由服务端计算 |
 | `cancelAfterSale`、`submitReturn`、`processAfterSale` | 撤销、退货信息与审核/收货/退款 |
 | `submitReview`、`deleteReview`、`moderateReview` | 验证购买资格、删除与管理员隐藏 |
 | `GET /api/products/:id/reviews?page=1` | 每页10条公开评价、可见总数及平均分 |
 
-## v1 → v2 迁移与备份
+## v1 → v2 → v3 迁移与备份
 
 首次打开旧数据库时事务化升级，新增优惠券、领取、评价、报价和幂等集合，为旧订单增加稳定行 ID、实付/退款数量和已知时间事件。旧待付款订单仅在首次升级时获得 30 分钟窗口；重复启动不延长。历史退款转换为原全部行数量，不重放扣库、回补或流水。不虚构未知的完成/取消时间，不注入示例券或评价。高于当前支持版本的数据库拒绝打开，避免旧代码覆盖新结构。
+
+当前结构版本为 v3。v2 升级仅新增空 `inventoryRequests` 集合及版本号，保留原账号、会话、待付款期限和全部业务历史；新增库存变动及采购关联只用于新操作，不补造旧记录。幂等请求保留 24 小时，启动和定时任务清理过期记录；启动正常处理超时订单与迁移本身分开核验。副本重复打开不重放库存或流水。
 
 部署前使用 SQLite 在线备份 API，保留旧镜像及独立备份文件，不能复制运行中的主文件代替完整备份。对数据库副本验证迁移和重复启动，并比对账号、会话、商品、订单金额、库存和流水。日常卷继续是 `shopmate-ai_api_data`，不删除数据卷、不恢复演示数据。
 
@@ -68,7 +74,7 @@ npm --prefix frontend run test:e2e
 $env:PLAYWRIGHT_BASE_URL = 'http://127.0.0.1:18087'
 $env:E2E_ADMIN_PASSWORD = '隔离验收管理员密码'
 $env:E2E_MUTATIONS_ALLOWED = '1'
-npm --prefix frontend run test:e2e -- e2e/auth.spec.ts e2e/traditional-container.spec.ts e2e/catalogue-smoke.spec.ts --output=test-results-container
+npm --prefix frontend run test:e2e -- e2e/auth.spec.ts e2e/traditional-container.spec.ts e2e/catalogue-smoke.spec.ts e2e/joint-commerce.spec.ts --output=test-results-container
 Remove-Item Env:PLAYWRIGHT_BASE_URL
 Remove-Item Env:E2E_ADMIN_PASSWORD
 Remove-Item Env:E2E_MUTATIONS_ALLOWED
@@ -78,7 +84,9 @@ Remove-Item Env:E2E_MUTATIONS_ALLOWED
 
 GitHub Actions 在最终提交上执行类型、单元/HTTP、审计、构建、完整浏览器回归，并对独立 API/Nginx 容器执行认证、目录和传统电商闭环验收。最终结果以交付消息中的确切提交 SHA 和 CI 链接为准。
 
-## 本次验收记录
+## 首轮历史验收记录
+
+以下是基线传统电商补全的历史结果，不是本轮双端补全的最终总数。最新范围、测试数量和体验结论见 [双端联合验收](joint-acceptance.md)，逐项提交及 CI 见 [交付记录](incremental-delivery.md)。
 
 2026-10-17 本地验证：前后端类型检查、ESLint、构建通过；后端 45 项单元/HTTP 测试、前端 8 项单元测试及完整 31 项浏览器回归通过，生产依赖审计均为 0 个漏洞。保留原认证、分类搜索、交易和客服断言，新增用券后的非空结算页在 390/768/1440px 下的边界检查。
 

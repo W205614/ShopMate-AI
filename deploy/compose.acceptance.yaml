@@ -1,0 +1,7 @@
+# Use with compose.yaml and a separate project, port, origins and credentials.
+# A project name isolates volumes; these tags also isolate images from daily use.
+services:
+  api:
+    image: shopmate-ai-api:${ACCEPTANCE_TAG:-acceptance}
+  web:
+    image: shopmate-ai-web:${ACCEPTANCE_TAG:-acceptance}

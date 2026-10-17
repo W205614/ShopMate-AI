@@ -188,6 +188,12 @@
 .admin-toolbar .el-select {
   width: 150px;
 }
+.admin-filter-date {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: #767f8e;
+}
 .admin-toolbar .el-date-editor {
   max-width: 340px;
 }

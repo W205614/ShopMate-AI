@@ -69,11 +69,13 @@ export async function refreshState(role: Role = scope) {
       db: Database;
       sessions: Record<Role, Session | null>;
     }>(`/api/state?role=${role}`);
-    if (current !== sequence) return;
-    database = value.db;
-    sessions = value.sessions;
-    issue = "";
-    notify();
+    if (current === sequence) {
+      database = value.db;
+      sessions = value.sessions;
+      issue = "";
+      notify();
+    }
+    return value;
   } catch (error) {
     if (current === sequence) {
       issue = error instanceof Error ? error.message : "无法读取服务端数据";

@@ -53,6 +53,18 @@ async function newOrder(product = "p01", quantity = 1) {
 }
 
 describe("交易与库存", () => {
+  it("设置允许空公告，过期编辑基线不能覆盖新设置", async () => {
+    const baseline = getDatabase().settings;
+    const next = { ...baseline, name: "更新后的商城", notice: "" };
+    await api.saveSettings(next, baseline);
+    expect(getDatabase().settings).toEqual(next);
+    await expect(
+      api.saveSettings({ ...baseline, name: "过期草稿" }, baseline),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(getDatabase().settings).toEqual(next);
+    await api.saveSettings({ ...next, slogan: "重新确认后保存" }, next);
+    expect(getDatabase().settings.slogan).toBe("重新确认后保存");
+  });
   it("所有 SKU 的变动累计等于库存，编辑商品不会凭空新增期初记录", async () => {
     const before = getDatabase();
     for (const p of before.products)

@@ -37,6 +37,13 @@ export const loginSchema = z
   .strict();
 const id = z.string().min(1).max(100);
 const text = (max: number) => z.string().trim().min(1).max(max);
+const settings = z
+  .object({
+    name: text(40),
+    slogan: text(80),
+    notice: z.string().trim().max(200),
+  })
+  .strict();
 const integer = z.number().int().safe();
 const address = z
   .object({
@@ -248,11 +255,7 @@ export const methods = {
   deleteFaq: { role: "admin", args: z.tuple([id]) },
   saveSettings: {
     role: "admin",
-    args: z.tuple([
-      z
-        .object({ name: text(40), slogan: text(80), notice: text(200) })
-        .strict(),
-    ]),
+    args: z.tuple([settings, settings]),
   },
   resetDemo: { role: "admin", args: z.tuple([]) },
 } as const;

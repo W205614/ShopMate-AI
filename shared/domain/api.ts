@@ -89,6 +89,9 @@ export interface ShopApi {
   closeConversation(id: string): Promise<void>;
   saveFaq(input: FaqInput): Promise<void>;
   deleteFaq(id: string): Promise<void>;
-  saveSettings(input: Settings): Promise<void>;
+  saveSettings(
+    input: Settings,
+    baseline: Settings,
+  ): Promise<{ settings: Settings; revision: number }>;
   resetDemo(): Promise<void>;
 }

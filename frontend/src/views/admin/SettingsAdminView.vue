@@ -1,27 +1,60 @@
 <script setup lang="ts">
-import { reactive, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { ElMessageBox } from "element-plus";
 import { useShop } from "../../stores/shop";
-import { api } from "../../services/api";
+import { api, refreshState } from "../../services/api";
+import type { Settings } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
   { busy, run } = useAdminAction(),
+  baseline = ref({ ...shop.db.settings }),
+  baselineRevision = ref(shop.db.revision),
   form = reactive({ ...shop.db.settings });
+const keys = ["name", "slogan", "notice"] as const;
+const dirty = computed(() =>
+  keys.some((key) => form[key] !== baseline.value[key]),
+);
+const conflict = computed(
+  () =>
+    shop.db.revision >= baselineRevision.value &&
+    keys.some((key) => shop.db.settings[key] !== baseline.value[key]),
+);
+function loadLatest(
+  settings: Settings = shop.db.settings,
+  revision = shop.db.revision,
+) {
+  baseline.value = { ...settings };
+  baselineRevision.value = revision;
+  Object.assign(form, baseline.value);
+}
+async function reloadLatest() {
+  await run(async () => {
+    const value = await refreshState("admin");
+    if (!value.sessions.admin) throw Error("登录已失效，请重新登录");
+    loadLatest(value.db.settings, value.db.revision);
+  }, "已加载最新设置，请重新编辑");
+}
 watch(
   () => shop.db.settings,
-  (s) => Object.assign(form, s),
+  () => {
+    if (!dirty.value && shop.db.revision >= baselineRevision.value)
+      loadLatest();
+  },
 );
 async function save() {
-  if (!form.name.trim() || !form.slogan.trim() || !form.notice.trim())
+  if (!form.name.trim() || !form.slogan.trim())
     return void run(async () => {
-      throw Error("请填写商城名称、标语和公告");
+      throw Error("请填写商城名称和标语");
     });
-  await run(() => api.saveSettings({ ...form }), "商城信息已保存");
+  await run(async () => {
+    const value = await api.saveSettings({ ...form }, { ...baseline.value });
+    loadLatest(value.settings, value.revision);
+  }, "商城信息已保存");
 }
 async function reset() {
   try {
     const result = await ElMessageBox.prompt(
-      "此操作会清空服务端全部演示订单、地址、收藏、库存变动、流水和会话，恢复初始商品。已注册账号及登录会话保留。请输入「恢复演示」确认。",
+      "此操作会清空全体用户的订单、购物车、地址、收藏、售后、优惠券、评价、报价及请求记录、库存变动、流水和客服会话，恢复初始商品、FAQ 与商城设置。已注册账号及登录会话保留。请输入「恢复演示」确认。",
       "恢复初始数据",
       {
         confirmButtonText: "恢复初始数据",
@@ -31,8 +64,11 @@ async function reset() {
         type: "warning",
       },
     );
-    if (result.value === "恢复演示")
-      await run(() => api.resetDemo(), "演示数据已恢复");
+    if (
+      result.value === "恢复演示" &&
+      (await run(() => api.resetDemo(), "演示数据已恢复"))
+    )
+      loadLatest();
   } catch {
     /* dismissed */
   }
@@ -48,22 +84,42 @@ async function reset() {
   </div>
   <section class="admin-panel admin-settings-panel">
     <h2>商城基础信息</h2>
+    <el-alert
+      v-if="dirty && conflict"
+      title="其他页面已更新设置，本地草稿已保留。请加载最新设置后重新编辑。"
+      type="warning"
+      :closable="false"
+      show-icon
+      role="alert"
+    />
+    <p v-if="dirty" class="admin-note">有尚未保存的修改。</p>
     <el-form
       class="admin-settings-form"
       label-position="top"
       @submit.prevent="save"
       ><el-form-item label="商城名称" required
-        ><el-input v-model="form.name" maxlength="40" /></el-form-item
+        ><el-input
+          v-model="form.name"
+          maxlength="40"
+          :disabled="busy" /></el-form-item
       ><el-form-item label="品牌标语" required
-        ><el-input v-model="form.slogan" maxlength="80" /></el-form-item
+        ><el-input
+          v-model="form.slogan"
+          maxlength="80"
+          :disabled="busy" /></el-form-item
       ><el-form-item label="商城公告"
         ><el-input
           v-model="form.notice"
           type="textarea"
           :rows="3"
+          :disabled="busy"
           maxlength="200" /></el-form-item
       ><el-button type="primary" :loading="busy" @click="save"
         >保存信息</el-button
+      ><el-button
+        :disabled="busy || (!dirty && !conflict)"
+        @click="reloadLatest"
+        >加载最新设置</el-button
       ></el-form
     >
   </section>
@@ -72,7 +128,8 @@ async function reset() {
     <dl class="admin-detail-list">
       <dt>数据保存</dt>
       <dd>
-        账号、商品、订单、库存和客服数据保存在服务端 SQLite 数据库，刷新或重建容器后保留。
+        账号、商品、订单、库存和客服数据保存在服务端 SQLite
+        数据库，刷新或重建容器后保留。
       </dd>
       <dt>账号边界</dt>
       <dd>

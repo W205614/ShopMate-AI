@@ -118,6 +118,8 @@ docker compose run --rm --no-deps api npm run admin:password
 
 新增能力、v1→v2 数据迁移、接口与测试范围见 [传统电商验证](docs/traditional-commerce.md)。AI 客服、Agent 和模型接入另行实施，当前客服规则保持不变。
 
+双端运营补全按功能独立测试、提交并等待 CI 后继续，进度见 [逐功能交付记录](docs/incremental-delivery.md)。设置编辑保留未保存草稿，并在保存时检查编辑基线；远端修改发生冲突时需加载最新设置再编辑，公告支持清空。
+
 ## 本地开发与验证
 
 建议 Node.js 24，与 Docker 和 CI 保持一致。具体依赖版本由前后端各自的 `package-lock.json` 锁定。

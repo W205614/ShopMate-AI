@@ -1,4 +1,5 @@
 import type { ShopApi } from "../../shared/domain/api";
+import { HttpError } from "./auth";
 import {
   transact,
   admin,
@@ -159,16 +160,27 @@ export const catalogApi: Pick<
         ledger(db, "purchase", cost, skuId, reason.trim());
     });
   },
-  async saveSettings(input) {
-    await transact((db) => {
+  async saveSettings(input, baseline) {
+    return transact((db) => {
       admin();
       requireThat(
         text(input.name, 40) &&
           text(input.slogan, 80) &&
-          text(input.notice, 200),
-        "商城名称、标语和公告不能为空",
+          typeof input.notice === "string" &&
+          input.notice.length <= 200,
+        "商城名称和标语不能为空，公告最多 200 字",
       );
+      if (
+        (["name", "slogan", "notice"] as const).some(
+          (key) => db.settings[key] !== baseline[key],
+        )
+      )
+        throw new HttpError(
+          409,
+          "设置已被其他页面修改，请加载最新设置后重新编辑",
+        );
       db.settings = clone(input);
+      return { settings: clone(db.settings), revision: db.revision + 1 };
     });
   },
 };

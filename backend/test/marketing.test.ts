@@ -63,6 +63,49 @@ function seed() {
 }
 
 describe("profile and marketing boundaries", () => {
+  it("requires an admin and matching settings baseline over HTTP, including empty announcements", async () => {
+    const baseline = readDatabase(sql).settings;
+    const input = { ...baseline, notice: "", name: "HTTP 设置" };
+    expect(
+      (await post("/api/actions/saveSettings", { args: [input, baseline] }))
+        .status,
+    ).toBe(401);
+    await createAccount(
+      sql,
+      { username: "admin", name: "管理员", password: "AdminPass123!" },
+      "admin",
+    );
+    const cookie = cookieOf(
+      await post("/api/auth/login", {
+        role: "admin",
+        username: "admin",
+        password: "AdminPass123!",
+      }),
+    );
+    expect(
+      (await post("/api/actions/saveSettings", { args: [input] }, cookie))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await post(
+          "/api/actions/saveSettings",
+          { args: [input, baseline] },
+          cookie,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await post(
+          "/api/actions/saveSettings",
+          { args: [{ ...input, name: "冲突覆盖" }, baseline] },
+          cookie,
+        )
+      ).status,
+    ).toBe(409);
+    expect(readDatabase(sql).settings).toEqual(input);
+  });
   it("validates profile and revokes every user session after password change while preserving admin", async () => {
     const input = {
       username: "alice",

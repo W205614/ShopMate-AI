@@ -5,9 +5,12 @@ import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import { dateTime } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
+import { useAdminQuery } from "./useAdminList";
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
-  filter = ref(""),
+  filter = useAdminQuery().field("status", {
+    values: ["bot", "waiting", "human", "closed"],
+  }),
   selectedId = ref(""),
   text = ref(""),
   messageBox = ref<HTMLElement>();
@@ -126,7 +129,8 @@ async function close() {
           <el-button
             v-if="selected.status !== 'closed'"
             @click="close"
-            :loading="pending" :disabled="busy"
+            :loading="pending"
+            :disabled="busy"
             >关闭会话</el-button
           >
         </div>
@@ -161,7 +165,10 @@ async function close() {
             <div v-if="m.orderId" class="admin-note">订单：{{ m.orderId }}</div>
           </article>
         </div>
-        <div v-if="['waiting', 'human'].includes(selected.status)" class="admin-compose">
+        <div
+          v-if="['waiting', 'human'].includes(selected.status)"
+          class="admin-compose"
+        >
           <el-input
             v-model="text"
             type="textarea"
@@ -172,12 +179,14 @@ async function close() {
           /><el-button
             type="primary"
             :loading="pending"
-            :disabled="busy || (!text.trim())"
+            :disabled="busy || !text.trim()"
             @click="reply"
             >发送回复</el-button
           >
         </div>
-        <p v-else-if="selected.status === 'bot'" class="admin-note">此会话由模拟客服接待。用户转人工后，可在此回复。</p>
+        <p v-else-if="selected.status === 'bot'" class="admin-note">
+          此会话由模拟客服接待。用户转人工后，可在此回复。
+        </p>
         <p v-else class="admin-note">会话已关闭，历史消息已保留。</p></template
       ><el-empty v-else description="选择会话开始处理" :image-size="80" />
     </section>

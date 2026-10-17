@@ -4,17 +4,11 @@ import { RouterLink } from "vue-router";
 import { useShop } from "../../stores/shop";
 import { localDate } from "./useAdmin";
 import { money, orderLabels, dateTime } from "../../domain/types";
+import { sumLedger } from "../../domain/finance";
 const shop = useShop();
-const income = computed(() =>
-  shop.db.ledger
-    .filter((l) => l.type === "payment")
-    .reduce((n, l) => n + l.amount, 0),
-);
-const refund = computed(() =>
-  shop.db.ledger
-    .filter((l) => l.type === "refund")
-    .reduce((n, l) => n + l.amount, 0),
-);
+const sums = computed(() => sumLedger(shop.db.ledger));
+const income = computed(() => sums.value.payment);
+const refund = computed(() => sums.value.refund);
 const lowStock = computed(() =>
   shop.db.products.flatMap((p) =>
     p.skus.filter((s) => s.stock <= 5).map((s) => ({ ...s, product: p.name })),
@@ -24,17 +18,17 @@ const tasks = computed(() => [
   {
     name: "待发货订单",
     count: shop.db.orders.filter((o) => o.status === "paid").length,
-    link: "/admin/orders",
+    link: "/admin/orders?status=paid",
   },
   {
     name: "待审核售后",
     count: shop.db.afterSales.filter((a) => a.status === "requested").length,
-    link: "/admin/after-sales",
+    link: "/admin/after-sales?status=requested",
   },
   {
     name: "等待人工接入",
     count: shop.db.conversations.filter((c) => c.status === "waiting").length,
-    link: "/admin/support",
+    link: "/admin/support?status=waiting",
   },
 ]);
 const trend = computed(() =>
@@ -46,15 +40,18 @@ const trend = computed(() =>
       label: `${d.getMonth() + 1}/${d.getDate()}`,
       total: shop.db.ledger
         .filter((l) => l.type === "payment" && localDate(l.createdAt) === key)
-        .reduce((n, l) => n + l.amount, 0),
+        .reduce((n, l) => n + BigInt(l.amount), 0n),
     };
   }),
 );
-const max = computed(() => Math.max(...trend.value.map((t) => t.total), 1));
+const max = computed(() =>
+  trend.value.reduce((n, t) => (t.total > n ? t.total : n), 0n),
+);
+// Only the drawing ratio becomes floating point; labels keep exact integer cents.
+const chartY = (total: bigint) =>
+  180 - Number((total * 150000n) / (max.value || 1n)) / 1000;
 const points = computed(() =>
-  trend.value
-    .map((t, i) => `${20 + i * 100},${180 - (t.total / max.value) * 150}`)
-    .join(" "),
+  trend.value.map((t, i) => `${20 + i * 100},${chartY(t.total)}`).join(" "),
 );
 const ranking = computed(() =>
   shop.db.products
@@ -68,6 +65,7 @@ const ranking = computed(() =>
         .reduce((n, i) => n + i.quantity - i.refundedQuantity, 0);
       return { ...p, count };
     })
+    .filter((p) => p.count > 0)
     .sort((a, b) => b.count - a.count)
     .slice(0, 4),
 );
@@ -78,7 +76,7 @@ const ranking = computed(() =>
       <h1>经营概览</h1>
       <p>掌握生意进展，把每一笔订单照顾好。</p>
     </div>
-    <el-tag effect="plain">演示数据</el-tag>
+    <el-tag effect="plain">模拟交易实时数据</el-tag>
   </div>
   <div class="admin-kpis">
     <div class="admin-kpi">
@@ -112,7 +110,7 @@ const ranking = computed(() =>
     <section class="admin-panel">
       <div class="admin-panel-head">
         <h2>近七日收款趋势</h2>
-        <span class="admin-note">单位：元 · 演示数据</span>
+        <span class="admin-note">单位：元 · 支付流水原额，退款另计</span>
       </div>
       <svg
         class="admin-chart"
@@ -134,12 +132,12 @@ const ranking = computed(() =>
           v-for="(t, i) in trend"
           :key="i"
           :cx="20 + i * 100"
-          :cy="180 - (t.total / max) * 150"
+          :cy="chartY(t.total)"
           r="4"
           fill="#1a4be0"
         />
         <text x="20" y="15" fill="#7b8492" font-size="12">
-          峰值 {{ money(max === 1 ? 0 : max) }}
+          峰值 {{ money(max) }}
         </text>
       </svg>
       <div class="admin-chart-labels">
@@ -178,15 +176,18 @@ const ranking = computed(() =>
             .slice(0, 5)
         "
         empty-text="暂无订单"
-        ><el-table-column
-          prop="id"
-          label="订单号"
-          min-width="140"
-        /><el-table-column label="下单时间" min-width="155"
+        ><el-table-column label="订单号" min-width="140"
+          ><template #default="{ row }"
+            ><RouterLink
+              :to="{ path: '/admin/orders', query: { detail: row.id } }"
+              >{{ row.id }}</RouterLink
+            ></template
+          ></el-table-column
+        ><el-table-column label="下单时间" min-width="155"
           ><template #default="{ row }">{{
             dateTime(row.createdAt)
           }}</template></el-table-column
-        ><el-table-column label="实付金额" min-width="100"
+        ><el-table-column label="订单金额" min-width="100"
           ><template #default="{ row }">{{
             money(row.total)
           }}</template></el-table-column
@@ -202,8 +203,13 @@ const ranking = computed(() =>
     <section class="admin-panel">
       <div class="admin-panel-head">
         <h2>热销商品</h2>
-        <span class="admin-note">按已支付订单件数</span>
+        <span class="admin-note">已支付件数，扣除实际退款数量</span>
       </div>
+      <el-empty
+        v-if="!ranking.length"
+        description="暂无已支付且未退款的销量"
+        :image-size="65"
+      />
       <div class="admin-rank" v-for="p in ranking" :key="p.id">
         <img :src="p.images[0]" :alt="p.name" />
         <div>
@@ -225,7 +231,7 @@ const ranking = computed(() =>
   <section class="admin-panel">
     <div class="admin-panel-head">
       <h2>低库存提醒</h2>
-      <RouterLink class="admin-text-button" to="/admin/inventory"
+      <RouterLink class="admin-text-button" to="/admin/inventory?low=1"
         >前往补货 ↗</RouterLink
       >
     </div>
@@ -235,7 +241,15 @@ const ranking = computed(() =>
         label="规格"
       /><el-table-column prop="stock" label="库存" sortable /><el-table-column
         label="建议"
-        ><template #default>请核对库存后补货</template></el-table-column
+        ><template #default="{ row }"
+          ><RouterLink
+            :to="{
+              path: '/admin/inventory',
+              query: { tab: 'stock', q: row.id },
+            }"
+            >核对并补货</RouterLink
+          ></template
+        ></el-table-column
       ></el-table
     >
   </section>

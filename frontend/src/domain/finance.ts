@@ -1,4 +1,5 @@
 import type { Database, LedgerEntry } from "./types";
+import { money } from "./types";
 export const ledgerLabels = {
   payment: "模拟收款",
   refund: "模拟退款",
@@ -15,8 +16,7 @@ export function ledgerAmount(cents: number | bigint, grouped = false) {
   const whole = absolute / 100n;
   return `${value < 0n ? "-" : ""}${grouped ? whole.toLocaleString("zh-CN") : whole}.${String(absolute % 100n).padStart(2, "0")}`;
 }
-export const ledgerMoney = (cents: number | bigint) =>
-  "¥" + ledgerAmount(cents, true);
+export const ledgerMoney = money;
 function cell(value: unknown) {
   let str = String(value ?? "");
   if (/^[\s]*[=+\-@]/.test(str)) str = "'" + str;

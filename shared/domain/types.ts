@@ -319,11 +319,10 @@ export const afterSaleLabels: Record<AfterSaleStatus, string> = {
   refunded: "已退款",
   rejected: "已拒绝",
 };
-export const money = (cents: number) =>
-  "¥" +
-  (cents / 100).toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+export const money = (cents: number | bigint) => {
+  const value = BigInt(cents),
+    absolute = value < 0n ? -value : value;
+  return `¥${value < 0n ? "-" : ""}${(absolute / 100n).toLocaleString("zh-CN")}.${String(absolute % 100n).padStart(2, "0")}`;
+};
 export const dateTime = (value: string) =>
   new Date(value).toLocaleString("zh-CN", { hour12: false });

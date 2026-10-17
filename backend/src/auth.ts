@@ -7,7 +7,7 @@ import {
 } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type { Request, Response } from "express";
-import type { Role, Session } from "../../frontend/src/domain/types";
+import type { Role, Session } from "../../shared/domain/types";
 import { readDatabase, transaction, writeDatabase } from "./database";
 
 export class HttpError extends Error {

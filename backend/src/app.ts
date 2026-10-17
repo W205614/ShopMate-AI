@@ -2,7 +2,7 @@ import express from "express";
 import type { ErrorRequestHandler } from "express";
 import type { DatabaseSync } from "node:sqlite";
 import { ZodError } from "zod";
-import type { Database, Role, Session } from "../../frontend/src/domain/types";
+import type { Database, Role, Session } from "../../shared/domain/types";
 import { readDatabase } from "./database";
 import {
   Account,

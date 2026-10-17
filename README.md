@@ -152,7 +152,8 @@ backend/src/app.ts         HTTP 接口、来源检查、权限与按身份过滤
 backend/src/database.ts    SQLite 初始化和事务
 backend/src/               服务端商品、交易、库存、售后与客服规则
 backend/test/              HTTP 认证与业务规则测试
-frontend/src/domain/       共享类型、API 契约、商品种子与素材清单
+shared/domain/             前后端共享类型、API 契约与商品种子
+frontend/src/domain/       共享类型入口与素材清单
 frontend/src/services/     HTTP 客户端、服务端状态缓存
 frontend/src/stores/       Pinia 状态与角色会话展示
 frontend/src/views/shop/   商城页面

@@ -1,4 +1,4 @@
-import type { ShopApi } from "../../frontend/src/domain/api";
+import type { ShopApi } from "../../shared/domain/api";
 import {
   transact,
   admin,

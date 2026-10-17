@@ -2,7 +2,7 @@ import { test as base, expect } from "@playwright/test";
 import { DatabaseSync } from "node:sqlite";
 import { randomBytes, scryptSync } from "node:crypto";
 import { resolve } from "node:path";
-import { createSeed } from "../src/domain/seed";
+import { createSeed } from "../../shared/domain/seed";
 
 export const TEST_USER_PASSWORD = "TestUser123!";
 export const TEST_ADMIN_PASSWORD =

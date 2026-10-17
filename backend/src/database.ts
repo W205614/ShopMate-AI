@@ -1,8 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { Database } from "../../frontend/src/domain/types";
-import { createSeed } from "../../frontend/src/domain/seed";
+import type { Database } from "../../shared/domain/types";
+import { createSeed } from "../../shared/domain/seed";
 
 // Keep the existing catalog; historical demo people and orders are not real accounts.
 export function initialDatabase(): Database {

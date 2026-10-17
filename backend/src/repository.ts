@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DatabaseSync } from "node:sqlite";
-import type { Database, Order, Session } from "../../frontend/src/domain/types";
+import type { Database, Order, Session } from "../../shared/domain/types";
 import {
   readDatabase,
   writeDatabase,

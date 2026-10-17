@@ -3,7 +3,7 @@ WORKDIR /app/backend
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 COPY backend/src ./src
-COPY frontend/src/domain /app/frontend/src/domain
+COPY shared /app/shared
 RUN mkdir -p /app/data && chown node:node /app/data
 USER node
 ENV HOST=0.0.0.0 PORT=3001 DATABASE_PATH=/app/data/shopmate.sqlite

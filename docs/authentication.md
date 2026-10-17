@@ -53,6 +53,8 @@ HTTP 用例验证了注册校验、账号重复与大小写唯一、密码哈希
 
 曾在 Windows Edge 全页导航中遇到一次 `ERR_SOCKET_NOT_CONNECTED`；单项复跑通过。Vite 开发模式下可出现 Element Plus 的 ResizeObserver 通知警告。生产构建保留已有后台包体积提示；这些不作为认证或交易成功证据。
 
+共享类型、API 契约和商品种子位于独立 `shared/domain/`，后端测试和运行不依赖前端安装。首次远端 CI 暴露过共享源码放在 Vue 目录引入的配置耦合，已通过该目录调整修复。
+
 GitHub Actions 现同时执行前后端验证、15 项完整浏览器回归，以及 Docker 构建后的 4 项认证回归。远端最终状态以对应提交的 Actions 结果为准。
 
 ## 已知范围

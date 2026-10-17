@@ -1,5 +1,5 @@
-import type { ShopApi } from "../../frontend/src/domain/api";
-import type { Message } from "../../frontend/src/domain/types";
+import type { ShopApi } from "../../shared/domain/api";
+import type { Message } from "../../shared/domain/types";
 import {
   transact,
   userId,

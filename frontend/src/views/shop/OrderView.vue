@@ -12,6 +12,7 @@ import {
 import OrderItems from "../../components/shop/OrderItems.vue";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import { useAction } from "../../components/shop/useAction";
+import { reviewWriteReason } from "../../domain/reviewWriteState";
 import "../../styles/commerce-flow.css";
 import { eventLabel } from "../../components/shop/commerceLabels";
 const shop = useShop(),
@@ -37,6 +38,21 @@ const activeAfterSale = computed(() =>
   ),
 );
 const quantities = reactive<Record<string, number>>({});
+const reviewStates = computed(
+  () =>
+    order.value?.items.map((item) => ({
+      item,
+      reason: reviewWriteReason(
+        order.value,
+        item,
+        shop.db.reviews,
+        shop.db.afterSales,
+      ),
+    })) ?? [],
+);
+const canReview = computed(() =>
+  reviewStates.value.some((entry) => !entry.reason),
+);
 const remaining = computed(
   () => order.value?.items.filter((i) => i.quantity > i.refundedQuantity) ?? [],
 );
@@ -118,6 +134,15 @@ async function request() {
         <section class="checkout-section">
           <h2>商品明细</h2>
           <OrderItems :items="order.items" />
+          <p
+            v-for="entry in reviewStates"
+            :key="`review-${entry.item.id}`"
+            class="secondary"
+          >
+            {{ entry.item.name }} · {{ entry.item.skuName }}：{{
+              entry.reason || "可评价"
+            }}
+          </p>
           <div class="order-detail-total">
             共 {{ order.items.reduce((n, i) => n + i.quantity, 0) }} 件，合计
             <strong>{{ money(order.total) }}</strong>
@@ -284,8 +309,11 @@ async function request() {
           再次购买
         </button>
         <RouterLink
-          v-if="order.status === 'completed'"
-          to="/account?section=reviews"
+          v-if="canReview"
+          :to="{
+            path: '/account',
+            query: { section: 'pending-reviews', orderId: order.id },
+          }"
           class="button secondary-button"
           >评价商品</RouterLink
         >

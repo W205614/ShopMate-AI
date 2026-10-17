@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute, useRouter, type LocationQuery } from "vue-router";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import type {
@@ -14,6 +14,7 @@ import { UserRound, ArrowUpRight } from "lucide-vue-next";
 import ProductCard from "../../components/shop/ProductCard.vue";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import { useAction } from "../../components/shop/useAction";
+import { reviewWriteReason } from "../../domain/reviewWriteState";
 import "../../styles/account-commerce.css";
 
 const shop = useShop(),
@@ -69,29 +70,41 @@ const myReviews = computed(() =>
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
 );
-const pendingReviews = computed(() =>
+const hasOrderFilter = computed(() => route.query.orderId !== undefined);
+const reviewOrder = computed(() =>
+  typeof route.query.orderId === "string"
+    ? shop.myOrders.find((o) => o.id === route.query.orderId)
+    : undefined,
+);
+const reviewEntries = computed(() =>
   shop.myOrders
     .filter(
-      (order) =>
-        order.status === "completed" &&
-        !shop.db.afterSales.some(
-          (a) =>
-            a.orderId === order.id &&
-            !["refunded", "rejected", "cancelled"].includes(a.status),
-        ),
+      (order) => !hasOrderFilter.value || order.id === reviewOrder.value?.id,
     )
     .flatMap((order) =>
-      order.items
-        .filter(
-          (item) =>
-            item.quantity > item.refundedQuantity &&
-            !myReviews.value.some(
-              (review) =>
-                review.orderId === order.id && review.orderItemId === item.id,
-            ),
-        )
-        .map((item) => ({ order, item })),
+      order.items.map((item) => ({
+        order,
+        item,
+        reason: reviewWriteReason(
+          order,
+          item,
+          shop.db.reviews,
+          shop.db.afterSales,
+        ),
+      })),
     ),
+);
+const pendingReviews = computed(() =>
+  reviewEntries.value.filter((entry) => !entry.reason),
+);
+const blockedReviews = computed(() =>
+  reviewEntries.value.filter(
+    (entry) =>
+      entry.reason &&
+      (hasOrderFilter.value ||
+        (entry.order.id === reviewForm.orderId &&
+          entry.item.id === reviewForm.orderItemId)),
+  ),
 );
 const reviewForm = reactive({
   orderId: "",
@@ -101,7 +114,9 @@ const reviewForm = reactive({
 });
 
 function selectSection(value: string) {
-  void router.replace({ query: { ...route.query, section: value } });
+  const query: LocationQuery = { ...route.query, section: value };
+  if (value !== "pending-reviews") delete query.orderId;
+  void router.replace({ query });
 }
 function couponStatus(claim: CouponClaim, coupon?: Coupon) {
   if (claim.status === "locked") return "订单占用中";
@@ -155,6 +170,17 @@ async function changePassword() {
   }
 }
 async function submitReview() {
+  const order = shop.myOrders.find((o) => o.id === reviewForm.orderId);
+  const reason = reviewWriteReason(
+    order,
+    order?.items.find((i) => i.id === reviewForm.orderItemId),
+    shop.db.reviews,
+    shop.db.afterSales,
+  );
+  if (reason)
+    return void (await run(async () => {
+      throw new Error(reason);
+    }));
   if (
     await run(
       () =>
@@ -435,7 +461,47 @@ async function deleteReview(id: string) {
         <h2>分享使用感受</h2>
         <span>{{ pendingReviews.length }} 件待评价</span>
       </div>
-      <div v-if="pendingReviews.length" class="commerce-list">
+      <div v-if="hasOrderFilter" class="button-row">
+        <RouterLink
+          :to="{ path: '/account', query: { section: 'pending-reviews' } }"
+          class="text-link"
+          >查看全部待评价</RouterLink
+        >
+        <RouterLink
+          v-if="reviewOrder"
+          :to="`/orders/${reviewOrder.id}`"
+          class="text-link"
+          >返回订单 {{ reviewOrder.id }}</RouterLink
+        >
+      </div>
+      <div
+        v-for="entry in blockedReviews"
+        :key="entry.item.id"
+        class="action-notice"
+        :role="
+          entry.order.id === reviewForm.orderId &&
+          entry.item.id === reviewForm.orderItemId
+            ? 'alert'
+            : undefined
+        "
+      >
+        {{ entry.item.name }} · {{ entry.item.skuName }}：{{ entry.reason }}
+        <span
+          v-if="
+            entry.order.id === reviewForm.orderId &&
+            entry.item.id === reviewForm.orderItemId
+          "
+          >。编辑内容已保留<span
+            v-if="entry.reason === '售后处理中，暂不可评价'"
+            >，资格恢复后可继续</span
+          >。</span
+        >
+      </div>
+      <div v-if="hasOrderFilter && !reviewOrder" class="empty-state">
+        <h2>未找到可访问的订单</h2>
+        <p>请使用下单账号查看，或选择全部待评价商品。</p>
+      </div>
+      <div v-else-if="pendingReviews.length" class="commerce-list">
         <article
           v-for="{ order, item } in pendingReviews"
           :key="`${order.id}:${item.id}`"

@@ -216,7 +216,11 @@ test("购买后评价公开脱敏，后台隐藏恢复及用户删除影响公�
   context,
 }) => {
   await login(page);
-  await page.goto("/account?section=pending-reviews");
+  await page.goto("/orders/SM000001");
+  await page.getByRole("link", { name: "评价商品", exact: true }).click();
+  await expect(page).toHaveURL(
+    /\/account\?section=pending-reviews&orderId=SM000001$/,
+  );
   const eligible = page
     .locator(".commerce-list-card")
     .filter({ hasText: "SM000001" });

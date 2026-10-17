@@ -437,6 +437,7 @@ describe("profile and marketing boundaries", () => {
         ]),
       );
       const sale = readDatabase(sql).afterSales[0]!;
+      expect(publicReviews(readDatabase(sql), "p01").total).toBe(1);
       refunded.push(sale.refundAmount);
       await run(() => commerceApi.processAfterSale(sale.id, "approve"));
       await expect(
@@ -472,6 +473,11 @@ describe("profile and marketing boundaries", () => {
     expect(db.products[0]!.skus[0]!.stock).toBe(
       fixture.products[0]!.skus[0]!.stock,
     );
+    const before = readDatabase(sql);
+    await expect(
+      run(() => marketingApi.moderateReview(reviewId, false)),
+    ).rejects.toThrow("历史");
+    expect(readDatabase(sql)).toEqual(before);
   });
   it("supports deletion, plaintext content, pagination and rating recalculation without identity leaks", () => {
     seed();

@@ -15,6 +15,7 @@ import ProductCard from "../../components/shop/ProductCard.vue";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import { useAction } from "../../components/shop/useAction";
 import { reviewWriteReason } from "../../domain/reviewWriteState";
+import { reviewState, reviewLabels } from "../../../../shared/domain/reviews";
 import "../../styles/account-commerce.css";
 
 const shop = useShop(),
@@ -125,12 +126,6 @@ function couponStatus(claim: CouponClaim, coupon?: Coupon) {
   if (!coupon.active) return "已停用";
   if (Date.now() < Date.parse(coupon.validFrom)) return "未到使用时间";
   return "可使用";
-}
-function fullyRefunded(orderId: string, itemId: string) {
-  const item = shop.db.orders
-    .find((o) => o.id === orderId)
-    ?.items.find((i) => i.id === itemId);
-  return item && item.refundedQuantity === item.quantity;
 }
 function edit(a?: Address) {
   Object.assign(form, {
@@ -589,19 +584,22 @@ async function deleteReview(id: string) {
               }}
             </h3>
             <span class="commerce-badge">{{
-              review.deleted ? "已删除" : review.hidden ? "已隐藏" : "已发布"
+              reviewLabels[reviewState(shop.db.orders, review)]
             }}</span>
           </div>
           <p>{{ review.rating }} 星 · {{ dateTime(review.createdAt) }}</p>
           <p class="review-content">{{ review.content }}</p>
           <p
-            v-if="fullyRefunded(review.orderId, review.orderItemId)"
+            v-if="reviewState(shop.db.orders, review) === 'refunded'"
             class="secondary"
           >
             商品已全部退款，评价仅保留在你的历史记录中。
           </p>
           <div class="button-row">
-            <RouterLink :to="`/orders/${review.orderId}`" class="text-link"
+            <RouterLink
+              v-if="shop.myOrders.some((o) => o.id === review.orderId)"
+              :to="`/orders/${review.orderId}`"
+              class="text-link"
               >查看订单</RouterLink
             ><button
               v-if="!review.deleted"

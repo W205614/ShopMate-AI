@@ -1,4 +1,5 @@
 import type { ShopApi } from "../../shared/domain/api";
+import { reviewState } from "../../shared/domain/reviews";
 import type {
   Database,
   PublicReviews,
@@ -38,10 +39,7 @@ export function publicReviews(
   const visible = db.reviews
     .filter(
       (r) =>
-        r.productId === productId &&
-        !r.deleted &&
-        !r.hidden &&
-        reviewEligible(db, r),
+        r.productId === productId && reviewState(db.orders, r) === "visible",
     )
     .sort(
       (a, b) =>
@@ -239,6 +237,10 @@ export const marketingApi: Pick<
       const review = db.reviews.find((r) => r.id === reviewId);
       requireThat(review && !review.deleted, "评价不存在或已被用户删除");
       requireThat(typeof hidden === "boolean", "隐藏状态无效");
+      requireThat(
+        reviewEligible(db, review),
+        "评价仅保留历史，不能恢复或隐藏公开展示",
+      );
       review.hidden = hidden;
     });
   },

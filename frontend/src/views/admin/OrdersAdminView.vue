@@ -335,7 +335,13 @@ async function submit() {
       <RouterLink
         :to="{ path: '/admin/after-sales', query: { orderId: selected.id } }"
         >查看该订单全部售后</RouterLink
-      > </template
+      >
+      <p>
+        <RouterLink
+          :to="{ path: '/admin/reviews', query: { orderId: selected.id } }"
+          >查看该订单评价</RouterLink
+        >
+      </p> </template
     ><el-alert v-else title="没有找到该订单" type="warning" :closable="false" />
     <template #footer
       ><el-button :disabled="pending" @click="detail = false">关闭</el-button

@@ -2,11 +2,7 @@
 
 一个包含用户商城和运营后台的中文单店电商项目，覆盖商品选购、订单履约、售后退款及人工客服，可用于学习、演示和后续 AI 客服集成。
 
-前端采用 Vue 3、TypeScript、Vite 和 Element Plus；后端采用 Node.js、Express 和 SQLite，通过 Docker Compose 部署。
-
 **账号认证和数据持久化已实现；支付、物流、退款均为模拟。当前客服使用 FAQ 规则和人工回复，尚未接入大模型或 Agent。**
-
-![商城首页](docs/screenshots/storefront-desktop-fold.jpg)
 
 ## 解决什么问题
 
@@ -23,7 +19,41 @@
 | 运营后台 | 商品分类、上下架、补货盘点、订单发货、售后处理、优惠券与评价管理、经营概览、财务查询与 CSV 导出 |
 | 客服与设置 | FAQ 规则问答、转人工、会话回复与关闭、商城名称和公告设置 |
 
-管理端预览见 [后台截图](docs/screenshots/admin-desktop.png)。项目为单店业务演示，不包含真实支付物流或多商家功能。
+项目为单店业务演示，不包含真实支付物流或多商家功能。
+
+## 技术栈
+
+| 层次 | 技术与用途 |
+| --- | --- |
+| 前端 | Vue 3 + TypeScript + Vite；Vue Router 管理路由，Pinia 管理状态，Element Plus 构建后台界面 |
+| 后端 | Node.js 24 + Express，Zod 校验接口参数；Cookie 会话认证与服务端权限校验 |
+| 数据 | SQLite 持久化账号和业务数据，事务处理订单、库存与流水 |
+| 部署 | Docker Compose 编排 API/Web，Nginx 托管前端并代理 API |
+| 验证 | Vitest 单元／HTTP 测试、Playwright 浏览器测试、GitHub Actions 自动验证 |
+
+## 运行效果
+
+可体验“领券购买 → 模拟支付 → 后台发货 → 收货评价 → 售后退款”的完整流程，订单、库存和流水随业务操作同步。商城适配桌面和窄屏；后台桌面优先，小屏宽表支持横向滚动。
+
+**商城首页：** 分类切换、商品浏览和搜索入口。截图展示界面布局，实际商品和数据以运行环境为准。
+
+![商城首页运行效果](docs/screenshots/storefront-desktop-fold.jpg)
+
+<details>
+<summary>运营后台：经营概览、订单待办与低库存提醒</summary>
+
+![运营后台运行效果](docs/qa/images/dashboard-1440.png)
+
+</details>
+
+<details>
+<summary>手机端：用券结算、分批退款及订单进度</summary>
+
+<img src="docs/qa/images/checkout-coupon-phone.png" width="280" alt="手机端用券结算" /> <img src="docs/qa/images/refunded-order-390.png" width="280" alt="手机端退款订单与进度" />
+
+</details>
+
+后台与手机截图来自隔离验收环境，金额、订单及收货资料均为测试数据，新部署不会自动生成这些交易。详细验证结果见 [联合验收报告](docs/joint-acceptance.md)。
 
 ## 快速部署
 
@@ -55,7 +85,7 @@ docker compose up -d --build --wait
 - 用户注册：<http://localhost:18086/register>
 - 管理端：<http://localhost:18086/admin/login>，使用上面配置的管理员账号登录。
 
-首次启动自带演示商品，普通用户需自行注册。可以先完成一次购买，再到后台发货，回到用户端收货、评价或申请售后。
+首次启动自带演示商品，普通用户需自行注册，再按上方流程体验购买、履约和售后。本地源码运行方式见 [开发与运维](docs/development.md)。
 
 检查运行状态和启动日志：
 

@@ -1,4 +1,10 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import {
+  test,
+  expect,
+  TEST_USER_PASSWORD,
+  TEST_ADMIN_PASSWORD,
+} from "./fixtures";
 import { readFile } from "node:fs/promises";
 test.use({ timezoneId: "Asia/Shanghai" });
 
@@ -7,7 +13,9 @@ async function login(page: Page, role: "admin" | "user" = "admin") {
   await page
     .getByLabel("账号", { exact: true })
     .fill(role === "admin" ? "admin" : "lin");
-  await page.getByLabel("密码", { exact: true }).fill("demo123");
+  await page
+    .getByLabel("密码", { exact: true })
+    .fill(role === "admin" ? TEST_ADMIN_PASSWORD : TEST_USER_PASSWORD);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page).toHaveURL(role === "admin" ? /\/admin$/ : /\/$/);
 }
@@ -47,8 +55,10 @@ test("商品上下架即时同步到已打开的商城标签页，并在刷新�
 test("补货增加指定 SKU 库存并写入采购流水，导出的是筛选后的 CSV", async ({
   page,
 }) => {
-  // Shanghai 00:15 is still the previous UTC date: filter must follow the displayed local date.
-  await page.clock.install({ time: new Date("2026-10-15T16:15:00.000Z") });
+  // Events are now timestamped by the server, not the browser clock.
+  const eventDate = new Date().toLocaleDateString("sv-SE", {
+    timeZone: "Asia/Shanghai",
+  });
   await login(page);
   await page.goto("/admin/inventory");
   await page.getByPlaceholder("搜索商品或规格").fill("明度 桌面阅读灯");
@@ -70,8 +80,8 @@ test("补货增加指定 SKU 库存并写入采购流水，导出的是筛选后
   await expect(page.getByText("验收补货采购", { exact: true })).toBeVisible();
   await page.goto("/admin/finance");
   await expect(page.getByText("验收补货采购", { exact: true })).toBeVisible();
-  await page.getByPlaceholder("开始日期").fill("2026-10-16");
-  await page.getByPlaceholder("结束日期").fill("2026-10-16");
+  await page.getByPlaceholder("开始日期").fill(eventDate);
+  await page.getByPlaceholder("结束日期").fill(eventDate);
   await page.getByPlaceholder("结束日期").press("Enter");
   await expect(page.getByText("验收补货采购", { exact: true })).toBeVisible();
   await page.locator(".admin-toolbar .el-select").click();

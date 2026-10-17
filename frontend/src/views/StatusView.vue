@@ -10,7 +10,7 @@ const route = useRoute();
     <p>
       {{
         route.path === "/forbidden"
-          ? "请使用对应角色的演示账号。"
+          ? "请使用对应角色的账号登录。"
           : "页面不存在，可能是地址有误。"
       }}
     </p>

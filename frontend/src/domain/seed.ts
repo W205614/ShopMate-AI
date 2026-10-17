@@ -400,7 +400,7 @@ export function createSeed(): Database {
         question: "什么时候发货？",
         keywords: ["发货", "配送", "快递", "几天"],
         answer:
-          "这是本地前端演示。管理员可在订单管理中模拟发货，填写的物流信息会同步到订单详情；不会产生真实快递。",
+          "这是业务体验环境。管理员可在订单管理中模拟发货，填写的物流信息会同步到订单详情；不会产生真实快递。",
         active: true,
       },
       {
@@ -431,7 +431,7 @@ export function createSeed(): Database {
     settings: {
       name: "ShopMate",
       slogan: "好物与答案，一起找到。",
-      notice: "前端演示 · 商品、交易与客服回复均为模拟",
+      notice: "业务体验版 · 商品、交易与客服回复均为模拟",
     },
   };
 }

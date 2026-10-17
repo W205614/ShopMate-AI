@@ -160,7 +160,7 @@ async function logout() {
             {{ busy ? '保存中…' : '保存地址' }}</button
           ><button type="button" @click="editing = false">取消</button>
         </div>
-        <p class="secondary">建议填写虚构资料，数据仅保存在当前浏览器。</p>
+        <p class="secondary">地址保存到服务端，仅当前账号与授权管理员可访问。</p>
       </form>
       <div v-if="shop.myAddresses.length" class="address-grid">
         <article v-for="a in shop.myAddresses" :key="a.id" class="address-card">
@@ -177,7 +177,7 @@ async function logout() {
       </div>
       <div v-else-if="!editing" class="empty-state">
         <h2>还没有收货地址</h2>
-        <p>添加一个演示地址，就可以完成下单。</p>
+        <p>添加收货地址后，就可以完成下单。</p>
       </div>
     </section>
   </div>

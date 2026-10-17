@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { getSession } from "./services/api";
+import { getSession, refreshState } from "./services/api";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -7,6 +7,11 @@ const router = createRouter({
     return saved ?? (to.path === from.path ? undefined : { top: 0 });
   },
   routes: [
+    {
+      path: "/register",
+      component: () => import("./views/LoginView.vue"),
+      meta: { title: "注册账号", register: true },
+    },
     {
       path: "/login",
       component: () => import("./views/LoginView.vue"),
@@ -157,9 +162,14 @@ const router = createRouter({
     },
   ],
 });
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   document.title = `${String(to.meta.title ?? "商城")} · ShopMate-AI`;
   const role = to.meta.auth;
+  try {
+    await refreshState(to.path.startsWith("/admin") ? "admin" : "user");
+  } catch {
+    /* Connection errors are shown by App; protected routes fail closed. */
+  }
   if ((role === "user" || role === "admin") && !getSession(role))
     return {
       path: role === "admin" ? "/admin/login" : "/login",

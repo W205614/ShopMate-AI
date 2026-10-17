@@ -1,5 +1,20 @@
 name: shopmate-ai
 services:
+  api:
+    image: shopmate-ai-api:local
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        VCS_REF: ${VCS_REF:-local}
+    environment:
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env before first startup}
+      APP_ORIGINS: ${APP_ORIGINS:-http://localhost:18086,http://127.0.0.1:18086}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    volumes:
+      - api_data:/app/data
+    restart: unless-stopped
   web:
     image: shopmate-ai-web:local
     build:
@@ -8,4 +23,9 @@ services:
         VCS_REF: ${VCS_REF:-local}
     ports:
       - "127.0.0.1:${APP_PORT:-18086}:80"
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
+volumes:
+  api_data:

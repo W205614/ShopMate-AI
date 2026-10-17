@@ -1,9 +1,40 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, getDatabase, STORAGE_KEY, subscribeDatabase } from "./api";
+import { commerceApi } from "../src/commerce";
+import { catalogApi } from "../src/catalog";
+import { supportApi } from "../src/support";
+import { context } from "../src/repository";
+import { openDatabase, readDatabase, writeDatabase } from "../src/database";
+import { createSeed } from "../../frontend/src/domain/seed";
+import type { Role, Session } from "../../frontend/src/domain/types";
+const sql = openDatabase(":memory:");
+let sessions: { user: Session | null; admin: Session | null };
+const services = { ...commerceApi, ...catalogApi, ...supportApi };
+const api = {
+  ...(Object.fromEntries(
+    Object.entries(services).map(([key, fn]) => [
+      key,
+      (...args: unknown[]) =>
+        context.run({ sql, ...sessions }, () =>
+          (fn as (...args: unknown[]) => Promise<unknown>)(...args),
+        ),
+    ]),
+  ) as typeof services),
+  async login(role: Role, username: string, _password: string) {
+    sessions[role] = {
+      id: username === "lin" ? "u1" : username === "chen" ? "u2" : "admin",
+      name: username,
+      role,
+    };
+  },
+  async logout(role: Role) {
+    sessions[role] = null;
+  },
+};
+const getDatabase = () => readDatabase(sql);
 
 beforeEach(async () => {
-  localStorage.clear();
-  sessionStorage.clear();
+  writeDatabase(sql, createSeed());
+  sessions = { user: null, admin: null };
   await api.login("user", "lin", "demo123");
   await api.login("admin", "admin", "demo123");
 });
@@ -185,41 +216,5 @@ describe("身份、管理与客服", () => {
     await expect(api.sendMessage(conversationId, "继续")).rejects.toThrow(
       "已关闭",
     );
-  });
-  it("无效库存变动不改变账目；恢复初始数据可处理损坏存储", async () => {
-    const before = getDatabase();
-    await expect(
-      api.adjustStock("p01", "p01-s1", -99999, 0, "错误调整"),
-    ).rejects.toThrow();
-    expect(getDatabase()).toEqual(before);
-    localStorage.setItem(STORAGE_KEY, "{bad");
-    await expect(api.favorite("p01")).rejects.toThrow("数据损坏");
-    await api.resetDemo();
-    expect(getDatabase().products).toHaveLength(24);
-  });
-  it("合法 JSON 的嵌套损坏也可恢复且不覆盖原数据", async () => {
-    const corrupt = { ...getDatabase(), products: [null] };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(corrupt));
-    expect(getDatabase().products).toHaveLength(24);
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).products).toEqual([
-      null,
-    ]);
-    await expect(api.favorite("p01")).rejects.toThrow("数据损坏");
-    await api.resetDemo();
-    expect(getDatabase().products[0]!.name).toBe("静听 无线头戴耳机");
-  });
-  it("提交后通知订阅者，其他标签页 storage 事件同步", async () => {
-    let revision = 0;
-    const stop = subscribeDatabase((db) => {
-      revision = db.revision;
-    });
-    await api.favorite("p01");
-    expect(revision).toBe(1);
-    const db = getDatabase();
-    db.revision = 9;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
-    expect(revision).toBe(9);
-    stop();
   });
 });

@@ -77,7 +77,7 @@ async function logout() {
       </nav>
       <div class="admin-sidebar-bottom">
         <RouterLink to="/">前往商城 ↗</RouterLink>
-        <p>本地演示 · 数据仅在当前浏览器保存</p>
+        <p>业务体验版 · 数据由服务端保存</p>
       </div>
     </aside>
     <div class="admin-workspace">
@@ -100,7 +100,7 @@ async function logout() {
       </header>
       <main class="admin-main"><RouterView /></main>
       <footer class="admin-foot">
-        ShopMate-AI · 单店自营演示 <span>所有交易、物流和客服均为前端模拟</span>
+        ShopMate-AI · 单店自营演示 <span>所有交易、物流和客服均为模拟</span>
       </footer>
     </div>
   </div>

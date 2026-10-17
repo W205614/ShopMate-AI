@@ -18,6 +18,7 @@ const context = await browser.newContext({
   timezoneId: "Asia/Shanghai",
   reducedMotion: "reduce",
 });
+if (!process.env.ADMIN_PASSWORD || !process.env.USER_USERNAME || !process.env.USER_PASSWORD) throw new Error("Set ADMIN_PASSWORD, USER_USERNAME and USER_PASSWORD for authenticated UI audit");
 const page = await context.newPage();
 const metrics = [];
 async function photo(name, width) {
@@ -61,8 +62,8 @@ async function visit(path, name, width) {
 }
 async function login(admin = false) {
   await page.goto(admin ? "/admin/login" : "/login");
-  await page.getByLabel("账号", { exact: true }).fill(admin ? "admin" : "lin");
-  await page.getByLabel("密码", { exact: true }).fill("demo123");
+  await page.getByLabel("账号", { exact: true }).fill(admin ? (process.env.ADMIN_USERNAME || "admin") : process.env.USER_USERNAME);
+  await page.getByLabel("密码", { exact: true }).fill(admin ? process.env.ADMIN_PASSWORD : process.env.USER_PASSWORD);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await page.waitForURL(admin ? "**/admin" : (url) => url.pathname === "/");
 }

@@ -6,3 +6,6 @@
 .taste-skill
 .env*
 docs
+backend/data
+backend/test
+backend/.e2e

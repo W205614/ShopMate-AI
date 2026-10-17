@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { resolve } from "node:path";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -16,9 +17,21 @@ export default defineConfig({
   },
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
-    : {
-        command: "npm run dev -- --host 127.0.0.1",
-        url: "http://127.0.0.1:5173",
-        reuseExistingServer: !process.env.CI,
-      },
+    : [
+        {
+          command: "npm --prefix ../backend start",
+          url: "http://127.0.0.1:3001/api/health",
+          reuseExistingServer: false,
+          env: {
+            DATABASE_PATH: resolve("../backend/.e2e/shopmate.sqlite"),
+            ADMIN_PASSWORD: "TestAdmin123!",
+            APP_ORIGINS: "http://127.0.0.1:5173",
+          },
+        },
+        {
+          command: "npm run dev -- --host 127.0.0.1",
+          url: "http://127.0.0.1:5173",
+          reuseExistingServer: !process.env.CI,
+        },
+      ],
 });

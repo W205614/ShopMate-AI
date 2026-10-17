@@ -1,7 +1,25 @@
 <script setup lang="ts">
-import { ref, onErrorCaptured } from "vue";
+import { ref, watch, onErrorCaptured } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useShop } from "./stores/shop";
 const shop = useShop();
+const route = useRoute(),
+  router = useRouter();
+watch(
+  () => [shop.userSession, shop.adminSession],
+  () => {
+    const role = route.meta.auth;
+    if (shop.storageIssue) return;
+    if (
+      (role === "user" && !shop.userSession) ||
+      (role === "admin" && !shop.adminSession)
+    )
+      void router.replace({
+        path: role === "admin" ? "/admin/login" : "/login",
+        query: { redirect: route.fullPath },
+      });
+  },
+);
 const error = ref("");
 onErrorCaptured((cause) => {
   error.value = cause instanceof Error ? cause.message : "页面加载失败";
@@ -10,10 +28,7 @@ onErrorCaptured((cause) => {
 </script>
 <template>
   <aside v-if="shop.storageIssue" class="storage-warning" role="alert">
-    {{ shop.storageIssue }}。原始数据未覆盖，当前仅显示初始预览。<RouterLink
-      to="/admin/settings"
-      >登录管理端后恢复</RouterLink
-    >
+    {{ shop.storageIssue }}。请检查服务连接后刷新页面。
   </aside>
   <div v-if="error" class="app-failure" role="alert">
     <h1>暂时无法打开页面</h1>

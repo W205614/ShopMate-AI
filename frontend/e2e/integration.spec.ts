@@ -1,9 +1,17 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import {
+  test,
+  expect,
+  TEST_USER_PASSWORD,
+  TEST_ADMIN_PASSWORD,
+} from "./fixtures";
 
 async function login(page: Page, admin = false) {
   await page.goto(admin ? "/admin/login" : "/login");
   await page.getByLabel("账号", { exact: true }).fill(admin ? "admin" : "lin");
-  await page.getByLabel("密码", { exact: true }).fill("demo123");
+  await page
+    .getByLabel("密码", { exact: true })
+    .fill(admin ? TEST_ADMIN_PASSWORD : TEST_USER_PASSWORD);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page).toHaveURL(admin ? /\/admin$/ : /\/$/);
 }
@@ -72,7 +80,11 @@ test("全部页面可直达刷新、图片有效，商城不加载后台组件�
     requests: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (message) => {
-    if (message.type() === "warning" && message.text().includes("slots expect a single root node")) errors.push(message.text());
+    if (
+      message.type() === "warning" &&
+      message.text().includes("slots expect a single root node")
+    )
+      errors.push(message.text());
   });
   page.on("request", (request) => requests.push(request.url()));
   page.on("response", (response) => {
@@ -156,24 +168,23 @@ test("全部页面可直达刷新、图片有效，商城不加载后台组件�
   expect(assetFailures).toEqual([]);
 });
 
-test("损坏演示数据有恢复提示，管理员可以恢复而不白屏", async ({ page }) => {
+test("旧浏览器数据和伪造身份不能改变服务端认证", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() =>
+  await page.evaluate(() => {
     localStorage.setItem(
       "shopmate-ai:database:v1",
       '{"version":1,"products":[null]}',
-    ),
-  );
-  await page.reload();
-  await expect(page.getByRole("alert")).toContainText("演示数据损坏");
-  await login(page, true);
-  await page.goto("/admin/settings");
-  await page.getByRole("button", { name: "恢复演示数据", exact: true }).click();
-  const modal = page.locator(".el-message-box");
-  await modal.locator("input").fill("恢复演示");
-  await modal
-    .getByRole("button", { name: "恢复初始数据", exact: true })
-    .click();
-  await expect(page.getByText("演示数据已恢复", { exact: true })).toBeVisible();
+    );
+    sessionStorage.setItem(
+      "shopmate-ai:session:admin",
+      JSON.stringify({ id: "admin", role: "admin" }),
+    );
+  });
+  await page.goto("/admin/orders");
+  await expect(page).toHaveURL(/\/admin\/login/);
+  await page.goto("/products/p01");
+  await expect(
+    page.getByRole("heading", { name: "静听 无线头戴耳机", exact: true }),
+  ).toBeVisible();
   await expect(page.locator(".storage-warning")).toHaveCount(0);
 });

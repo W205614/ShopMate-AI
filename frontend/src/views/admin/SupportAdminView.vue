@@ -74,7 +74,7 @@ async function close() {
       <h1>客服工作台</h1>
       <p>接住每一个问题，让咨询有回应。</p>
     </div>
-    <el-tag effect="plain">同一浏览器多标签页联动</el-tag>
+    <el-tag effect="plain">服务端同步会话</el-tag>
   </div>
   <div class="admin-chat" :class="{ 'is-empty': !selected }">
     <aside class="admin-chat-list">

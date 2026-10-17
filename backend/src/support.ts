@@ -1,5 +1,5 @@
-import type { ShopApi } from "./api";
-import type { Message } from "../domain/types";
+import type { ShopApi } from "../../frontend/src/domain/api";
+import type { Message } from "../../frontend/src/domain/types";
 import {
   transact,
   userId,
@@ -149,7 +149,7 @@ export const supportApi: Pick<
       conversation.messages.push({
         id: id("msg-"),
         role: "assistant",
-        text: "已转入演示人工服务队列。请在同一浏览器的管理端客服工作台回复，此处会同步显示。",
+        text: "已转入演示人工服务队列。请在管理端客服工作台回复，此处会同步显示。",
         createdAt: now(),
       });
     });

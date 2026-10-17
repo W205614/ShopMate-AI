@@ -31,6 +31,8 @@ export const useShop = defineStore("shop", () => {
   subscribeDatabase((value) => {
     db.value = value;
     storageIssue.value = getStorageIssue();
+    userSession.value = getSession("user");
+    adminSession.value = getSession("admin");
   });
   async function login(role: Role, username: string, password: string) {
     const session = await api.login(role, username, password);
@@ -41,6 +43,13 @@ export const useShop = defineStore("shop", () => {
     await api.logout(role);
     if (role === "user") userSession.value = null;
     else adminSession.value = null;
+  }
+  async function register(input: {
+    username: string;
+    name: string;
+    password: string;
+  }) {
+    userSession.value = await api.register(input);
   }
   return {
     db,
@@ -54,6 +63,7 @@ export const useShop = defineStore("shop", () => {
     myOrders,
     myAddresses,
     login,
+    register,
     logout,
   };
 });

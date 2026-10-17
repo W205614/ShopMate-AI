@@ -21,7 +21,7 @@ async function save() {
 async function reset() {
   try {
     const result = await ElMessageBox.prompt(
-      "此操作会清空当前浏览器内的演示订单、库存变动、流水和会话，恢复初始数据。请输入「恢复演示」确认。",
+      "此操作会清空服务端全部演示订单、地址、收藏、库存变动、流水和会话，恢复初始商品。已注册账号及登录会话保留。请输入「恢复演示」确认。",
       "恢复初始数据",
       {
         confirmButtonText: "恢复初始数据",
@@ -72,11 +72,11 @@ async function reset() {
     <dl class="admin-detail-list">
       <dt>数据保存</dt>
       <dd>
-        商品、订单、库存和客服数据保存在当前浏览器。同源多标签页共享，刷新后恢复。
+        账号、商品、订单、库存和客服数据保存在服务端 SQLite 数据库，刷新或重建容器后保留。
       </dd>
       <dt>账号边界</dt>
       <dd>
-        用户与管理员使用独立演示身份。前端路由与数据筛选用于功能演示，后续需服务端认证和权限保护。
+        用户与管理员使用独立服务端会话，接口验证身份、角色和数据归属。管理员不开放公开注册。
       </dd>
       <dt>交易流程</dt>
       <dd>
@@ -88,13 +88,13 @@ async function reset() {
         的规则回复，未连接真实大模型。人工回复可在另一商城标签页查看。
       </dd>
       <dt>设备范围</dt>
-      <dd>不支持跨浏览器或跨设备同步。更换访问域名或端口也会使用独立数据。</dd>
+      <dd>同一服务端支持跨浏览器访问，需各自登录。页面定期同步服务端数据。</dd>
     </dl>
   </section>
   <section class="admin-panel admin-settings-panel">
     <h2>恢复初始数据</h2>
     <p class="admin-muted" style="margin-bottom: 20px">
-      用于重新体验完整流程。恢复后，当前浏览器的业务修改将被初始演示数据替换。
+      用于重新体验完整流程。恢复影响所有账号的业务数据，注册账号和密码保留。
     </p>
     <el-button type="danger" plain :loading="busy" @click="reset"
       >恢复演示数据</el-button

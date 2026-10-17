@@ -58,7 +58,7 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
       <h1>售后管理</h1>
       <p>有进度、有说明，让售后处理更透明。</p>
     </div>
-    <el-tag effect="plain">退款为前端模拟</el-tag>
+    <el-tag effect="plain">退款为模拟</el-tag>
   </div>
   <section class="admin-panel">
     <div class="admin-toolbar">

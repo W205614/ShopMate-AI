@@ -1,6 +1,7 @@
 node_modules/
 frontend/dist/
 frontend/test-results/
+frontend/test-results-container/
 frontend/playwright-report/
 .taste-skill/inspect/
 .taste-skill/page-audit/
@@ -11,4 +12,7 @@ frontend/playwright-report/
 !.env.example
 *.log
 *.tsbuildinfo
+backend/data/
+backend/test-results/
+backend/.e2e/
 .DS_Store

@@ -1,56 +1,152 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch, onUnmounted } from "vue";
 import { ElMessageBox } from "element-plus";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
 import { afterSaleLabels, money, dateTime } from "../../domain/types";
 import type { AfterSale } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
+import { useAdminQuery, useAdminPagination } from "./useAdminList";
+import { afterSaleState } from "../../domain/afterSaleState";
 import { eventLabel } from "../../components/shop/commerceLabels";
 import "../../styles/account-commerce.css";
+const filters = useAdminQuery();
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
-  status = ref(""),
-  selectedId = ref(""),
-  dialog = ref(false),
-  note = ref("");
-const rows = computed(() =>
+  query = filters.field("q", { replace: true }),
+  orderId = filters.field("orderId"),
+  status = filters.field("status", { values: Object.keys(afterSaleLabels) }),
+  selectedId = filters.field("detail", { resetPage: false }),
+  dialog = computed({
+    get: () => !!selectedId.value,
+    set: (value) => {
+      if (!value) selectedId.value = "";
+    },
+  }),
+  confirming = ref(false),
+  note = ref(""),
+  baselineNote = ref("");
+let cancelConfirmation: (() => void) | undefined;
+const filtered = computed(() =>
   [...shop.db.afterSales]
-    .filter((a) => !status.value || a.status === status.value)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    .filter(
+      (a) =>
+        (!status.value || a.status === status.value) &&
+        (!orderId.value || a.orderId === orderId.value) &&
+        (!query.value.trim() ||
+          [a.id, a.orderId].some((value) =>
+            value.toLowerCase().includes(query.value.trim().toLowerCase()),
+          )),
+    )
+    .sort(
+      (a, b) =>
+        b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+    ),
 );
+const { page, rows } = useAdminPagination(filtered, filters);
 const selected = computed(() =>
   shop.db.afterSales.find((a) => a.id === selectedId.value),
 );
+const selectedOrder = computed(() =>
+  shop.db.orders.find((o) => o.id === selected.value?.orderId),
+);
+const state = computed(() =>
+  selected.value ? afterSaleState(selected.value, selectedOrder.value) : null,
+);
+function loadLatestNote() {
+  note.value = baselineNote.value = selected.value?.note ?? "";
+}
+const noteConflict = computed(
+  () =>
+    baselineNote.value !== (selected.value?.note ?? "") &&
+    note.value !== baselineNote.value &&
+    note.value !== selected.value?.note,
+);
+watch(
+  () => [selected.value?.id, selected.value?.note] as const,
+  ([id], previous) => {
+    if (id !== previous?.[0]) {
+      cancelConfirmation?.();
+      loadLatestNote();
+    } else if (
+      note.value === baselineNote.value ||
+      note.value === selected.value?.note
+    ) {
+      loadLatestNote();
+    }
+  },
+  { immediate: true },
+);
+let alive = true;
+onUnmounted(() => {
+  alive = false;
+  cancelConfirmation?.();
+});
 function open(a: AfterSale) {
+  if (pending.value || confirming.value) return;
   selectedId.value = a.id;
-  note.value = a.note;
-  dialog.value = true;
 }
 async function action(type: "approve" | "reject" | "receive" | "refund") {
-  if (!selected.value) return;
+  if (!selected.value || busy.value || confirming.value) return;
+  const sale = selected.value,
+    inputNote = note.value;
+  const allowed = {
+    approve: state.value?.canApprove,
+    reject: state.value?.canReject,
+    receive: state.value?.canReceive,
+    refund: state.value?.canRefund,
+  };
+  if (!allowed[type])
+    return void (await run(async () => {
+      throw new Error(state.value?.guidance ?? "申请状态不可处理");
+    }));
   const labels = {
     approve: "批准申请",
     reject: "拒绝申请",
     receive: "确认收到退货",
     refund: "执行模拟退款",
   };
-  if (type === "reject" && !note.value.trim())
+  if (type === "reject" && !inputNote.trim())
     return void run(async () => {
       throw Error("拒绝申请时，请填写用户可见的处理说明");
     });
+  confirming.value = true;
   try {
-    await ElMessageBox.confirm(
-      `确认${labels[type]}？${type === "refund" ? "将生成退款流水并回补库存。" : ""}`,
-      "售后处理",
-      { type: "warning" },
-    );
-    await run(
-      () => api.processAfterSale(selected.value!.id, type, note.value),
+    const confirmed = await Promise.race([
+      ElMessageBox.confirm(
+        `确认${labels[type]}（售后 ${sale.id}，订单 ${sale.orderId}）？${type === "refund" ? "将生成退款流水并回补库存。" : ""}`,
+        `${labels[type]}确认`,
+        { type: "warning" },
+      ).then(() => true),
+      new Promise<boolean>((resolve) => {
+        cancelConfirmation = () => {
+          ElMessageBox.close();
+          resolve(false);
+        };
+      }),
+    ]);
+    cancelConfirmation = undefined;
+    if (!confirmed || !alive) return;
+    if (selected.value?.id !== sale.id || selected.value.status !== sale.status)
+      return void (await run(async () => {
+        throw new Error("申请已切换或状态已变化，请重新核对后操作");
+      }));
+    const success = await run(
+      () => api.processAfterSale(sale.id, type, inputNote),
       labels[type] + "成功",
     );
+    if (
+      success &&
+      alive &&
+      selected.value?.id === sale.id &&
+      shop.syncStatus.phase === "ready"
+    )
+      loadLatestNote();
   } catch {
     /* dismissed */
+  } finally {
+    cancelConfirmation = undefined;
+    confirming.value = false;
   }
 }
 </script>
@@ -64,6 +160,7 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
   </div>
   <section class="admin-panel">
     <div class="admin-toolbar">
+      <el-input v-model="query" placeholder="售后编号 / 订单号" clearable />
       <el-select v-model="status" clearable placeholder="全部售后状态"
         ><el-option
           v-for="(label, key) in afterSaleLabels"
@@ -71,17 +168,38 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
           :label="label"
           :value="key"
       /></el-select>
+      <el-button
+        @click="
+          filters.update(
+            { q: '', orderId: '', status: '' },
+            { resetPage: true },
+          )
+        "
+        >重置筛选</el-button
+      >
+      <span class="admin-note">{{ filtered.length }} 笔申请</span>
     </div>
+    <p v-if="orderId" class="admin-note">
+      指定订单 {{ orderId }}
+      <el-button
+        link
+        @click="filters.update({ orderId: '' }, { resetPage: true })"
+        >查看全部订单申请</el-button
+      >
+    </p>
     <el-table :data="rows" empty-text="暂无售后申请"
       ><el-table-column
         prop="id"
         label="售后编号"
         min-width="160"
-      /><el-table-column
-        prop="orderId"
-        label="关联订单"
-        min-width="160"
-      /><el-table-column
+      /><el-table-column label="关联订单" min-width="160"
+        ><template #default="{ row }"
+          ><RouterLink
+            :to="{ path: '/admin/orders', query: { detail: row.orderId } }"
+            >{{ row.orderId }}</RouterLink
+          ></template
+        ></el-table-column
+      ><el-table-column
         prop="reason"
         label="申请原因"
         min-width="160"
@@ -105,18 +223,44 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
         }}</template></el-table-column
       ><el-table-column label="操作" width="100" fixed="right"
         ><template #default="{ row }"
-          ><el-button type="primary" link @click="open(row)"
+          ><el-button
+            type="primary"
+            link
+            :disabled="pending || confirming"
+            @click="open(row)"
             >查看处理</el-button
           ></template
         ></el-table-column
       ></el-table
     >
+    <div class="admin-pagination">
+      <el-pagination
+        v-model:current-page="page"
+        :page-size="10"
+        :total="filtered.length"
+        layout="prev,pager,next,total"
+      />
+    </div>
   </section>
-  <el-dialog v-model="dialog" title="售后处理" width="660px"
+  <el-dialog
+    v-model="dialog"
+    title="售后处理"
+    width="660px"
+    :close-on-click-modal="!pending && !confirming"
+    :close-on-press-escape="!pending && !confirming"
+    :show-close="!pending && !confirming"
     ><template v-if="selected"
       ><dl class="admin-detail-list">
+        <dt>售后编号</dt>
+        <dd>{{ selected.id }}</dd>
         <dt>关联订单</dt>
-        <dd>{{ selected.orderId }}</dd>
+        <dd>
+          {{ selected.orderId }}
+          <RouterLink
+            :to="{ path: '/admin/orders', query: { detail: selected.orderId } }"
+            >查看关联订单</RouterLink
+          >
+        </dd>
         <dt>售后类型</dt>
         <dd>
           {{
@@ -133,10 +277,8 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
         <dd>
           <div v-for="line in selected.lines" :key="line.orderItemId">
             {{
-              shop.db.orders
-                .find((o) => o.id === selected?.orderId)
-                ?.items.find((i) => i.id === line.orderItemId)?.name ??
-              "历史商品"
+              selectedOrder?.items.find((i) => i.id === line.orderItemId)
+                ?.name ?? "历史商品"
             }}
             × {{ line.quantity }} · {{ money(line.amount) }}
           </div>
@@ -155,6 +297,19 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
         <dt>当前处理说明</dt>
         <dd>{{ selected.note || "尚无处理说明" }}</dd>
       </dl>
+      <el-alert
+        v-if="noteConflict"
+        title="处理说明已被其他页面更新，当前草稿已保留"
+        type="warning"
+        :closable="false"
+      >
+        <el-button
+          link
+          :disabled="pending || confirming"
+          @click="loadLatestNote"
+          >加载最新处理说明</el-button
+        >
+      </el-alert>
       <el-form label-position="top"
         ><el-form-item label="本次处理说明（用户可见）"
           ><el-input
@@ -162,15 +317,12 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
             type="textarea"
             :rows="3"
             :disabled="
+              busy ||
+              confirming ||
               ['refunded', 'rejected', 'cancelled'].includes(selected.status)
             "
             placeholder="填写审核或收货情况；拒绝时必填" /></el-form-item></el-form
-      ><el-alert
-        v-if="selected.status === 'approved' && selected.requiresReturn"
-        title="等待用户填写退货物流。提交单号并收到退货后，才能确认收货和退款。"
-        type="info"
-        :closable="false"
-      />
+      ><el-alert :title="state?.guidance" type="info" :closable="false" />
       <ul class="admin-commerce-events" aria-label="售后进度">
         <li v-for="(event, index) in selected.events" :key="index">
           <time
@@ -186,32 +338,41 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
           }}<span v-if="event.note"> · {{ event.note }}</span>
         </li>
       </ul></template
-    ><template #footer
-      ><el-button @click="dialog = false">关闭</el-button
-      ><template v-if="selected?.status === 'requested'"
-        ><el-button type="danger" :loading="pending" :disabled="busy" @click="action('reject')"
+    ><el-alert
+      v-else
+      title="没有找到该售后申请"
+      type="warning"
+      :closable="false"
+    />
+    <template #footer
+      ><el-button :disabled="pending || confirming" @click="dialog = false"
+        >关闭</el-button
+      ><template v-if="state?.canApprove"
+        ><el-button
+          type="danger"
+          :loading="pending"
+          :disabled="busy || confirming"
+          @click="action('reject')"
           >拒绝</el-button
-        ><el-button type="primary" :loading="pending" :disabled="busy" @click="action('approve')"
+        ><el-button
+          type="primary"
+          :loading="pending"
+          :disabled="busy || confirming"
+          @click="action('approve')"
           >批准申请</el-button
         ></template
       ><el-button
-        v-if="
-          selected?.status === 'returning' &&
-          selected.requiresReturn &&
-          selected.returnTracking
-        "
+        v-if="state?.canReceive"
         type="primary"
-        :loading="pending" :disabled="busy"
+        :loading="pending"
+        :disabled="busy || confirming"
         @click="action('receive')"
         >确认收到退货</el-button
       ><el-button
-        v-if="
-          selected &&
-          (selected.status === 'received' ||
-            (selected.status === 'approved' && !selected.requiresReturn))
-        "
+        v-if="state?.canRefund"
         type="primary"
-        :loading="pending" :disabled="busy"
+        :loading="pending"
+        :disabled="busy || confirming"
         @click="action('refund')"
         >执行模拟退款</el-button
       ></template

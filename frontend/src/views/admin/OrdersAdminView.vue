@@ -2,7 +2,12 @@
 import { computed, ref, reactive } from "vue";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
-import { orderLabels, money, dateTime } from "../../domain/types";
+import {
+  orderLabels,
+  afterSaleLabels,
+  money,
+  dateTime,
+} from "../../domain/types";
 import type { Order } from "../../domain/types";
 import { useAdminAction, localDate } from "./useAdmin";
 import { useAdminQuery, useAdminPagination } from "./useAdminList";
@@ -311,7 +316,26 @@ async function submit() {
           >
         </li>
       </ol>
-      <p v-else class="admin-note">该历史订单未记录更多进度时间。</p> </template
+      <p v-else class="admin-note">该历史订单未记录更多进度时间。</p>
+      <h3>售后记录</h3>
+      <p
+        v-for="sale in shop.db.afterSales.filter(
+          (a) => a.orderId === selected?.id,
+        )"
+        :key="sale.id"
+      >
+        <RouterLink
+          :to="{
+            path: '/admin/after-sales',
+            query: { orderId: selected.id, detail: sale.id },
+          }"
+          >{{ sale.id }} · {{ afterSaleLabels[sale.status] }}</RouterLink
+        >
+      </p>
+      <RouterLink
+        :to="{ path: '/admin/after-sales', query: { orderId: selected.id } }"
+        >查看该订单全部售后</RouterLink
+      > </template
     ><el-alert v-else title="没有找到该订单" type="warning" :closable="false" />
     <template #footer
       ><el-button :disabled="pending" @click="detail = false">关闭</el-button

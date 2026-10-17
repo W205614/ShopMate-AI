@@ -7,6 +7,7 @@ import ActionNotice from "../../components/shop/ActionNotice.vue";
 import { useAction } from "../../components/shop/useAction";
 import "../../styles/commerce-flow.css";
 import { eventLabel } from "../../components/shop/commerceLabels";
+import { afterSaleState } from "../../domain/afterSaleState";
 const shop = useShop(),
   { busy, error, notice, run } = useAction(),
   records = computed(() =>
@@ -65,6 +66,7 @@ function submitReturn(id: string) {
           <strong class="order-status">{{ afterSaleLabels[a.status] }}</strong>
         </div>
         <p>{{ a.description }}</p>
+        <p class="secondary">售后编号 {{ a.id }}</p>
         <p class="secondary">
           {{ a.requiresReturn ? "退货退款" : "仅退款" }} · 订单
           {{ a.orderId }} · 本次退款 {{ money(a.refundAmount) }}
@@ -76,14 +78,21 @@ function submitReturn(id: string) {
           </li>
         </ul>
         <p v-if="a.note">处理说明：{{ a.note }}</p>
-        <p
-          v-if="a.status === 'approved' && a.requiresReturn"
-          class="action-notice"
-        >
-          退货申请已批准。请填写模拟承运商与单号，管理员确认收货后退款，无需实际寄件。
+        <p class="action-notice">
+          {{
+            afterSaleState(
+              a,
+              shop.myOrders.find((o) => o.id === a.orderId),
+            ).guidance
+          }}
         </p>
         <form
-          v-if="a.status === 'approved' && a.requiresReturn"
+          v-if="
+            afterSaleState(
+              a,
+              shop.myOrders.find((o) => o.id === a.orderId),
+            ).canReturn
+          "
           class="form-stack"
           @submit.prevent="submitReturn(a.id)"
         >
@@ -92,13 +101,13 @@ function submitReturn(id: string) {
               >模拟退货承运商<input
                 v-model.trim="returnForm(a.id).carrier"
                 required
-                maxlength="40" /></label
+                maxlength="60" /></label
             ><label
               >模拟退货单号<input
                 v-model.trim="returnForm(a.id).tracking"
                 required
                 maxlength="80"
-                minlength="3"
+                minlength="1"
             /></label>
           </div>
           <button class="button" :disabled="busy">提交退货单号</button>
@@ -127,7 +136,12 @@ function submitReturn(id: string) {
         </details>
         <div class="button-row">
           <button
-            v-if="['requested', 'approved'].includes(a.status)"
+            v-if="
+              afterSaleState(
+                a,
+                shop.myOrders.find((o) => o.id === a.orderId),
+              ).canCancel
+            "
             :disabled="busy"
             @click="cancel(a.id)"
           >

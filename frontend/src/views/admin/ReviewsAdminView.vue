@@ -8,7 +8,7 @@ import { useAdminAction } from "./useAdmin";
 import "../../styles/account-commerce.css";
 
 const shop = useShop(),
-  { busy, run } = useAdminAction();
+  { busy, pending, run } = useAdminAction();
 const query = ref(""),
   status = ref("");
 async function moderate(review: Review) {
@@ -113,7 +113,7 @@ const rows = computed(() =>
             v-if="!row.deleted"
             link
             type="primary"
-            :loading="busy"
+            :loading="pending" :disabled="busy"
             @click="moderate(row)"
             >{{ row.hidden ? "恢复展示" : "隐藏评价" }}</el-button
           ><span v-else class="admin-note">不可恢复</span></template

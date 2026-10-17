@@ -88,6 +88,22 @@ p {
   background: #1a4be0;
   color: white;
 }
+.storage-warning {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px var(--ui-page-gutter);
+  color: #851b1b;
+  background: #fff0ee;
+}
+.storage-warning button {
+  min-height: 44px;
+  padding: 8px 16px;
+  color: inherit;
+  background: white;
+  border: 1px solid currentColor;
+}
 .page-loading,
 .app-failure {
   padding: 64px var(--ui-page-gutter);

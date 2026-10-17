@@ -9,7 +9,7 @@ import ActionNotice from "../../components/shop/ActionNotice.vue";
 import { useAction } from "../../components/shop/useAction";
 const route = useRoute(),
   shop = useShop(),
-  { busy, error, notice, run } = useAction(),
+  { busy, pending, error, notice, run } = useAction(),
   order = computed(() => shop.myOrders.find((o) => o.id === route.params.id));
 const now = ref(Date.now()),
   timer = window.setInterval(() => {
@@ -63,7 +63,7 @@ async function pay() {
       <ActionNotice :error="error" :notice="notice" />
       <div v-if="order.status === 'pending'" class="payment-actions">
         <button class="button" :disabled="busy || expired" @click="pay">
-          {{ busy ? "处理中…" : "确认模拟支付" }}</button
+          {{ pending ? "处理中…" : "确认模拟支付" }}</button
         ><RouterLink :to="`/orders/${order.id}`" class="text-link"
           >暂不支付，返回订单</RouterLink
         >

@@ -21,7 +21,7 @@ const shop = useShop(),
   selected = ref(""),
   image = ref(0),
   quantity = ref(1),
-  { busy, error, notice, run } = useAction();
+  { busy, pending, error, notice, run } = useAction();
 const product = computed(() =>
     shop.db.products.find((p) => p.id === route.params.id),
   ),
@@ -191,7 +191,7 @@ async function toggleFavorite() {
             :disabled="busy || !product.active || !sku?.stock"
             @click="add"
           >
-            {{ busy ? "处理中…" : "加入购物车" }}
+            {{ pending ? "处理中…" : "加入购物车" }}
             <ArrowUpRight :size="20" /></button
           ><button
             class="favorite-button"

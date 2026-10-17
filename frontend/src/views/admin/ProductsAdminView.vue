@@ -7,7 +7,7 @@ import type { Product, ProductInput } from "../../domain/types";
 import { money } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
-  { busy, run } = useAdminAction(),
+  { busy, pending, run } = useAdminAction(),
   query = ref(""),
   category = ref(""),
   status = ref(""),
@@ -207,7 +207,7 @@ async function toggle(p: Product) {
           ><el-button
             link
             :type="row.active ? 'danger' : 'primary'"
-            :loading="busy"
+            :loading="pending" :disabled="busy"
             @click="toggle(row)"
             >{{ row.active ? "下架" : "上架" }}</el-button
           ></template
@@ -311,7 +311,7 @@ async function toggle(p: Product) {
       ></el-form
     ><template #footer
       ><el-button @click="dialog = false">取消</el-button
-      ><el-button type="primary" :loading="busy" @click="save"
+      ><el-button type="primary" :loading="pending" :disabled="busy" @click="save"
         >保存商品</el-button
       ></template
     ></el-dialog

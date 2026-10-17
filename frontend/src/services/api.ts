@@ -1,12 +1,22 @@
 import type { ShopApi } from "../domain/api";
 import type { Role, Session } from "../domain/types";
-import { request, refreshState } from "./repository";
+import {
+  request,
+  confirmSession,
+  synchronizeConfirmedMutation,
+  requireFreshState,
+  unknownMutation,
+  invalidateIdentitySnapshot,
+  RequestError,
+} from "./repository";
 export {
   getDatabase,
   getStorageIssue,
   getSession,
   subscribeDatabase,
   refreshState,
+  getSyncStatus,
+  hasConfirmedLogout,
 } from "./repository";
 export type { ShopApi } from "../domain/api";
 
@@ -17,42 +27,77 @@ export function hasPasswordChangeNotice() {
 }
 
 async function action<T>(method: string, args: unknown[]): Promise<T> {
+  requireFreshState();
   const response = await request<{ result: T }>(`/api/actions/${method}`, {
     args,
   });
-  await refreshState();
+  if (!response || !Object.hasOwn(response, "result")) throw unknownMutation();
+  await synchronizeConfirmedMutation();
   return response.result;
 }
 export const api: ShopApi = {
   async login(role: Role, username: string, password: string) {
+    invalidateIdentitySnapshot(role);
     const session = await request<Session>("/api/auth/login", {
       role,
       username,
       password,
     });
+    if (!session) throw unknownMutation();
     if (role === "user") passwordChanged = false;
-    await refreshState();
+    confirmSession(role, session);
+    await synchronizeConfirmedMutation();
     return session;
   },
   async register(input) {
+    invalidateIdentitySnapshot("user");
     const session = await request<Session>("/api/auth/register", input);
+    if (!session) throw unknownMutation();
     passwordChanged = false;
-    await refreshState();
+    confirmSession("user", session);
+    await synchronizeConfirmedMutation();
     return session;
   },
   async logout(role) {
-    await request("/api/auth/logout", { role });
-    await refreshState();
+    const result = await request<{ ok: boolean }>("/api/auth/logout", {
+      role,
+    }).catch((error) => {
+      if (error instanceof RequestError && error.outcome === "unknown")
+        invalidateIdentitySnapshot(role);
+      throw error;
+    });
+    if (result?.ok !== true) {
+      invalidateIdentitySnapshot(role);
+      throw unknownMutation();
+    }
+    confirmSession(role, null);
+    await synchronizeConfirmedMutation();
   },
   async updateProfile(name) {
+    requireFreshState();
     const session = await request<Session>("/api/auth/profile", { name });
-    await refreshState();
+    if (!session) throw unknownMutation();
+    confirmSession("user", session, false);
+    await synchronizeConfirmedMutation();
     return session;
   },
   async changePassword(currentPassword, newPassword) {
-    await request("/api/auth/password", { currentPassword, newPassword });
+    requireFreshState();
+    const result = await request<{ ok: boolean }>("/api/auth/password", {
+      currentPassword,
+      newPassword,
+    }).catch((error) => {
+      if (error instanceof RequestError && error.outcome === "unknown")
+        invalidateIdentitySnapshot("user");
+      throw error;
+    });
+    if (result?.ok !== true) {
+      invalidateIdentitySnapshot("user");
+      throw unknownMutation();
+    }
     passwordChanged = true;
-    await refreshState();
+    confirmSession("user", null);
+    await synchronizeConfirmedMutation();
   },
   batchCart: (...args) => action("batchCart", args),
   clearInvalidCart: (...args) => action("clearInvalidCart", args),

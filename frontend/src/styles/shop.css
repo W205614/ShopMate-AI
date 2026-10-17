@@ -5,15 +5,6 @@
   min-height: 44px;
   align-self: start;
 }
-.storage-warning {
-  padding: 16px 24px;
-  color: #851b1b;
-  background: #fff0ee;
-}
-.storage-warning a {
-  text-decoration: underline;
-  margin-left: 12px;
-}
 .shop-site {
   --shop-gap: 24px;
   background: var(--bg, #fff);

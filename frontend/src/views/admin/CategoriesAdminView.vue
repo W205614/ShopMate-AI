@@ -6,7 +6,7 @@ import { api } from "../../services/api";
 import type { Category, CategoryInput } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
-  { busy, run } = useAdminAction(),
+  { busy, pending, run } = useAdminAction(),
   dialog = ref(false);
 const form = reactive<CategoryInput>({
   name: "",
@@ -115,7 +115,7 @@ async function remove(c: Category) {
           :min="0" /></el-form-item></el-form
     ><template #footer
       ><el-button @click="dialog = false">取消</el-button
-      ><el-button type="primary" :loading="busy" @click="save"
+      ><el-button type="primary" :loading="pending" :disabled="busy" @click="save"
         >保存</el-button
       ></template
     ></el-dialog

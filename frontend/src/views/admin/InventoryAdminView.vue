@@ -6,7 +6,7 @@ import { dateTime } from "../../domain/types";
 import type { SKU } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
-  { busy, run } = useAdminAction(),
+  { busy, pending, run } = useAdminAction(),
   query = ref(""),
   low = ref(false),
   dialog = ref(false),
@@ -187,7 +187,7 @@ async function save() {
           placeholder="例如：到货入库 / 盘点修正" /></el-form-item></el-form
     ><template #footer
       ><el-button @click="dialog = false">取消</el-button
-      ><el-button type="primary" :loading="busy" @click="save"
+      ><el-button type="primary" :loading="pending" :disabled="busy" @click="save"
         >确认调整</el-button
       ></template
     ></el-dialog

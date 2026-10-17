@@ -8,7 +8,7 @@ import { useAdminAction } from "./useAdmin";
 import "../../styles/account-commerce.css";
 
 const shop = useShop(),
-  { busy, run } = useAdminAction();
+  { busy, pending, run } = useAdminAction();
 const dialog = ref(false),
   editingId = ref("");
 const form = reactive({
@@ -117,7 +117,7 @@ async function save() {
       <el-table-column label="操作" fixed="right" width="150"
         ><template #default="{ row }"
           ><el-button link type="primary" @click="open(row)">查看配置</el-button
-          ><el-button link :loading="busy" @click="toggle(row)">{{
+          ><el-button link :loading="pending" :disabled="busy" @click="toggle(row)">{{
             row.active ? "停用" : "启用"
           }}</el-button></template
         ></el-table-column
@@ -223,7 +223,7 @@ async function save() {
           v-if="!issued"
           type="primary"
           native-type="submit"
-          :loading="busy"
+          :loading="pending" :disabled="busy"
           >保存优惠券</el-button
         >
       </div>

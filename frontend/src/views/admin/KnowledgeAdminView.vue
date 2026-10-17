@@ -6,7 +6,7 @@ import { api } from "../../services/api";
 import type { Faq, FaqInput } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
-  { busy, run } = useAdminAction(),
+  { busy, pending, run } = useAdminAction(),
   query = ref(""),
   dialog = ref(false),
   keywords = ref("");
@@ -140,7 +140,7 @@ async function toggle(f: Faq) {
       ><el-checkbox v-model="form.active">启用问答</el-checkbox></el-form
     ><template #footer
       ><el-button @click="dialog = false">取消</el-button
-      ><el-button type="primary" :loading="busy" @click="save"
+      ><el-button type="primary" :loading="pending" :disabled="busy" @click="save"
         >保存</el-button
       ></template
     ></el-dialog

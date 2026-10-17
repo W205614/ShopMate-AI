@@ -9,7 +9,7 @@ import { useAdminAction } from "./useAdmin";
 import { eventLabel } from "../../components/shop/commerceLabels";
 import "../../styles/account-commerce.css";
 const shop = useShop(),
-  { busy, run } = useAdminAction(),
+  { busy, pending, run } = useAdminAction(),
   status = ref(""),
   selectedId = ref(""),
   dialog = ref(false),
@@ -189,9 +189,9 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
     ><template #footer
       ><el-button @click="dialog = false">关闭</el-button
       ><template v-if="selected?.status === 'requested'"
-        ><el-button type="danger" :loading="busy" @click="action('reject')"
+        ><el-button type="danger" :loading="pending" :disabled="busy" @click="action('reject')"
           >拒绝</el-button
-        ><el-button type="primary" :loading="busy" @click="action('approve')"
+        ><el-button type="primary" :loading="pending" :disabled="busy" @click="action('approve')"
           >批准申请</el-button
         ></template
       ><el-button
@@ -201,7 +201,7 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
           selected.returnTracking
         "
         type="primary"
-        :loading="busy"
+        :loading="pending" :disabled="busy"
         @click="action('receive')"
         >确认收到退货</el-button
       ><el-button
@@ -211,7 +211,7 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
             (selected.status === 'approved' && !selected.requiresReturn))
         "
         type="primary"
-        :loading="busy"
+        :loading="pending" :disabled="busy"
         @click="action('refund')"
         >执行模拟退款</el-button
       ></template

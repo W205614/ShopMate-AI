@@ -6,12 +6,14 @@ import {
   getSession,
   getStorageIssue,
   subscribeDatabase,
+  getSyncStatus,
 } from "../services/api";
 import type { Role } from "../domain/types";
 
 export const useShop = defineStore("shop", () => {
   const db = ref(getDatabase());
   const storageIssue = ref(getStorageIssue());
+  const syncStatus = ref(getSyncStatus());
   const userSession = ref(getSession("user"));
   const adminSession = ref(getSession("admin"));
   const user = computed(
@@ -31,29 +33,27 @@ export const useShop = defineStore("shop", () => {
   subscribeDatabase((value) => {
     db.value = value;
     storageIssue.value = getStorageIssue();
+    syncStatus.value = getSyncStatus();
     userSession.value = getSession("user");
     adminSession.value = getSession("admin");
   });
   async function login(role: Role, username: string, password: string) {
-    const session = await api.login(role, username, password);
-    if (role === "user") userSession.value = session;
-    else adminSession.value = session;
+    await api.login(role, username, password);
   }
   async function logout(role: Role) {
     await api.logout(role);
-    if (role === "user") userSession.value = null;
-    else adminSession.value = null;
   }
   async function register(input: {
     username: string;
     name: string;
     password: string;
   }) {
-    userSession.value = await api.register(input);
+    await api.register(input);
   }
   return {
     db,
     storageIssue,
+    syncStatus,
     user,
     userId,
     admin,

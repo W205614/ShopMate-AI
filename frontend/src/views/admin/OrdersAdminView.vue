@@ -8,7 +8,7 @@ const totalQuantity = (order: Order) =>
   order.items.reduce((total, item) => total + item.quantity, 0);
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
-  { busy, run } = useAdminAction(),
+  { busy, pending, run } = useAdminAction(),
   query = ref(""),
   status = ref(""),
   selectedId = ref(""),
@@ -207,7 +207,7 @@ async function submit() {
           placeholder="输入演示物流单号" /></el-form-item></el-form
     ><template #footer
       ><el-button @click="ship = false">取消</el-button
-      ><el-button type="primary" :loading="busy" @click="submit"
+      ><el-button type="primary" :loading="pending" :disabled="busy" @click="submit"
         >确认模拟发货</el-button
       ></template
     ></el-dialog

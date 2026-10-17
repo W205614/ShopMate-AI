@@ -6,7 +6,7 @@ import { api, refreshState } from "../../services/api";
 import type { Settings } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
-  { busy, run } = useAdminAction(),
+  { busy, pending, run } = useAdminAction(),
   baseline = ref({ ...shop.db.settings }),
   baselineRevision = ref(shop.db.revision),
   form = reactive({ ...shop.db.settings });
@@ -114,7 +114,7 @@ async function reset() {
           :rows="3"
           :disabled="busy"
           maxlength="200" /></el-form-item
-      ><el-button type="primary" :loading="busy" @click="save"
+      ><el-button type="primary" :loading="pending" :disabled="busy" @click="save"
         >保存信息</el-button
       ><el-button
         :disabled="busy || (!dirty && !conflict)"
@@ -153,7 +153,7 @@ async function reset() {
     <p class="admin-muted" style="margin-bottom: 20px">
       用于重新体验完整流程。恢复影响所有账号的业务数据，注册账号和密码保留。
     </p>
-    <el-button type="danger" plain :loading="busy" @click="reset"
+    <el-button type="danger" plain :loading="pending" :disabled="busy" @click="reset"
       >恢复演示数据</el-button
     >
   </section>

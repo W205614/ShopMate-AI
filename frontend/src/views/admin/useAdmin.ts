@@ -1,11 +1,16 @@
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
+import { useShop } from "../../stores/shop";
 
 export function useAdminAction() {
-  const busy = ref(false);
+  const shop = useShop(),
+    pending = ref(false);
+  const busy = computed(
+    () => pending.value || shop.syncStatus.phase !== "ready",
+  );
   async function run(action: () => Promise<unknown>, success = "操作已完成") {
     if (busy.value) return false;
-    busy.value = true;
+    pending.value = true;
     try {
       await action();
       ElMessage.success(success);
@@ -16,13 +21,13 @@ export function useAdminAction() {
       );
       return false;
     } finally {
-      busy.value = false;
+      pending.value = false;
     }
   }
-  return { busy, run };
+  return { busy, pending, run };
 }
 // Match dateTime() and date-picker inputs, both of which use browser local time.
 export const localDate = (value: string | Date) => {
-  const date = typeof value === 'string' ? new Date(value) : value;
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const date = typeof value === "string" ? new Date(value) : value;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };

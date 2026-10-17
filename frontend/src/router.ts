@@ -1,5 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { getSession, refreshState } from "./services/api";
+import {
+  getSession,
+  refreshState,
+  getSyncStatus,
+  hasConfirmedLogout,
+} from "./services/api";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -185,7 +190,11 @@ router.beforeEach(async (to) => {
   } catch {
     /* Connection errors are shown by App; protected routes fail closed. */
   }
-  if ((role === "user" || role === "admin") && !getSession(role))
+  if (
+    (role === "user" || role === "admin") &&
+    (getSyncStatus().phase === "ready" || hasConfirmedLogout(role)) &&
+    !getSession(role)
+  )
     return {
       path: role === "admin" ? "/admin/login" : "/login",
       query: { redirect: to.fullPath },

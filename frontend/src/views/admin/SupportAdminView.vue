@@ -6,7 +6,7 @@ import { api } from "../../services/api";
 import { dateTime } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
-  { busy, run } = useAdminAction(),
+  { busy, pending, run } = useAdminAction(),
   filter = ref(""),
   selectedId = ref(""),
   text = ref(""),
@@ -126,7 +126,7 @@ async function close() {
           <el-button
             v-if="selected.status !== 'closed'"
             @click="close"
-            :loading="busy"
+            :loading="pending" :disabled="busy"
             >关闭会话</el-button
           >
         </div>
@@ -171,8 +171,8 @@ async function close() {
             @keydown.ctrl.enter="reply"
           /><el-button
             type="primary"
-            :loading="busy"
-            :disabled="!text.trim()"
+            :loading="pending"
+            :disabled="busy || (!text.trim())"
             @click="reply"
             >发送回复</el-button
           >

@@ -20,7 +20,7 @@ const shop = useShop(),
   activeId = ref(''),
   text = ref(''),
   messagesEl = ref<HTMLElement>(),
-  { busy, error, notice, run } = useAction()
+  { busy, pending, error, notice, run } = useAction()
 const conversations = computed(() =>
     shop.db.conversations
       .filter((c) => c.userId === shop.userId)
@@ -267,7 +267,7 @@ async function send(value?: string) {
             :disabled="busy || !text.trim()"
             aria-label="发送消息"
           >
-            <Send :size="18" /><span>{{ busy ? '发送中' : '发送' }}</span>
+            <Send :size="18" /><span>{{ pending ? '发送中' : '发送' }}</span>
           </button>
         </form>
         <div v-else class="chat-closed">

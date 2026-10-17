@@ -49,7 +49,7 @@ watch(
   },
 );
 const password = reactive({ current: "", next: "", confirm: "" });
-const { busy, error, notice, run } = useAction();
+const { busy, pending, error, notice, run } = useAction();
 const favorites = computed(() =>
   shop.db.products.filter((p) =>
     shop.db.favorites[shop.userId]?.includes(p.id),
@@ -302,7 +302,7 @@ async function deleteReview(id: string) {
         >
         <div class="button-row">
           <button class="button" :disabled="busy">
-            {{ busy ? "保存中…" : "保存地址" }}</button
+            {{ pending ? "保存中…" : "保存地址" }}</button
           ><button type="button" @click="editing = false">取消</button>
         </div>
         <p class="secondary">

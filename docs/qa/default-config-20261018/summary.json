@@ -1,0 +1,429 @@
+{
+  "schema": 1,
+  "sourceCommit": "ef9dcc976ea7c3c7cd3c80b8247a9613adf2aa34",
+  "sourceSha256": "bc1aeea5f761c96bad0cc6da7d628129fcbdba7be23d77b389ca35d18b03c650",
+  "scope": "Isolated single-instance daily-default load and online automatic backup/retention verification. No daily deployment rebuild.",
+  "host": {
+    "platform": "Windows Docker Desktop Linux engine",
+    "logicalCpus": 12,
+    "dockerMemoryBytes": 16341676032
+  },
+  "configuration": {
+    "concurrency": 50,
+    "minimumSecondsPerDataset": 600,
+    "apiRequestLogs": true,
+    "nginxAccessLogs": true,
+    "automaticBackupCheckSeconds": 60,
+    "dailyRetention": 7,
+    "preloadedDailyBackups": 7,
+    "independentBackupBind": true,
+    "persistentJobs": true,
+    "idempotencyRequired": true,
+    "memoryLimitBytes": 1073741824,
+    "pidsLimit": 128,
+    "logDriver": "json-file",
+    "logMaxSize": "10m",
+    "logMaxFiles": 3,
+    "workload": "90% paged products/orders/points reads;10% idempotent cart selection writes"
+  },
+  "localChecks": {
+    "backendTestsPassed": 126,
+    "backendTypecheckPassed": true
+  },
+  "verificationHelpers": {
+    "verify-load-invariants.mjs": "0b5ee77c85612addbf0a96d0522bec1ef89b2f4252360fc8ca1468dd5bcfd491",
+    "compare-database-snapshots.mjs": "8fe4cc21f3a4b2340e2527de8170cfe1384e29eade4516252ba3695f14a24550"
+  },
+  "baselineFailure": {
+    "sourceCommit": "b2bbf693b7403d91b4273e46cdadbbdae133a59a",
+    "errors": 100,
+    "statusCounts": {
+      "200": 28434,
+      "504": 100
+    },
+    "globalP95Ms": 206,
+    "backupWindows": {
+      "passed": false,
+      "failures": [
+        "Backup 78d533f0-e022-4675-bbfa-1ed29ad20a54: overlap window is not fully covered by load",
+        "Backup 78d533f0-e022-4675-bbfa-1ed29ad20a54: overlap window has request errors",
+        "Backup 78d533f0-e022-4675-bbfa-1ed29ad20a54: overlap window P95 exceeds 2000ms",
+        "Backup 78d533f0-e022-4675-bbfa-1ed29ad20a54: context window is not fully covered by load",
+        "Backup 78d533f0-e022-4675-bbfa-1ed29ad20a54: context window has request errors"
+      ],
+      "dropped": 0,
+      "completeBackupsInLoad": 1,
+      "backups": [
+        {
+          "backupId": "78d533f0-e022-4675-bbfa-1ed29ad20a54",
+          "file": "shopmate-daily-2026-10-18-1792312506595.sqlite",
+          "startAt": 1792312506596,
+          "endAt": 1792312554690,
+          "durationMs": 48096,
+          "observedDurationMs": 48094,
+          "bytes": 23855104,
+          "entirelyWithinLoad": true,
+          "overlapWindow": {
+            "startAt": 1792312506292,
+            "endAt": 1792312554994,
+            "fullyWithinLoad": false,
+            "stats": {
+              "startAt": 1792312506292,
+              "endAt": 1792312554994,
+              "count": 2933,
+              "writes": 292,
+              "statusCounts": {
+                "200": 2833,
+                "504": 100
+              },
+              "errors": 100,
+              "rejected": 0,
+              "p50Ms": 196.695556640625,
+              "p95Ms": 6789.367431640625,
+              "p99Ms": 15008.66015625,
+              "maxMs": 15025.656982421875,
+              "startedInWindow": 2883,
+              "finishedInWindow": 2933,
+              "dropped": 0
+            }
+          },
+          "contextWindow": {
+            "startAt": 1792312505596,
+            "endAt": 1792312555690,
+            "fullyWithinLoad": false,
+            "stats": {
+              "startAt": 1792312505596,
+              "endAt": 1792312555690,
+              "count": 3263,
+              "writes": 326,
+              "statusCounts": {
+                "200": 3163,
+                "504": 100
+              },
+              "errors": 100,
+              "rejected": 0,
+              "p50Ms": 191.854248046875,
+              "p95Ms": 587.321533203125,
+              "p99Ms": 15006.423583984375,
+              "maxMs": 15025.656982421875,
+              "startedInWindow": 3213,
+              "finishedInWindow": 3263,
+              "dropped": 0
+            }
+          },
+          "passed": false,
+          "failures": [
+            "overlap window is not fully covered by load",
+            "overlap window has request errors",
+            "overlap window P95 exceeds 2000ms",
+            "context window is not fully covered by load",
+            "context window has request errors"
+          ]
+        }
+      ]
+    },
+    "observationFailures": [
+      "log_capture_not_caught_up"
+    ],
+    "note": "90-second pilot failed. Its old request-marker observer also falsely reported capture lag; both issues are retained, not counted as a pass."
+  },
+  "results": [
+    {
+      "dataset": 0,
+      "commit": "ef9dcc976ea7c3c7cd3c80b8247a9613adf2aa34",
+      "startedAt": "2026-10-18T08:56:21.851Z",
+      "endedAt": "2026-10-18T09:06:21.891Z",
+      "requests": 520877,
+      "elapsedSeconds": 600.04,
+      "requestsPerSecond": 868.0704619692021,
+      "p95Ms": 103,
+      "p99Ms": 131,
+      "errors": 0,
+      "rejected": 0,
+      "apiImage": "sha256:4f147625fc7c3e15e031192c419a58393b9f21c0edbd482bd7ce7cd7efd5c0f6",
+      "webImage": "sha256:706380b4ba54b46ee02b3d2c7e2d863fb38d4855a849af2817bf9bc2a75890a1",
+      "sourceSha256": "bc1aeea5f761c96bad0cc6da7d628129fcbdba7be23d77b389ca35d18b03c650",
+      "proxySha256": "16166a291ac52ee59f83bd1b1f8c6cfdd85685b6766656892713cdd422ed0586",
+      "observationFailures": [],
+      "logMarkerSeen": true,
+      "apiLoggedRequests": 520957,
+      "droppedObservations": 0,
+      "sampledMemoryMaxMiB": 558.5,
+      "kernelPeakMemoryBytes": 623849472,
+      "health": "healthy",
+      "restartCount": 0,
+      "oomKilled": false,
+      "backupWindows": [
+        {
+          "backupId": "64efb019-2ba5-4865-8ca8-841dd8939cad",
+          "file": "shopmate-daily-2026-10-18-1792313829704.sqlite",
+          "startAt": 1792313829705,
+          "endAt": 1792313833018,
+          "durationMs": 3313,
+          "observedDurationMs": 3313,
+          "bytes": 2011136,
+          "entirelyWithinLoad": true,
+          "overlapWindow": {
+            "startAt": 1792313829427,
+            "endAt": 1792313833296,
+            "fullyWithinLoad": true,
+            "stats": {
+              "startAt": 1792313829427,
+              "endAt": 1792313833296,
+              "count": 2802,
+              "writes": 279,
+              "statusCounts": {
+                "200": 2802
+              },
+              "errors": 0,
+              "rejected": 0,
+              "p50Ms": 66.295654296875,
+              "p95Ms": 123.41845703125,
+              "p99Ms": 142.511962890625,
+              "maxMs": 198.131103515625,
+              "startedInWindow": 2752,
+              "finishedInWindow": 2752,
+              "dropped": 0
+            }
+          },
+          "contextWindow": {
+            "startAt": 1792313828705,
+            "endAt": 1792313834018,
+            "fullyWithinLoad": true,
+            "stats": {
+              "startAt": 1792313828705,
+              "endAt": 1792313834018,
+              "count": 3936,
+              "writes": 393,
+              "statusCounts": {
+                "200": 3936
+              },
+              "errors": 0,
+              "rejected": 0,
+              "p50Ms": 64.864990234375,
+              "p95Ms": 121.4912109375,
+              "p99Ms": 141.446044921875,
+              "maxMs": 198.131103515625,
+              "startedInWindow": 3886,
+              "finishedInWindow": 3886,
+              "dropped": 0
+            }
+          },
+          "passed": true,
+          "failures": []
+        }
+      ],
+      "verification": {
+        "verified": true,
+        "dataset": 0,
+        "checks": {
+          "reportInIgnoredDeliveryDirectory": true,
+          "reportedDataset": true,
+          "reportedProject": true,
+          "isolatedProductionLoadContainer": true,
+          "exactReportedImage": true,
+          "dailyDefaultSettings": true,
+          "independentBackupBind": true,
+          "projectOnlyDataVolume": true,
+          "isolatedPublishedPort": true,
+          "resourceAndLogLimits": true,
+          "oneCompletedAutomaticBackup": true,
+          "automaticBackupFilename": true,
+          "automaticBackupPairExists": true,
+          "preloadZeroPruned": true,
+          "newRecoveryTarget": true,
+          "newEvidenceDirectory": true,
+          "sevenValidDailyBackups": true,
+          "onlySevenBackupPairsNoSidecars": true,
+          "offlineRestoreCreated": true,
+          "liveConservation21": true,
+          "backupConservation21": true,
+          "restoredConservation21": true,
+          "backupAndRestoreEquality10": true,
+          "backupUnchanged": true,
+          "restoreByteIdentical": true
+        },
+        "imageSha256": "sha256:4f147625fc7c3e15e031192c419a58393b9f21c0edbd482bd7ce7cd7efd5c0f6",
+        "sourceSha256": "bc1aeea5f761c96bad0cc6da7d628129fcbdba7be23d77b389ca35d18b03c650",
+        "helperSha256": "0b5ee77c85612addbf0a96d0522bec1ef89b2f4252360fc8ca1468dd5bcfd491",
+        "backupSha256": "8b32f9a21f0bef3eaefb1d703a99611f1d09185c85e34f0490e12c34359acc8c",
+        "restoreSha256": "8b32f9a21f0bef3eaefb1d703a99611f1d09185c85e34f0490e12c34359acc8c",
+        "validDailyCount": 7,
+        "liveCounts": {
+          "products": 24,
+          "skus": 48,
+          "orders": 0,
+          "orderItems": 0,
+          "inventory": 49,
+          "ledger": 0,
+          "purchases": 0,
+          "carts": 1,
+          "commands": 52088
+        }
+      }
+    },
+    {
+      "dataset": 10000,
+      "commit": "ef9dcc976ea7c3c7cd3c80b8247a9613adf2aa34",
+      "startedAt": "2026-10-18T09:06:45.932Z",
+      "endedAt": "2026-10-18T09:16:46.012Z",
+      "requests": 327638,
+      "elapsedSeconds": 600.08,
+      "requestsPerSecond": 545.9905345953872,
+      "p95Ms": 160,
+      "p99Ms": 194,
+      "errors": 0,
+      "rejected": 0,
+      "apiImage": "sha256:4f147625fc7c3e15e031192c419a58393b9f21c0edbd482bd7ce7cd7efd5c0f6",
+      "webImage": "sha256:706380b4ba54b46ee02b3d2c7e2d863fb38d4855a849af2817bf9bc2a75890a1",
+      "sourceSha256": "bc1aeea5f761c96bad0cc6da7d628129fcbdba7be23d77b389ca35d18b03c650",
+      "proxySha256": "16166a291ac52ee59f83bd1b1f8c6cfdd85685b6766656892713cdd422ed0586",
+      "observationFailures": [],
+      "logMarkerSeen": true,
+      "apiLoggedRequests": 327718,
+      "droppedObservations": 0,
+      "sampledMemoryMaxMiB": 322.2,
+      "kernelPeakMemoryBytes": 357699584,
+      "health": "healthy",
+      "restartCount": 0,
+      "oomKilled": false,
+      "backupWindows": [
+        {
+          "backupId": "67a269b5-1eb5-4fc1-b511-a6c6d267cead",
+          "file": "shopmate-daily-2026-10-18-1792314453819.sqlite",
+          "startAt": 1792314453819,
+          "endAt": 1792314503591,
+          "durationMs": 49773,
+          "observedDurationMs": 49772,
+          "bytes": 23760896,
+          "entirelyWithinLoad": true,
+          "overlapWindow": {
+            "startAt": 1792314453547,
+            "endAt": 1792314503863,
+            "fullyWithinLoad": true,
+            "stats": {
+              "startAt": 1792314453547,
+              "endAt": 1792314503863,
+              "count": 24854,
+              "writes": 2490,
+              "statusCounts": {
+                "200": 24854
+              },
+              "errors": 0,
+              "rejected": 0,
+              "p50Ms": 91.864501953125,
+              "p95Ms": 174.029052734375,
+              "p99Ms": 229.08203125,
+              "maxMs": 1046.160400390625,
+              "startedInWindow": 24805,
+              "finishedInWindow": 24803,
+              "dropped": 0
+            }
+          },
+          "contextWindow": {
+            "startAt": 1792314452819,
+            "endAt": 1792314504591,
+            "fullyWithinLoad": true,
+            "stats": {
+              "startAt": 1792314452819,
+              "endAt": 1792314504591,
+              "count": 25725,
+              "writes": 2579,
+              "statusCounts": {
+                "200": 25725
+              },
+              "errors": 0,
+              "rejected": 0,
+              "p50Ms": 91.3603515625,
+              "p95Ms": 173.222412109375,
+              "p99Ms": 227.618896484375,
+              "maxMs": 1046.160400390625,
+              "startedInWindow": 25676,
+              "finishedInWindow": 25675,
+              "dropped": 0
+            }
+          },
+          "passed": true,
+          "failures": []
+        }
+      ],
+      "verification": {
+        "verified": true,
+        "dataset": 10000,
+        "checks": {
+          "reportInIgnoredDeliveryDirectory": true,
+          "reportedDataset": true,
+          "reportedProject": true,
+          "isolatedProductionLoadContainer": true,
+          "exactReportedImage": true,
+          "dailyDefaultSettings": true,
+          "independentBackupBind": true,
+          "projectOnlyDataVolume": true,
+          "isolatedPublishedPort": true,
+          "resourceAndLogLimits": true,
+          "oneCompletedAutomaticBackup": true,
+          "automaticBackupFilename": true,
+          "automaticBackupPairExists": true,
+          "preloadZeroPruned": true,
+          "newRecoveryTarget": true,
+          "newEvidenceDirectory": true,
+          "sevenValidDailyBackups": true,
+          "onlySevenBackupPairsNoSidecars": true,
+          "offlineRestoreCreated": true,
+          "liveConservation21": true,
+          "backupConservation21": true,
+          "restoredConservation21": true,
+          "backupAndRestoreEquality10": true,
+          "backupUnchanged": true,
+          "restoreByteIdentical": true
+        },
+        "imageSha256": "sha256:4f147625fc7c3e15e031192c419a58393b9f21c0edbd482bd7ce7cd7efd5c0f6",
+        "sourceSha256": "bc1aeea5f761c96bad0cc6da7d628129fcbdba7be23d77b389ca35d18b03c650",
+        "helperSha256": "0b5ee77c85612addbf0a96d0522bec1ef89b2f4252360fc8ca1468dd5bcfd491",
+        "backupSha256": "4d382e1310c92524fa39a90148e27a24de9121ecb560a6e5ea735920d6f54daf",
+        "restoreSha256": "4d382e1310c92524fa39a90148e27a24de9121ecb560a6e5ea735920d6f54daf",
+        "validDailyCount": 7,
+        "liveCounts": {
+          "products": 24,
+          "skus": 48,
+          "orders": 10000,
+          "orderItems": 10000,
+          "inventory": 50,
+          "ledger": 10000,
+          "purchases": 0,
+          "carts": 1,
+          "commands": 32763
+        }
+      }
+    }
+  ],
+  "dailyDeployment": {
+    "unchanged": true,
+    "checkedAt": "2026-10-18T09:18:12.4610327Z",
+    "checks": {
+      "shopmate-ai-api-1-container": true,
+      "shopmate-ai-api-1-image": true,
+      "shopmate-ai-api-1-startedAt": true,
+      "shopmate-ai-api-1-restarts": true,
+      "shopmate-ai-api-1-revision": true,
+      "shopmate-ai-api-1-mounts": true,
+      "shopmate-ai-web-1-container": true,
+      "shopmate-ai-web-1-image": true,
+      "shopmate-ai-web-1-startedAt": true,
+      "shopmate-ai-web-1-restarts": true,
+      "shopmate-ai-web-1-revision": true,
+      "shopmate-ai-web-1-mounts": true
+    },
+    "revisions": {
+      "shopmate-ai-api-1": "bff28e1154e2a68d31b8237dc211e5834b75566f",
+      "shopmate-ai-web-1": "bff28e1154e2a68d31b8237dc211e5834b75566f"
+    }
+  },
+  "limits": [
+    "Not order/payment throughput",
+    "One automatic backup per dataset during a 10-minute synthetic workload",
+    "No long-term, multi-instance, real storage-failure or host-loss guarantee",
+    "Backups and data remain on the same development host",
+    "Daily containers retain the previously delivered version; this repair was tested only in isolation"
+  ]
+}

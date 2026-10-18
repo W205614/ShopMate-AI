@@ -6,7 +6,7 @@ import { expirePendingOrders } from "./commerce";
 import { writeFileSync, rmSync } from "node:fs";
 import { ensureRuntimeSchema } from "./runtime";
 import { runDueJobs, ensureRecurringJobs } from "./jobs";
-import { runAutomaticBackup } from "./automatic-backup";
+import { runAutomaticBackup, cancelAutomaticBackup } from "./automatic-backup";
 import { join } from "node:path";
 
 const databasePath = process.env.DATABASE_PATH ?? "data/shopmate.sqlite";
@@ -67,7 +67,7 @@ const backupTimer = setInterval(() => {
   const day = new Date().toISOString().slice(0, 10);
   if (process.env.BACKUP_DIR && !backupInProgress && day !== lastBackupDay) {
     backupInProgress = runAutomaticBackup(
-      sql,
+      databasePath,
       join(
         process.env.BACKUP_DIR,
         `shopmate-daily-${day}-${Date.now()}.sqlite`,
@@ -94,6 +94,7 @@ function shutdown() {
   clearInterval(backupTimer);
   const deadline = setTimeout(() => {
     server.closeAllConnections();
+    cancelAutomaticBackup();
     process.exit(1);
   }, 15000);
   deadline.unref();

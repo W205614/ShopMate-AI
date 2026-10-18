@@ -123,15 +123,22 @@ export function inspectBackup(path: string): BackupManifest {
 export async function backupDatabase(
   sql: DatabaseSync,
   destination: string,
-  options: { reason?: BackupManifest["reason"] } = {},
+  options: {
+    reason?: BackupManifest["reason"];
+    afterCopy?: () => void;
+    temporaryId?: string;
+  } = {},
 ) {
+  const temporaryId = options.temporaryId ?? randomUUID();
+  if (!/^[a-zA-Z0-9-]+$/.test(temporaryId)) throw new Error("备份临时标识无效");
   const path = resolve(destination),
-    temporary = `${path}.partial-${randomUUID()}`;
+    temporary = `${path}.partial-${temporaryId}`;
   if (existsSync(path) || existsSync(manifestPath(path)))
     throw new Error("备份目标已存在，请使用新的文件名");
   mkdirSync(dirname(path), { recursive: true });
   try {
     await backup(sql, temporary);
+    options.afterCopy?.();
     const manifest: BackupManifest = {
       format: 1,
       createdAt: new Date().toISOString(),

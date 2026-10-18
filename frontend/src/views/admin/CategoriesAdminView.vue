@@ -128,6 +128,7 @@ async function remove(c: Category) {
     <div class="admin-toolbar">
       <el-input
         v-model="query"
+        maxlength="100"
         placeholder="搜索分类名称或描述"
         clearable
       /><span class="admin-note">{{ total }} 个分类</span>
@@ -162,7 +163,7 @@ async function remove(c: Category) {
         label="排序"
         sortable="custom"
         width="100"
-      /><el-table-column label="商品数" width="110"
+      /><el-table-column label="商品数（含下架）" width="155"
         ><template #default="{ row }">{{
           row.productCount ??
           shop.db.products.filter((p) => p.categoryId === row.id).length

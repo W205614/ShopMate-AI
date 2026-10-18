@@ -17,6 +17,7 @@ import { availableStock, reservedStock } from "./commerce-rules";
 import { reconcile } from "./operations";
 import type { Promotion, PurchaseOrder } from "../../shared/domain/operations";
 import { queryMemberSummary, type PageOptions } from "./storage";
+import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
 
 const meta = (sql: DatabaseSync) =>
   sql.prepare("SELECT version,revision FROM storage_meta WHERE id=1").get() as {
@@ -303,14 +304,14 @@ function relatedRecords(
 /** Warehouse rows are SKUs, so page SKUs before grouping them back into product snapshots. */
 function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
   const where: string[] = [],
-    args: (string | number)[] = [];
+    args: (string | number)[] = [new Date().toISOString()];
   if (options.search) {
     where.push(
       "instr(lower(p.key||' '||s.id||' '||p.name||' '||json_extract(s.data,'$.name')),lower(?))>0",
     );
     args.push(options.search);
   }
-  if (req.query.low === "1") where.push("s.stock<=5");
+  if (req.query.low === "1") where.push(`${availableStockSql}<=5`);
   if (options.ids) {
     where.push(
       options.ids.length
@@ -322,9 +323,7 @@ function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
   const predicate = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const total = (
     sql
-      .prepare(
-        `SELECT count(*) AS total FROM product_skus s JOIN biz_products p ON p.key=s.product_id ${predicate}`,
-      )
+      .prepare(`SELECT count(*) AS total ${stockAvailabilityFrom} ${predicate}`)
       .get(...args) as { total: number }
   ).total;
   const pageSize = options.pageSize ?? 10,
@@ -332,11 +331,11 @@ function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
     page = Math.min(options.page ?? 1, pages);
   const sort =
     options.sort === "asc" || options.sort === "desc"
-      ? `s.stock ${options.sort === "asc" ? "ASC" : "DESC"},p.position,s.id`
+      ? `${availableStockSql} ${options.sort === "asc" ? "ASC" : "DESC"},p.position,s.id`
       : "p.position,s.id";
   const rows = sql
     .prepare(
-      `SELECT p.data AS product,s.data AS sku FROM product_skus s JOIN biz_products p ON p.key=s.product_id ${predicate} ORDER BY ${sort} LIMIT ? OFFSET ?`,
+      `SELECT p.data AS product,s.data AS sku ${stockAvailabilityFrom} ${predicate} ORDER BY ${sort} LIMIT ? OFFSET ?`,
     )
     .all(...args, pageSize, (page - 1) * pageSize) as {
     product: string;
@@ -625,7 +624,7 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
           productCount: (
             sql
               .prepare(
-                "SELECT count(*) AS n FROM biz_products WHERE category_id=? AND active=1",
+                `SELECT count(*) AS n FROM biz_products WHERE category_id=?${role === "user" ? " AND active=1" : ""}`,
               )
               .get(c.id) as { n: number }
           ).n,

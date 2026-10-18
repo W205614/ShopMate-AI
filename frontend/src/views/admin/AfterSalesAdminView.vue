@@ -160,7 +160,12 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
   </div>
   <section class="admin-panel">
     <div class="admin-toolbar">
-      <el-input v-model="query" placeholder="售后编号 / 订单号" clearable />
+      <el-input
+        v-model="query"
+        maxlength="100"
+        placeholder="售后编号 / 订单号"
+        clearable
+      />
       <el-select v-model="status" clearable placeholder="全部售后状态"
         ><el-option
           v-for="(label, key) in afterSaleLabels"

@@ -74,6 +74,7 @@ const { page, rows, total } = useAdminPagination(filtered, filters);
     <div class="admin-toolbar">
       <el-input
         v-model="query"
+        maxlength="100"
         placeholder="商品 / 内容 / 订单号 / 评价编号"
         clearable
       /><el-select v-model="status" placeholder="全部状态" clearable

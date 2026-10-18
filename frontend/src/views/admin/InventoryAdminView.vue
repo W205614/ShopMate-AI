@@ -55,7 +55,7 @@ watch([stockSort, tab], async () => {
   if (!stockTable.value) return;
   if (stockSort.value)
     stockTable.value.sort(
-      "stock",
+      "available",
       stockSort.value === "asc" ? "ascending" : "descending",
     );
   else stockTable.value.clearSort();
@@ -74,6 +74,8 @@ const stockRows = computed(() =>
   shop.db.products.flatMap((p) =>
     p.skus.map((s) => ({
       ...s,
+      reserved: (s as SKU & { reserved?: number }).reserved ?? 0,
+      available: s.stock - ((s as SKU & { reserved?: number }).reserved ?? 0),
       productId: p.id,
       product: p.name,
       image: p.images[0],
@@ -90,11 +92,11 @@ const stockFiltered = computed(() =>
     .filter(
       (s) =>
         match(s.productId, s.id, s.product, s.name) &&
-        (!low.value || s.stock <= 5),
+        (!low.value || s.available <= 5),
     )
     .sort((a, b) =>
       stockSort.value
-        ? (a.stock - b.stock) * (stockSort.value === "desc" ? -1 : 1)
+        ? (a.available - b.available) * (stockSort.value === "desc" ? -1 : 1)
         : 0,
     ),
 );
@@ -294,7 +296,7 @@ async function save() {
       <h1>库存管理</h1>
       <p>每一次库存变化，都有迹可循。</p>
     </div>
-    <el-tag effect="plain">低库存阈值 ≤ 5</el-tag>
+    <el-tag effect="plain">低库存：可售库存 ≤ 5</el-tag>
   </div>
   <section class="admin-panel">
     <el-tabs v-model="tab"
@@ -305,6 +307,7 @@ async function save() {
     <div class="admin-toolbar">
       <el-input
         v-model="query"
+        maxlength="100"
         placeholder="搜索商品、规格或变动编号 / 原因"
         clearable
       /><el-checkbox v-if="tab === 'stock'" v-model="low"
@@ -319,7 +322,7 @@ async function save() {
       ref="stockTable"
       @sort-change="sortChanged"
       :default-sort="{
-        prop: 'stock',
+        prop: 'available',
         order:
           stockSort === 'asc'
             ? 'ascending'
@@ -340,14 +343,24 @@ async function save() {
         ></el-table-column
       >
       <el-table-column prop="name" label="规格" min-width="140" />
+      <el-table-column prop="stock" label="实物库存" width="130"
+        ><template #default="{ row }"
+          >{{ row.stock }} 件</template
+        ></el-table-column
+      >
+      <el-table-column label="待付款预占" width="130"
+        ><template #default="{ row }"
+          >{{ row.reserved }} 件</template
+        ></el-table-column
+      >
       <el-table-column
-        prop="stock"
+        prop="available"
         sortable="custom"
-        label="可用库存"
+        label="可售库存"
         width="130"
         ><template #default="{ row }"
-          ><el-tag :type="row.stock <= 5 ? 'danger' : 'info'" effect="plain"
-            >{{ row.stock }} 件</el-tag
+          ><el-tag :type="row.available <= 5 ? 'danger' : 'info'" effect="plain"
+            >{{ row.available }} 件</el-tag
           ></template
         ></el-table-column
       >
@@ -425,7 +438,7 @@ async function save() {
   >
     <p>{{ form.name }}</p>
     <p class="admin-note">
-      读取时 {{ form.stock }} 件 → 调整后 {{ afterStock }} 件
+      实物库存：读取时 {{ form.stock }} 件 → 调整后 {{ afterStock }} 件
     </p>
     <el-alert
       v-if="submitted"

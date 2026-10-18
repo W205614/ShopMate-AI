@@ -24,10 +24,10 @@ const filtered = computed(() =>
   shop.db.faqs.filter(
     (f) =>
       (!status.value || f.active === (status.value === "active")) &&
-      (!query.value ||
-        f.question.includes(query.value) ||
-        f.answer.includes(query.value) ||
-        f.keywords.some((k) => k.includes(query.value))),
+      (!query.value.trim() ||
+        [f.question, f.answer, ...f.keywords].some((value) =>
+          value.toLowerCase().includes(query.value.trim().toLowerCase()),
+        )),
   ),
 );
 const { page, rows, total } = useAdminPagination(filtered, filters);
@@ -102,6 +102,7 @@ async function toggle(f: Faq) {
     <div class="admin-toolbar">
       <el-input
         v-model="query"
+        maxlength="100"
         clearable
         placeholder="搜索问题、回答或关键词"
       />

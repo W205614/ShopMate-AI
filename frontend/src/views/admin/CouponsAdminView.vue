@@ -51,14 +51,12 @@ const issued = computed(
         .length) > 0,
 );
 const filtered = computed(() =>
-  [...shop.db.coupons]
-    .reverse()
-    .filter(
-      (c) =>
-        (!query.value.trim() ||
-          c.name.toLowerCase().includes(query.value.trim().toLowerCase())) &&
-        (!status.value || c.active === (status.value === "active")),
-    ),
+  [...shop.db.coupons].filter(
+    (c) =>
+      (!query.value.trim() ||
+        c.name.toLowerCase().includes(query.value.trim().toLowerCase())) &&
+      (!status.value || c.active === (status.value === "active")),
+  ),
 );
 const { page, rows, total } = useAdminPagination(filtered, filters);
 async function toggle(coupon: Coupon) {
@@ -147,6 +145,7 @@ async function save() {
     <div class="admin-toolbar">
       <el-input
         v-model="query"
+        maxlength="100"
         placeholder="搜索优惠券名称"
         clearable
       /><el-select v-model="status" clearable placeholder="全部状态"

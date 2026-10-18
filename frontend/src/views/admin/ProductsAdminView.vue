@@ -166,6 +166,7 @@ async function toggle(p: Product) {
     <div class="admin-toolbar">
       <el-input
         v-model="query"
+        maxlength="100"
         placeholder="搜索商品名称"
         clearable
         @input="page = 1"

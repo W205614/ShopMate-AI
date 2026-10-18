@@ -216,6 +216,7 @@ async function download() {
     <div class="admin-toolbar">
       <el-input
         v-model="query"
+        maxlength="100"
         placeholder="流水号 / 关联编号 / 说明"
         clearable
       />

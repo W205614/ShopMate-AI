@@ -42,6 +42,33 @@ async function get(path: string, admin = false) {
 }
 
 describe("paged read contracts", () => {
+  it("counts inactive category products for admins while storefront counts only active products", async () => {
+    const seed = createSeed();
+    const categoryId = seed.categories[0]!.id;
+    for (const product of seed.products)
+      if (product.categoryId === categoryId) product.active = false;
+    writeDatabase(sql, seed);
+    const adminPage = await get(
+      "/api/collections/categories?role=admin&pageSize=100",
+      true,
+    );
+    const userPage = await get(
+      "/api/collections/categories?role=user&pageSize=100",
+    );
+    expect(
+      adminPage.items.find(
+        (category: { id: string }) => category.id === categoryId,
+      ).productCount,
+    ).toBe(
+      seed.products.filter((product) => product.categoryId === categoryId)
+        .length,
+    );
+    expect(
+      userPage.items.find(
+        (category: { id: string }) => category.id === categoryId,
+      ).productCount,
+    ).toBe(0);
+  });
   it("resolves nested conversation recommendations beyond bootstrap and only owned message orders", async () => {
     const seed = createSeed(),
       baseProduct = seed.products[0]!,

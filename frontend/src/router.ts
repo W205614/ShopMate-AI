@@ -203,7 +203,7 @@ router.beforeEach(async (to) => {
   // Keep shared/search URLs within the same limit as the search fields and API.
   const keyword = queryText(to.query.q).trim();
   if (
-    to.path === "/products" &&
+    (to.path === "/products" || to.path.startsWith("/admin/")) &&
     (Array.isArray(to.query.q) || keyword.length > 100)
   )
     return {

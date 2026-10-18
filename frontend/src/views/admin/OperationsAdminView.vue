@@ -45,6 +45,9 @@ const metadata = computed(() => {
 });
 const search = ref(String(route.query.q ?? "")),
   extraError = ref("");
+watch([() => route.query.q, tab], ([value]) => {
+  search.value = typeof value === "string" ? value : "";
+});
 const staff = ref<Staff[]>([]),
   reconciliation = ref<{
     balanced: boolean;
@@ -133,7 +136,7 @@ watch(
   tabs,
   () => {
     if (!route.query.tab && tabs.value[0])
-      void router.replace({ query: { tab: tabs.value[0][0] } });
+      void router.replace({ query: { ...route.query, tab: tabs.value[0][0] } });
   },
   { immediate: true },
 );
@@ -478,8 +481,10 @@ onUnmounted(() => {
       >
         <el-input
           v-model="search"
+          maxlength="100"
           placeholder="搜索当前业务记录"
           clearable
+          @clear="navigate({ q: undefined })"
         /><el-button native-type="submit">搜索</el-button
         ><span>共 {{ metadata?.total ?? 0 }} 条</span>
       </form>

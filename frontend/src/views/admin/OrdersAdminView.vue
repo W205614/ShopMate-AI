@@ -19,6 +19,9 @@ const refundedQuantity = (order: Order) =>
   order.items.reduce((sum, item) => sum + item.refundedQuantity, 0);
 const remainingQuantity = (order: Order) =>
   totalQuantity(order) - refundedQuantity(order);
+const paymentRecorded = (order: Order) =>
+  !!order.paidAt ||
+  ["paid", "shipped", "completed", "refunded"].includes(order.status);
 const filters = useAdminQuery();
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
@@ -122,6 +125,7 @@ async function submit() {
     <div class="admin-toolbar">
       <el-input
         v-model="query"
+        maxlength="100"
         placeholder="订单号 / 商品 / 收件人"
         clearable
       /><el-select v-model="status" placeholder="全部状态" clearable
@@ -293,12 +297,20 @@ async function submit() {
         未退数量为购买数量减已退款数量；是否可发货由订单与售后状态决定。
       </p>
       <div class="admin-stats-line">
-        实付金额 <strong>{{ money(selected.total) }}</strong
+        {{
+          paymentRecorded(selected)
+            ? "实付金额"
+            : selected.status === "pending"
+              ? "应付金额"
+              : "订单金额"
+        }}
+        <strong>{{ money(selected.total) }}</strong
         ><span v-if="selected.discount"
           >（优惠 {{ money(selected.discount) }}）</span
         ><span v-if="selected.refundedAmount">
           · 已退 {{ money(selected.refundedAmount) }}</span
         >
+        <span v-if="!paymentRecorded(selected)"> · 未付款</span>
       </div>
       <h3>已记录的订单进度</h3>
       <ol v-if="selected.events.length" class="commerce-timeline">

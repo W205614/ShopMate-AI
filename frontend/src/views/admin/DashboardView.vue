@@ -318,8 +318,11 @@ const ranking = computed(() =>
       ><el-table-column prop="product" label="商品" /><el-table-column
         prop="name"
         label="规格"
-      /><el-table-column prop="stock" label="库存" sortable /><el-table-column
-        label="建议"
+      /><el-table-column prop="stock" label="实物库存" /><el-table-column
+        prop="available"
+        label="可售库存"
+        sortable
+      /><el-table-column label="建议"
         ><template #default="{ row }"
           ><RouterLink
             v-if="permitted('warehouse')"

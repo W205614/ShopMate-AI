@@ -233,6 +233,7 @@ async function close() {
     <aside class="admin-chat-list">
       <el-input
         v-model="query"
+        maxlength="100"
         placeholder="搜索会话 / 用户 / 商品 / 订单"
         clearable
         style="margin-bottom: 12px"

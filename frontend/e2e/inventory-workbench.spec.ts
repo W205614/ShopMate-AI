@@ -213,7 +213,7 @@ test("库存提交返回异常结果时保留原请求，刷新后可按原参�
 });
 test("库存全局排序的行序、箭头及前进后退 URL 一致", async ({ page }) => {
   await page.goto("/admin/inventory");
-  const header = page.getByRole("columnheader", { name: "可用库存" });
+  const header = page.getByRole("columnheader", { name: "可售库存" });
   await header.click();
   await expect(page).toHaveURL(/sort=asc/);
   await expect(header).toHaveClass(/ascending/);

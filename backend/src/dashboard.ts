@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Order, Product, Session } from "../../shared/domain/types";
 import { readDatabase, queryPage, queryRecord } from "./database";
 import { permits } from "./permissions";
-import { availableStock } from "./commerce-rules";
+import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
 
 export function dashboard(sql: DatabaseSync, session: Session) {
   const canFinance = permits(session, "finance"),
@@ -50,13 +50,15 @@ export function dashboard(sql: DatabaseSync, session: Session) {
       ? (
           sql
             .prepare(
-              "SELECT id,product_id,stock,data FROM product_skus WHERE stock<=5 ORDER BY stock,id LIMIT 100",
+              `SELECT s.id,s.product_id,s.stock,s.data,coalesce(reservations.reserved,0) AS reserved,${availableStockSql} AS available ${stockAvailabilityFrom} WHERE ${availableStockSql}<=5 ORDER BY ${availableStockSql},s.id LIMIT 100`,
             )
-            .all() as {
+            .all(new Date().toISOString()) as {
             id: string;
             product_id: string;
             stock: number;
             data: string;
+            reserved: number;
+            available: number;
           }[]
         ).map((s) => {
           const product = queryRecord<Product>(sql, "products", s.product_id)!;
@@ -66,7 +68,8 @@ export function dashboard(sql: DatabaseSync, session: Session) {
             skuId: s.id,
             skuName: JSON.parse(s.data).name,
             stock: s.stock,
-            available: availableStock(db, product.id, s.id),
+            reserved: s.reserved,
+            available: s.available,
           };
         })
       : [];

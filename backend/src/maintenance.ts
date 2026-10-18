@@ -28,6 +28,13 @@ export interface BackupManifest {
 const sha256 = (value: string | Buffer) =>
   createHash("sha256").update(value).digest("hex");
 const manifestPath = (path: string) => `${path}.manifest.json`;
+const backupFiles = (path: string) => [
+  path,
+  manifestPath(path),
+  `${path}-wal`,
+  `${path}-shm`,
+  `${path}-journal`,
+];
 
 function snapshotDetails(path: string) {
   const sql = new DatabaseSync(path, { readOnly: true });
@@ -139,6 +146,18 @@ export async function backupDatabase(
   try {
     await backup(sql, temporary);
     options.afterCopy?.();
+    // Only this attempt owns the copied file. Make it self-contained before hashing;
+    // later read-only inspections must not recreate persistent WAL/SHM sidecars.
+    const copied = new DatabaseSync(temporary);
+    try {
+      if (
+        copied.prepare("PRAGMA journal_mode=DELETE").get()?.journal_mode !==
+        "delete"
+      )
+        throw new Error("备份副本无法切换为独立文件模式");
+    } finally {
+      copied.close();
+    }
     const manifest: BackupManifest = {
       format: 1,
       createdAt: new Date().toISOString(),
@@ -154,7 +173,7 @@ export async function backupDatabase(
     renameSync(manifestPath(temporary), manifestPath(path));
     return inspectBackup(path);
   } finally {
-    for (const partial of [temporary, manifestPath(temporary)])
+    for (const partial of backupFiles(temporary))
       if (existsSync(partial)) unlinkSync(partial);
   }
 }
@@ -183,8 +202,10 @@ export function pruneDailyBackups(directory: string, keep = 7) {
     );
   const removed: string[] = [];
   for (const { path } of candidates.slice(keep)) {
-    unlinkSync(path);
-    unlinkSync(manifestPath(path));
+    // These exact files belong to the validated backup selected for deletion.
+    // Retained snapshots, source sidecars and unrecognized staging files stay untouched.
+    for (const file of backupFiles(path))
+      if (existsSync(file)) unlinkSync(file);
     removed.push(path);
   }
   return removed;

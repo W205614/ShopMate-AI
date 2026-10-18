@@ -121,5 +121,12 @@
     "inputUnchanged": true,
     "sourceFileSha256": "b795c45c99d4d558c899ab554d17a2d5714d1bde4e8c9efff64cb56661591bc7"
   },
-  "validatedCodeCommit": "9bd7ce477dc7c49ac14dd2a13a2daff6a909568a"
+  "validatedCodeCommit": "9bd7ce477dc7c49ac14dd2a13a2daff6a909568a",
+  "acceptanceSettings": {
+    "apiRequestLogs": false,
+    "automaticBackups": false,
+    "nginxAccessLogs": true,
+    "persistentJobs": true,
+    "idempotencyRequired": true
+  }
 }

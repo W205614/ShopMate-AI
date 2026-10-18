@@ -9,6 +9,9 @@ import {
   unlinkSync,
   copyFileSync,
   readdirSync,
+  openSync,
+  readSync,
+  closeSync,
 } from "node:fs";
 import { resolve, dirname, basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -23,10 +26,91 @@ export interface BackupManifest {
   businessVersion: number;
   revision: number;
   counts: Record<string, number>;
-  digests: { business: string; accounts: string; sessions: string };
+  digests: {
+    business: string;
+    accounts: string;
+    sessions: string;
+    ai?: string;
+  };
 }
 const sha256 = (value: string | Buffer) =>
   createHash("sha256").update(value).digest("hex");
+
+/** Document BLOBs can make snapshots large; never load the SQLite file into memory. */
+function fileSha256(path: string) {
+  const hash = createHash("sha256"),
+    file = openSync(path, "r"),
+    buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    let bytes: number;
+    while ((bytes = readSync(file, buffer, 0, buffer.length, null)) > 0)
+      hash.update(buffer.subarray(0, bytes));
+    return hash.digest("hex");
+  } finally {
+    closeSync(file);
+  }
+}
+
+/** Include durable AI state, excluding FTS virtual tables and their derived shadow tables. */
+function aiSnapshotDetails(sql: DatabaseSync, counts: Record<string, number>) {
+  const tables = (
+    sql.prepare("PRAGMA main.table_list").all() as {
+      schema: string;
+      name: string;
+      type: string;
+    }[]
+  )
+    .filter(
+      (table) =>
+        table.schema === "main" &&
+        table.type === "table" &&
+        /^(?:ai_|support_|knowledge_)[a-zA-Z0-9_]+$/.test(table.name),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "en"));
+  if (!tables.length) return undefined;
+  const digest = createHash("sha256");
+  // Length-prefixed, typed fields avoid ambiguous concatenation and JSON-expanding BLOBs.
+  const field = (value: unknown) => {
+    const type =
+        value === null
+          ? "null"
+          : value instanceof Uint8Array
+            ? "blob"
+            : typeof value,
+      bytes =
+        value instanceof Uint8Array
+          ? value
+          : Buffer.from(value === null ? "" : String(value));
+    digest.update(`${type}:${bytes.byteLength}:`).update(bytes);
+  };
+  for (const { name } of tables) {
+    field(name);
+    const columns = sql.prepare(`PRAGMA main.table_info("${name}")`).all() as {
+        name: string;
+        pk: number;
+      }[],
+      primary = columns
+        .filter((column) => column.pk)
+        .sort((a, b) => a.pk - b.pk),
+      order = primary.length
+        ? primary
+            .map((column) => `"${column.name.replaceAll('"', '""')}"`)
+            .join(",")
+        : "rowid",
+      rows = sql.prepare(`SELECT * FROM "${name}" ORDER BY ${order}`);
+    field(JSON.stringify(columns));
+    rows.setReadBigInts(true);
+    let count = 0;
+    for (const row of rows.iterate()) {
+      field("row");
+      for (const column of columns) field(row[column.name]);
+      count++;
+    }
+    counts[name] = count;
+    field(count);
+  }
+  return digest.digest("hex");
+}
 const manifestPath = (path: string) => `${path}.manifest.json`;
 const backupFiles = (path: string) => [
   path,
@@ -36,7 +120,7 @@ const backupFiles = (path: string) => [
   `${path}-journal`,
 ];
 
-function snapshotDetails(path: string) {
+function snapshotDetails(path: string, includeAi = true) {
   const sql = new DatabaseSync(path, { readOnly: true });
   try {
     const integrity = sql.prepare("PRAGMA integrity_check").all();
@@ -91,6 +175,7 @@ function snapshotDetails(path: string) {
         .all();
     counts.accounts = accounts.length;
     counts.sessions = sessions.length;
+    const ai = includeAi ? aiSnapshotDetails(sql, counts) : undefined;
     return {
       schemaVersion: meta?.schema_version ?? 0,
       businessVersion: meta?.version ?? Number(legacyState!.version),
@@ -100,6 +185,7 @@ function snapshotDetails(path: string) {
         business: business.digest("hex"),
         accounts: sha256(JSON.stringify(accounts)),
         sessions: sha256(JSON.stringify(sessions)),
+        ...(ai ? { ai } : {}),
       },
     };
   } finally {
@@ -111,9 +197,10 @@ export function inspectBackup(path: string): BackupManifest {
   const manifest = JSON.parse(
     readFileSync(manifestPath(path), "utf8"),
   ) as BackupManifest;
-  if (manifest.format !== 1 || manifest.sha256 !== sha256(readFileSync(path)))
+  if (manifest.format !== 1 || manifest.sha256 !== fileSha256(path))
     throw new Error("备份校验和不匹配");
-  const details = snapshotDetails(path);
+  // Format 1 manifests created before AI support have neither its digest nor counts.
+  const details = snapshotDetails(path, manifest.digests.ai !== undefined);
   for (const key of [
     "schemaVersion",
     "businessVersion",
@@ -162,7 +249,7 @@ export async function backupDatabase(
       format: 1,
       createdAt: new Date().toISOString(),
       reason: options.reason ?? "manual",
-      sha256: sha256(readFileSync(temporary)),
+      sha256: fileSha256(temporary),
       ...snapshotDetails(temporary),
     };
     writeFileSync(manifestPath(temporary), JSON.stringify(manifest, null, 2), {
@@ -251,7 +338,7 @@ export async function restoreBackup(
   const moved: { source: string; backup: string }[] = [];
   try {
     copyFileSync(from, staged);
-    if (sha256(readFileSync(staged)) !== manifest.sha256)
+    if (fileSha256(staged) !== manifest.sha256)
       throw new Error("恢复复制校验失败");
     if (existsSync(`${to}.running`))
       throw new Error("恢复期间检测到服务启动，取消替换");

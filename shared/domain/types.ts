@@ -188,6 +188,14 @@ export interface LedgerEntry {
   inventoryMovementId?: string;
 }
 export interface Message {
+  source?: "ai" | "rule";
+  citations?: {
+    id: string;
+    title: string;
+    text: string;
+    page?: number;
+    paragraph?: number;
+  }[];
   id: string;
   role: "user" | "assistant" | "agent";
   text: string;
@@ -337,7 +345,9 @@ export interface Database {
   settings: Settings;
 }
 export type ProductInput = Omit<Product, "id"> & { id?: string };
-export type CategoryInput = Omit<Category, "id" | "productCount"> & { id?: string };
+export type CategoryInput = Omit<Category, "id" | "productCount"> & {
+  id?: string;
+};
 export type AddressInput = Omit<Address, "id" | "userId"> & { id?: string };
 export type FaqInput = Omit<Faq, "id"> & { id?: string };
 export const orderLabels: Record<OrderStatus, string> = {

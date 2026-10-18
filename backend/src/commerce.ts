@@ -102,35 +102,7 @@ export const commerceApi: Pick<
   | "processAfterSale"
 > = {
   async addCart(productId, skuId, quantity) {
-    await transact((db) => {
-      const uid = userId(),
-        { product, sku } = productSku(db, productId, skuId);
-      requireThat(
-        product.active && integer(quantity, 1),
-        "商品已下架或数量无效",
-      );
-      const existing = db.carts.find(
-        (c) =>
-          c.userId === uid && c.productId === productId && c.skuId === skuId,
-      );
-      requireThat(
-        (existing?.quantity ?? 0) + quantity <=
-          availableStock(db, product.id, sku.id),
-        "库存不足",
-      );
-      if (existing) {
-        existing.quantity += quantity;
-        existing.selected = true;
-      } else
-        db.carts.push({
-          id: id("cart-"),
-          userId: uid,
-          productId,
-          skuId,
-          quantity,
-          selected: true,
-        });
-    });
+    await transact((db) => addCartChange(db, productId, skuId, quantity));
   },
   async updateCart(cartId, patch) {
     await transact((db) => {
@@ -441,16 +413,7 @@ export const commerceApi: Pick<
     });
   },
   async cancelOrder(orderId) {
-    await transact((db) => {
-      const order = ownedOrder(db, orderId);
-      if (order.status === "cancelled") return;
-      requireThat(order.status === "pending", "只有待付款订单可以取消");
-      order.status = "cancelled";
-      order.cancelledAt = now();
-      order.cancelReason = "用户取消";
-      addEvent(order, "cancelled", "user", "用户取消");
-      releaseCoupon(db, order);
-    });
+    await transact((db) => cancelOrderChange(db, orderId));
   },
   async confirmOrder(orderId) {
     await transact((db) => {
@@ -515,74 +478,9 @@ export const commerceApi: Pick<
     });
   },
   async requestAfterSale(orderId, reason, description, lines) {
-    await transact((db) => {
-      const order = ownedOrder(db, orderId);
-      requireThat(
-        ["paid", "shipped", "completed"].includes(order.status),
-        "该状态不能申请售后",
-      );
-      requireThat(
-        !order.completedAt ||
-          order.afterSaleDays === undefined ||
-          Date.now() <=
-            Date.parse(order.completedAt) + order.afterSaleDays * 86400000,
-        "已超过该订单售后申请期限",
-      );
-      requireThat(
-        text(reason, 100) && text(description, 1000),
-        "请填写售后原因与说明",
-      );
-      requireThat(!hasSale(db, orderId), "该订单已有售后申请，请查看处理进度");
-      requireThat(
-        lines.length > 0 &&
-          new Set(lines.map((l) => l.orderItemId)).size === lines.length,
-        "请选择不重复的售后商品",
-      );
-      const details = lines.map((line) => {
-        const item = order.items.find((i) => i.id === line.orderItemId);
-        requireThat(
-          item &&
-            integer(line.quantity, 1) &&
-            line.quantity <= item.quantity - item.refundedQuantity,
-          "售后商品或数量无效，不能超过剩余可退数量",
-        );
-        return {
-          ...line,
-          amount:
-            refundThrough(item, item.refundedQuantity + line.quantity) -
-            refundThrough(item, item.refundedQuantity),
-        };
-      });
-      const at = now();
-      const fullRemaining = order.items.every(
-        (item) =>
-          item.refundedQuantity +
-            (details.find((line) => line.orderItemId === item.id)?.quantity ??
-              0) ===
-          item.quantity,
-      );
-      const shippingRefund =
-        order.status === "paid" && fullRemaining
-          ? (order.shippingFee ?? 0) - (order.shippingRefunded ?? 0)
-          : 0;
-      db.afterSales.unshift({
-        id: id("as-"),
-        orderId,
-        userId: userId(),
-        reason: reason.trim(),
-        description: description.trim(),
-        status: "requested",
-        requiresReturn: order.status !== "paid",
-        createdAt: at,
-        note: "",
-        lines: details,
-        shippingRefund,
-        refundAmount:
-          details.reduce((n, l) => n + l.amount, 0) + shippingRefund,
-        events: [{ at, actor: "user", action: "requested" }],
-      });
-      addEvent(order, "afterSaleRequested", "user");
-    });
+    await transact((db) =>
+      requestAfterSaleChange(db, orderId, reason, description, lines),
+    );
   },
   async cancelAfterSale(afterSaleId) {
     await transact((db) => {
@@ -765,3 +663,119 @@ export const commerceApi: Pick<
     });
   },
 };
+
+export function addCartChange(
+  db: Database,
+  productId: string,
+  skuId: string,
+  quantity: number,
+) {
+  const uid = userId(),
+    { product, sku } = productSku(db, productId, skuId);
+  requireThat(product.active && integer(quantity, 1), "商品已下架或数量无效");
+  const existing = db.carts.find(
+    (c) => c.userId === uid && c.productId === productId && c.skuId === skuId,
+  );
+  requireThat(
+    (existing?.quantity ?? 0) + quantity <=
+      availableStock(db, product.id, sku.id),
+    "库存不足",
+  );
+  if (existing) {
+    existing.quantity += quantity;
+    existing.selected = true;
+  } else
+    db.carts.push({
+      id: id("cart-"),
+      userId: uid,
+      productId,
+      skuId,
+      quantity,
+      selected: true,
+    });
+}
+
+export function cancelOrderChange(db: Database, orderId: string) {
+  const order = ownedOrder(db, orderId);
+  if (order.status === "cancelled") return;
+  requireThat(order.status === "pending", "只有待付款订单可以取消");
+  order.status = "cancelled";
+  order.cancelledAt = now();
+  order.cancelReason = "用户取消";
+  addEvent(order, "cancelled", "user", "用户取消");
+  releaseCoupon(db, order);
+}
+
+export function requestAfterSaleChange(
+  db: Database,
+  orderId: string,
+  reason: string,
+  description: string,
+  lines: { orderItemId: string; quantity: number }[],
+) {
+  const order = ownedOrder(db, orderId);
+  requireThat(
+    ["paid", "shipped", "completed"].includes(order.status),
+    "该状态不能申请售后",
+  );
+  requireThat(
+    !order.completedAt ||
+      order.afterSaleDays === undefined ||
+      Date.now() <=
+        Date.parse(order.completedAt) + order.afterSaleDays * 86400000,
+    "已超过该订单售后申请期限",
+  );
+  requireThat(
+    text(reason, 100) && text(description, 1000),
+    "请填写售后原因与说明",
+  );
+  requireThat(!hasSale(db, orderId), "该订单已有售后申请，请查看处理进度");
+  requireThat(
+    lines.length > 0 &&
+      new Set(lines.map((l) => l.orderItemId)).size === lines.length,
+    "请选择不重复的售后商品",
+  );
+  const details = lines.map((line) => {
+    const item = order.items.find((i) => i.id === line.orderItemId);
+    requireThat(
+      item &&
+        integer(line.quantity, 1) &&
+        line.quantity <= item.quantity - item.refundedQuantity,
+      "售后商品或数量无效，不能超过剩余可退数量",
+    );
+    return {
+      ...line,
+      amount:
+        refundThrough(item, item.refundedQuantity + line.quantity) -
+        refundThrough(item, item.refundedQuantity),
+    };
+  });
+  const at = now();
+  const fullRemaining = order.items.every(
+    (item) =>
+      item.refundedQuantity +
+        (details.find((line) => line.orderItemId === item.id)?.quantity ??
+          0) ===
+      item.quantity,
+  );
+  const shippingRefund =
+    order.status === "paid" && fullRemaining
+      ? (order.shippingFee ?? 0) - (order.shippingRefunded ?? 0)
+      : 0;
+  db.afterSales.unshift({
+    id: id("as-"),
+    orderId,
+    userId: userId(),
+    reason: reason.trim(),
+    description: description.trim(),
+    status: "requested",
+    requiresReturn: order.status !== "paid",
+    createdAt: at,
+    note: "",
+    lines: details,
+    shippingRefund,
+    refundAmount: details.reduce((n, l) => n + l.amount, 0) + shippingRefund,
+    events: [{ at, actor: "user", action: "requested" }],
+  });
+  addEvent(order, "afterSaleRequested", "user");
+}

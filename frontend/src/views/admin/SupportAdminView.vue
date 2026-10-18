@@ -60,12 +60,12 @@ onUnmounted(() => {
   cancelConfirmation?.();
 });
 const labels = {
-    bot: "模拟客服中",
+    bot: "自动客服中",
     waiting: "等待人工",
     human: "人工接待中",
     closed: "已关闭",
   },
-  roles = { user: "用户", assistant: "模拟客服", agent: "人工客服" };
+  roles = { user: "用户", assistant: "自动客服", agent: "人工客服" };
 const allConversations = computed(() =>
   [...shop.db.conversations].sort((a, b) => {
     const priority = { waiting: 0, human: 1, bot: 2, closed: 3 };
@@ -353,7 +353,7 @@ async function close() {
           >
         </div>
         <p v-if="selected.status === 'bot'" class="admin-note">
-          此会话由模拟客服接待。用户转人工后，可在此回复。
+          此会话由自动客服接待。用户转人工后，可在此回复。
         </p>
         <p v-else-if="selected.status === 'closed'" class="admin-note">
           {{

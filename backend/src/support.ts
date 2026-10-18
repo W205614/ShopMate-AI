@@ -1,5 +1,9 @@
 import type { ShopApi } from "../../shared/domain/api";
 import type { Message } from "../../shared/domain/types";
+import { aiConfig } from "./ai-provider";
+import { enqueueSupportRun } from "./ai-support";
+import { cancelSupportWork, ensureSupportSchema } from "./ai-schema";
+import { context } from "./repository";
 import {
   transact,
   userId,
@@ -43,7 +47,9 @@ export const supportApi: Pick<
           {
             id: id("msg-"),
             role: "assistant",
-            text: "你好，我是 ShopMate 模拟客服。我可以帮你找商品、查看当前账号的演示订单，或指引售后。回复来自本地规则，信息不足时可以转人工。",
+            text: aiConfig().enabled
+              ? "你好，我是 ShopMate AI 客服。我可以帮你选商品、查询本人订单和售后，或根据已发布资料回答问题。业务操作需要你点击确认；支付、物流和退款均为模拟。"
+              : "你好，我是 ShopMate 模拟客服。我可以帮你找商品、查看当前账号的演示订单，或指引售后。回复来自本地规则，信息不足时可以转人工。",
             createdAt: now(),
             ...(product ? { productIds: [product.id] } : {}),
             ...(context.orderId ? { orderId: context.orderId } : {}),
@@ -63,17 +69,28 @@ export const supportApi: Pick<
         "会话不存在或已关闭，请新建咨询",
       );
       requireThat(text(message, 1000), "消息不能为空且不能超过 1000 字");
+      const messageId = id("msg-");
       conversation.messages.push({
-        id: id("msg-"),
+        id: messageId,
         role: "user",
         text: message.trim(),
         createdAt: now(),
       });
       if (conversation.status !== "bot") return;
+      if (aiConfig().enabled) {
+        enqueueSupportRun(
+          context.getStore()!.sql,
+          conversation.id,
+          userId(),
+          messageId,
+        );
+        return;
+      }
       const answer: Message = {
         id: id("msg-"),
         role: "assistant",
         text: "",
+        source: "rule",
         createdAt: now(),
       };
       const faq = db.faqs.find(
@@ -145,6 +162,8 @@ export const supportApi: Pick<
         "会话不存在或已关闭",
       );
       if (conversation.status !== "bot") return;
+      ensureSupportSchema(context.getStore()!.sql);
+      cancelSupportWork(context.getStore()!.sql, conversationId);
       conversation.status = "waiting";
       conversation.messages.push({
         id: id("msg-"),
@@ -181,6 +200,8 @@ export const supportApi: Pick<
         (c) => c.id === conversationId,
       );
       requireThat(conversation, "会话不存在");
+      ensureSupportSchema(context.getStore()!.sql);
+      cancelSupportWork(context.getStore()!.sql, conversationId);
       conversation.status = "closed";
     });
   },

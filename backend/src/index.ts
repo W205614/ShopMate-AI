@@ -8,6 +8,8 @@ import { ensureRuntimeSchema } from "./runtime";
 import { runDueJobs, ensureRecurringJobs } from "./jobs";
 import { runAutomaticBackup, cancelAutomaticBackup } from "./automatic-backup";
 import { join } from "node:path";
+import { startSupportWorker } from "./ai-support";
+import { startKnowledgeWorker } from "./ai-knowledge";
 
 const databasePath = process.env.DATABASE_PATH ?? "data/shopmate.sqlite";
 const sql = openDatabase(databasePath);
@@ -53,6 +55,8 @@ const app = await createApp(sql, {
   afterSaleDays: Number(process.env.AFTER_SALE_DAYS ?? "7"),
   allowLegacyCommands: process.env.ALLOW_LEGACY_COMMANDS === "true",
 });
+const stopSupportWorker = startSupportWorker(sql);
+const stopKnowledgeWorker = startKnowledgeWorker(sql);
 const server = app.listen(
   Number(process.env.PORT ?? 3001),
   process.env.HOST ?? "127.0.0.1",
@@ -99,6 +103,8 @@ function shutdown() {
   }, 15000);
   deadline.unref();
   server.close(async () => {
+    await stopSupportWorker();
+    await stopKnowledgeWorker();
     await backupInProgress;
     sql.close();
     rmSync(databasePath + ".running", { force: true });

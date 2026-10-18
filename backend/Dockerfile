@@ -1,11 +1,12 @@
 FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f
 WORKDIR /app/backend
+RUN apk add --no-cache poppler-utils poppler-data font-noto-cjk
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 COPY backend/src ./src
 COPY shared /app/shared
 COPY backend/scripts ./scripts
-RUN mkdir -p /app/data && chown node:node /app/data
+RUN mkdir -p /app/data /app/backups && chown node:node /app/data /app/backups
 USER node
 ENV HOST=0.0.0.0 PORT=3001 DATABASE_PATH=/app/data/shopmate.sqlite
 ARG VCS_REF=local

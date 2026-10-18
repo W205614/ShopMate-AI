@@ -176,6 +176,8 @@ it("幂等记录 24 小时清理，历史变动和采购流水保留；管理员
   vi.useFakeTimers();
   try {
     vi.setSystemTime(new Date("2026-10-17T10:00:00Z"));
+    // Seed order expiries must share the test clock rather than the host's current day.
+    writeDatabase(sql, createSeed());
     await adjust("p01", "p01-s1", 1, 100, "按管理员隔离", {
       requestId: "same-key",
     });
@@ -193,6 +195,7 @@ it("幂等记录 24 小时清理，历史变动和采购流水保留；管理员
     );
     const before = db();
     expect(Reflect.get(before, "inventoryRequests")).toHaveLength(2);
+    expect(before.orders.some((order) => order.status === "pending")).toBe(true);
     expect(expireOrders(before, "2026-10-18T09:59:59Z")).toBe(true); // seed pending orders also expire
     expect(Reflect.get(before, "inventoryRequests")).toHaveLength(2);
     expireOrders(before, "2026-10-18T10:00:00Z");

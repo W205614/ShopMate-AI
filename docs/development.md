@@ -65,6 +65,16 @@ npm --prefix frontend run dev -- --host 127.0.0.1
 
 后端默认监听 `127.0.0.1:3001`，Vite 使用 5173 并代理 `/api/`。后端启动脚本读取根目录 `.env`；本地数据在 `backend/data/shopmate.sqlite`，与 Docker 数据卷独立。
 
+本地处理 PDF 还需要 Poppler 的 `pdfinfo`、`pdftotext`、`pdftoppm` 位于启动后端进程的 `PATH` 中；安装后重新打开终端，用以下命令检查。Debian／Ubuntu 可安装 `poppler-utils`，macOS 可通过 Homebrew 安装 `poppler`，Windows 使用适用于本机的 Poppler 二进制包并将其工具目录加入 `PATH`。Docker API 镜像已安装 `poppler-utils`，无需在宿主机额外安装。
+
+```powershell
+pdfinfo -v
+pdftotext -v
+pdftoppm -v
+```
+
+PDF 文字提取在本地执行，扫描页和图片识别仍需模型 API，文档索引需 Embedding；配置及边界见 [AI 客服与知识库](ai-support.md)。
+
 ## 验证命令
 
 按改动范围选择必要检查，已通过且代码未变时不重复扩大测试。以下为各类检查入口，不要求每次全部执行：

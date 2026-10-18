@@ -22,6 +22,9 @@ jobs:
             backend/package-lock.json
       - run: npm ci
         working-directory: backend
+      - name: Install PDF extraction tools
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+        working-directory: .
       # A cross-boundary regression imports the storefront review eligibility helper.
       # Install both workspaces before either suite resolves their tsconfig dependencies.
       - run: npm ci

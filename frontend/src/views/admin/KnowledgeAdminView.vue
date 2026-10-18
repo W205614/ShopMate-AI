@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
+import SupportDocumentsPanel from "./SupportDocumentsPanel.vue";
 import { ElMessageBox } from "element-plus";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
@@ -65,7 +66,7 @@ async function save() {
     await run(() => {
       assertCurrent(target);
       return api.saveFaq({ ...form, keywords: list });
-    }, "FAQ 已保存，模拟客服即时生效")
+    }, "FAQ 已保存，即时更新客服知识")
   )
     finish(target);
 }
@@ -87,14 +88,15 @@ async function toggle(f: Faq) {
   <div class="admin-page-head">
     <div>
       <h1>FAQ 管理</h1>
-      <p>维护规则回复，让常见问题得到一致解答。</p>
+      <p>维护常见问答与已核对的文档，让客服回答有据可查。</p>
     </div>
     <el-button type="primary" :disabled="pending" @click="open()"
       >新增问答</el-button
     >
   </div>
   <div class="admin-callout">
-    此处为关键词规则演示，不涉及向量检索或大模型训练。启用的问答参与模拟客服匹配。
+    启用的 FAQ 参与规则回复和 AI
+    知识检索；文档需完成处理、人工核对并发布后才生效。
   </div>
   <section class="admin-panel">
     <div class="admin-toolbar">
@@ -149,6 +151,7 @@ async function toggle(f: Faq) {
       />
     </div>
   </section>
+  <SupportDocumentsPanel />
   <el-dialog
     v-model="dialog"
     :title="detailId ? '编辑问答' : '新增问答'"

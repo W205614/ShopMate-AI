@@ -46,7 +46,10 @@ async function save() {
       throw Error("请填写商城名称和标语");
     });
   await run(async () => {
-    const value = await api.saveSettings({ ...form, version: baseline.value.version ?? 1 }, { ...baseline.value });
+    const value = await api.saveSettings(
+      { ...form, version: baseline.value.version ?? 1 },
+      { ...baseline.value },
+    );
     loadLatest(value.settings, value.revision);
   }, "商城信息已保存");
 }
@@ -122,8 +125,8 @@ async function save() {
       </dd>
       <dt>客服能力</dt>
       <dd>
-        基于商品、订单和 FAQ
-        的规则回复，未连接真实大模型。人工回复可在另一商城标签页查看。
+        AI
+        开启时支持多轮咨询、知识来源及待确认操作；关闭时提供规则回复。人工回复可在另一商城标签页查看。
       </dd>
       <dt>设备范围</dt>
       <dd>同一服务端支持跨浏览器访问，需各自登录。页面定期同步服务端数据。</dd>

@@ -81,6 +81,16 @@ for (const fault of ["响应丢失", "结果结构损坏"])
       .fill("响应丢失补货");
     const before = await state(page);
     const requests: unknown[][] = [];
+    // Hold read-only recovery until the unknown-result UI has been observed.
+    // A fast background lookup must not skip the state this scenario exercises.
+    let allowRecovery = false;
+    await page.route(
+      "**/api/requests/*?method=adjustStock&role=admin",
+      (route) =>
+        allowRecovery
+          ? route.continue()
+          : route.fulfill({ json: { found: false } }),
+    );
     await page.route("**/api/actions/adjustStock", async (route) => {
       requests.push(route.request().postDataJSON().args);
       await route.fetch();
@@ -104,6 +114,7 @@ for (const fault of ["响应丢失", "结果结构损坏"])
     await expect(
       dialog.getByLabel("调整数量（正数补货，负数盘亏）", { exact: true }),
     ).toBeDisabled();
+    allowRecovery = true;
     await page.reload();
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("该请求已完成");

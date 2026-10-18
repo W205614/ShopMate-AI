@@ -259,6 +259,9 @@ export const methods = {
     ]),
   },
   sendMessage: { role: "user", args: z.tuple([id, text(1000)]) },
+  confirmSupportProposal: { role: "user", args: z.tuple([id]) },
+  cancelSupportProposal: { role: "user", args: z.tuple([id]) },
+  retrySupportRun: { role: "user", args: z.tuple([id]) },
   transferConversation: { role: "user", args: z.tuple([id]) },
   saveProduct: { role: "admin", args: z.tuple([product]) },
   toggleProduct: {

@@ -22,6 +22,8 @@ import { context, admin, transact } from "./repository";
 import { commerceApi } from "./commerce";
 import { catalogApi } from "./catalog";
 import { supportApi } from "./support";
+import { registerSupportRoutes, supportCommands } from "./ai-support";
+import { ensureKnowledgeSchema, registerKnowledgeRoutes } from "./ai-knowledge";
 import { randomUUID } from "node:crypto";
 import { ensureRuntimeSchema, audit } from "./runtime";
 import { demand, methodPermission } from "./permissions";
@@ -98,6 +100,7 @@ export async function createApp(
   },
 ) {
   ensureRuntimeSchema(sql);
+  ensureKnowledgeSchema(sql);
   if (
     config.afterSaleDays !== undefined &&
     (!Number.isSafeInteger(config.afterSaleDays) ||
@@ -167,10 +170,14 @@ export async function createApp(
     const largeImage =
       req.path === "/api/actions/saveProduct" ||
       req.path === "/api/actions/saveCategory";
+    if (req.path.startsWith("/api/support/documents") && req.method === "POST")
+      demand(findSession(sql, req, "admin"), "support");
     if (largeImage && !findSession(sql, req, "admin"))
       return next(new HttpError(401, "请先登录管理账号"));
     return express.json({
-      limit: largeImage
+      limit: req.path.startsWith("/api/support/documents") && req.method === "POST"
+        ? "15mb"
+        : largeImage
         ? "8mb"
         : req.path.startsWith("/api/auth/")
           ? "4kb"
@@ -204,6 +211,8 @@ export async function createApp(
     });
   });
   registerReadRoutes(app, sql);
+  registerSupportRoutes(app, sql);
+  registerKnowledgeRoutes(app, sql);
   app.get("/api/products/:id/reviews", (req, res) => {
     const productId = String(req.params.id);
     const from = `FROM biz_reviews r JOIN order_items i ON i.id=json_extract(r.data,'$.orderItemId') JOIN biz_orders o ON o.key=r.order_id WHERE r.product_id=? AND i.product_id=r.product_id AND o.user_id=r.user_id AND coalesce(json_extract(r.data,'$.hidden'),0)=0 AND coalesce(json_extract(r.data,'$.deleted'),0)=0 AND i.refunded_quantity<i.quantity`;
@@ -370,6 +379,7 @@ export async function createApp(
     ...commerceApi,
     ...catalogApi,
     ...supportApi,
+    ...supportCommands,
     ...marketingApi,
     ...operationsApi,
     async resetDemo() {

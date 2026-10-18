@@ -77,6 +77,10 @@ export function commandReadScope(
     add(row?.order_id);
   };
   if (typeof first === "string") {
+    if (command.method === "confirmSupportProposal") {
+      const proposal = sql.prepare("SELECT args FROM support_proposals WHERE id=? AND user_id=?").get(first, user?.id ?? "");
+      if (proposal) add(JSON.parse(String(proposal.args)).orderId);
+    }
     if (
       [
         "payOrder",

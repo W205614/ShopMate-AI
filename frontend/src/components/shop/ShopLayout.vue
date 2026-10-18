@@ -48,6 +48,7 @@ function submit() {
         <Search :size="18" /><input
           v-model="search"
           aria-label="搜索商品"
+          maxlength="100"
           placeholder="想找点什么？"
         /><button type="submit" aria-label="提交搜索">
           <ArrowUpRight :size="19" />

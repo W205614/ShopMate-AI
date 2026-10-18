@@ -35,6 +35,7 @@ const listing = computed(() => {
   return getCollectionPage("orders");
 });
 const pages = computed(() => listing.value?.pages ?? 1);
+const total = computed(() => listing.value?.total ?? orders.value.length);
 const pageNumber = computed(() => listing.value?.page ?? 1);
 const visibleOrders = computed(() => orders.value);
 watch(
@@ -111,7 +112,7 @@ async function cancel(id: string) {
         placeholder="搜索订单号或商品名称"
         maxlength="100"
       /><button class="button">搜索订单</button
-      ><span class="secondary">共 {{ orders.length }} 笔订单</span>
+      ><span class="secondary">共 {{ total }} 笔订单</span>
     </form>
     <ActionNotice :error="error" :notice="notice" />
     <div v-if="orders.length" class="orders-list">

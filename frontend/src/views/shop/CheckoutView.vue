@@ -230,12 +230,27 @@ function edit(address?: Address) {
   editing.value = true;
 }
 async function saveAddress(input: AddressInput) {
+  if (saving.value) return;
+  const previousIds = new Set(shop.myAddresses.map((address) => address.id));
   saving.value = true;
   error.value = "";
   try {
     await api.saveAddress(input);
+    const saved = shop.myAddresses.find((address) =>
+      input.id
+        ? address.id === input.id
+        : !previousIds.has(address.id) &&
+          address.name === input.name.trim() &&
+          address.phone === input.phone.trim() &&
+          address.region === input.region.trim() &&
+          address.detail === input.detail.trim() &&
+          address.province === input.province?.trim(),
+    );
+    if (saved) addressId.value = saved.id;
     editing.value = false;
-    notice.value = "收货地址已保存，请确认更新后的报价。";
+    notice.value = saved
+      ? "收货地址已保存并选中，请确认更新后的地址与报价。"
+      : "收货地址已保存，请选择收货地址并确认报价。";
   } catch (e) {
     error.value = e instanceof Error ? e.message : "保存地址失败";
   } finally {
@@ -342,6 +357,8 @@ async function submit() {
     !quote.value ||
     expired.value ||
     submitting.value ||
+    saving.value ||
+    editing.value ||
     quoting.value ||
     recovery.value ||
     selectedCouponReason.value ||
@@ -574,6 +591,7 @@ watch(
             submitting ||
             quoting ||
             saving ||
+            editing ||
             !quote ||
             expired ||
             stale ||

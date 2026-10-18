@@ -111,6 +111,7 @@ function applyPrices() {
       <Search :size="21" /><input
         v-model="q"
         aria-label="搜索商品关键词"
+        maxlength="100"
         placeholder="搜索商品、材质或用途"
       />
       <button class="button" type="submit">搜索</button>

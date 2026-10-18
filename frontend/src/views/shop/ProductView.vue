@@ -69,9 +69,9 @@ watch(
     notice.value = "";
   },
 );
-function requireLogin() {
+function requireLogin(redirect = route.fullPath) {
   if (shop.user) return true;
-  router.push({ path: "/login", query: { redirect: route.fullPath } });
+  router.push({ path: "/login", query: { redirect } });
   return false;
 }
 function selectSku(id: string) {
@@ -86,7 +86,7 @@ async function add() {
   );
 }
 function buyNow() {
-  if (!requireLogin() || !product.value || !sku.value) return;
+  if (!product.value?.active || !sku.value) return;
   if (
     !Number.isInteger(quantity.value) ||
     quantity.value < 1 ||
@@ -95,7 +95,7 @@ function buyNow() {
     error.value = "请选择库存范围内的整数数量";
     return;
   }
-  router.push({
+  const destination = router.resolve({
     path: "/checkout",
     query: {
       productId: product.value.id,
@@ -103,6 +103,7 @@ function buyNow() {
       quantity: String(quantity.value),
     },
   });
+  if (requireLogin(destination.fullPath)) router.push(destination.fullPath);
 }
 async function toggleFavorite() {
   if (requireLogin() && product.value)
@@ -234,7 +235,7 @@ async function toggleFavorite() {
           <details>
             <summary>配送与收货</summary>
             <p>
-              本演示免运费。提交订单后，可在管理端填写模拟快递信息并发货；不会产生真实包裹。
+              配送费按收货省份和配送规则核算，以结算页报价为准。提交订单后，可在管理端填写模拟快递信息并发货；不会产生真实包裹。
             </p>
           </details>
           <details>

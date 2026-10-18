@@ -199,6 +199,18 @@ const router = createRouter({
   ],
 });
 router.beforeEach(async (to) => {
+  // Keep shared/search URLs within the same limit as the search fields and API.
+  if (
+    to.path === "/products" &&
+    typeof to.query.q === "string" &&
+    to.query.q.trim().length > 100
+  )
+    return {
+      path: to.path,
+      query: { ...to.query, q: to.query.q.trim().slice(0, 100) },
+      hash: to.hash,
+      replace: true,
+    };
   document.title = `${String(to.meta.title ?? "商城")} · ShopMate-AI`;
   const role = to.meta.auth;
   setRouteScope(to.path, to.query);

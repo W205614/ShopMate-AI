@@ -141,6 +141,21 @@ test("超长搜索链接规范化，两个搜索入口均限制长度且页面�
     }),
   ).toBeVisible();
   expect(new URL(page.url()).searchParams.get("q")).toHaveLength(100);
+  await page.goto(`/products?q=${encodeURIComponent("无".repeat(101))}&q=耳机`);
+  await expect(
+    page.getByRole("heading", {
+      name: `搜索：${"无".repeat(100)}`,
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.getAll("q")).toEqual([
+    "无".repeat(100),
+  ]);
+  await page.goto(`/products?q=${encodeURIComponent("a".repeat(99) + "😀")}`);
+  await expect(
+    page.getByRole("heading", { name: `搜索：${"a".repeat(99)}`, exact: true }),
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("q")).toBe("a".repeat(99));
   await expect(
     page.getByRole("textbox", { name: "搜索商品", exact: true }),
   ).toHaveAttribute("maxlength", "100");

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { queryText } from "./domain/catalogue";
 import {
   getSession,
   refreshState,
@@ -200,14 +201,18 @@ const router = createRouter({
 });
 router.beforeEach(async (to) => {
   // Keep shared/search URLs within the same limit as the search fields and API.
+  const keyword = queryText(to.query.q).trim();
   if (
     to.path === "/products" &&
-    typeof to.query.q === "string" &&
-    to.query.q.trim().length > 100
+    (Array.isArray(to.query.q) || keyword.length > 100)
   )
     return {
       path: to.path,
-      query: { ...to.query, q: to.query.q.trim().slice(0, 100) },
+      query: {
+        ...to.query,
+        // Avoid leaving half an emoji at the API's UTF-16 length boundary.
+        q: keyword.slice(0, 100).replace(/[\uD800-\uDBFF]$/, "") || undefined,
+      },
       hash: to.hash,
       replace: true,
     };

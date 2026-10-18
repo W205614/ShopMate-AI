@@ -1,3 +1,5 @@
+import { checkVersion } from "./versions";
+import { reservedStock } from "./commerce-rules";
 import type { ShopApi } from "../../shared/domain/api";
 import { validateImages } from "../../shared/domain/images";
 import { HttpError } from "./auth";
@@ -54,6 +56,7 @@ export const catalogApi: Pick<
         ? db.products.find((p) => p.id === input.id)
         : undefined;
       requireThat(!input.id || existing, "商品不存在");
+      if (existing) checkVersion(existing, input.version);
       const productId = existing?.id ?? id("p-");
       const existingSkuIds = new Set(existing?.skus.map((s) => s.id) ?? []);
       const usedIds = new Set<string>();
@@ -79,7 +82,12 @@ export const catalogApi: Pick<
           existing.skus.every((s) => skus.some((n) => n.id === s.id)),
         "已有规格请保留，可调整名称和价格；库存通过库存管理处理",
       );
-      const value = { ...clone(input), id: productId, skus };
+      const value = {
+        ...clone(input),
+        id: productId,
+        skus,
+        version: (existing?.version ?? (existing ? 1 : 0)) + 1,
+      };
       if (existing) Object.assign(existing, value);
       else db.products.unshift(value);
       for (const sku of skus)
@@ -96,12 +104,14 @@ export const catalogApi: Pick<
         }
     });
   },
-  async toggleProduct(productId) {
+  async toggleProduct(productId, active, version) {
     await transact((db) => {
       admin();
       const p = db.products.find((p) => p.id === productId);
       requireThat(p, "商品不存在");
-      p.active = !p.active;
+      checkVersion(p, version);
+      p.active = active ?? !p.active;
+      p.version = (p.version ?? 1) + 1;
     });
   },
   async saveCategory(input) {
@@ -128,18 +138,23 @@ export const catalogApi: Pick<
         ? db.categories.find((c) => c.id === input.id)
         : undefined;
       requireThat(!input.id || old, "分类不存在");
+      if (old) checkVersion(old, input.version);
       const value = {
         ...input,
         name: input.name.trim(),
         id: old?.id ?? id("cat-"),
+        version: (old?.version ?? (old ? 1 : 0)) + 1,
       };
       if (old) Object.assign(old, value);
       else db.categories.push(value);
     });
   },
-  async deleteCategory(categoryId) {
+  async deleteCategory(categoryId, version) {
     await transact((db) => {
       admin();
+      const category = db.categories.find((c) => c.id === categoryId);
+      requireThat(category, "分类不存在");
+      checkVersion(category, version);
       requireThat(
         !db.products.some((p) => p.categoryId === categoryId),
         "该分类仍有关联商品，请先调整商品分类",
@@ -205,6 +220,10 @@ export const catalogApi: Pick<
         );
       const delta = mode === "count" ? quantity - beforeStock : quantity;
       requireThat(delta > 0 || cost === 0, "库存减少不能记录采购支出");
+      requireThat(
+        beforeStock + delta >= reservedStock(db, productId, skuId),
+        "库存不能低于已预占数量",
+      );
       const movement = move(db, productId, skuId, delta, reason.trim());
       Object.assign(movement, { beforeStock, afterStock: sku.stock, mode });
       if (mode === "delta" && delta > 0 && cost > 0)
@@ -247,7 +266,11 @@ export const catalogApi: Pick<
           409,
           "设置已被其他页面修改，请加载最新设置后重新编辑",
         );
-      db.settings = clone(input);
+      checkVersion(db.settings, baseline.version);
+      db.settings = {
+        ...clone(input),
+        version: (db.settings.version ?? 1) + 1,
+      };
       return { settings: clone(db.settings), revision: db.revision + 1 };
     });
   },

@@ -34,7 +34,7 @@ export interface ShopApi {
   reorder(id: string): Promise<ReorderResult>;
   saveCoupon(input: CouponInput): Promise<void>;
   claimCoupon(id: string): Promise<void>;
-  toggleCoupon(id: string): Promise<void>;
+  toggleCoupon(id: string, active?: boolean, version?: number): Promise<void>;
   submitReview(input: {
     orderId: string;
     orderItemId: string;
@@ -51,7 +51,7 @@ export interface ShopApi {
     patch: { quantity?: number; selected?: boolean },
   ): Promise<void>;
   removeCart(id: string): Promise<void>;
-  favorite(productId: string): Promise<void>;
+  favorite(productId: string, desired?: boolean): Promise<void>;
   saveAddress(input: AddressInput): Promise<void>;
   deleteAddress(id: string): Promise<void>;
   createOrder(input: { quoteId: string; requestId: string }): Promise<string>;
@@ -73,9 +73,9 @@ export interface ShopApi {
     lines: { orderItemId: string; quantity: number }[],
   ): Promise<void>;
   saveProduct(input: ProductInput): Promise<void>;
-  toggleProduct(id: string): Promise<void>;
+  toggleProduct(id: string, active?: boolean, version?: number): Promise<void>;
   saveCategory(input: CategoryInput): Promise<void>;
-  deleteCategory(id: string): Promise<void>;
+  deleteCategory(id: string, version?: number): Promise<void>;
   adjustStock(
     productId: string,
     skuId: string,

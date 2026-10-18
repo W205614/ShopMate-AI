@@ -110,7 +110,7 @@ it("盘点校验冻结基线，重试已完成盘点优先返回原结果且不�
   });
   expect(db().ledger).toEqual(before.ledger);
 });
-it("销售先完成后陈旧盘点被拒绝，盘点先完成后销售按新库存校验", async () => {
+it("销售后陈旧盘点被拒绝，已预占订单不能被盘点归零破坏", async () => {
   async function order() {
     return context.run({ sql, ...sessions }, async () => {
       const quote = await commerceApi.quoteCheckout({
@@ -151,10 +151,10 @@ it("销售先完成后陈旧盘点被拒绝，盘点先完成后销售按新库�
     }),
     context.run({ sql, ...sessions }, () => commerceApi.payOrder(second)),
   ]);
-  expect(next.map((r) => r.status)).toEqual(["fulfilled", "rejected"]);
-  expect(quantity()).toBe(0);
-  expect(db().orders.find((o) => o.id === second)!.status).toBe("pending");
-  expect(db().ledger.filter((l) => l.reference === second)).toHaveLength(0);
+  expect(next.map((r) => r.status)).toEqual(["rejected", "fulfilled"]);
+  expect(quantity()).toBe(stock - 2);
+  expect(db().orders.find((o) => o.id === second)!.status).toBe("paid");
+  expect(db().ledger.filter((l) => l.reference === second)).toHaveLength(1);
 });
 it("盘点/增量的非法数量金额和基线失败时不留下请求或流水", async () => {
   const before = db();
@@ -204,7 +204,7 @@ it("幂等记录 24 小时清理，历史变动和采购流水保留；管理员
   }
 });
 it("库存 HTTP 兼容五参数、校验扩展参数并隔离管理员请求记录", async () => {
-  const app = await createApp(sql, { origins: ["http://localhost"] });
+  const app = await createApp(sql, { origins: ["http://localhost"], allowLegacyCommands: true });
   await createAccount(
     sql,
     {

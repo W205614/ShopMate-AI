@@ -71,12 +71,13 @@ const filtered = computed(() =>
         b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
     ),
 );
-const { page, rows } = useAdminPagination(filtered, filters);
+const { page, rows, total } = useAdminPagination(filtered, filters);
 const selected = computed(() =>
   shop.db.orders.find((o) => o.id === selectedId.value),
 );
 function canShip(order: Order) {
   return (
+    shop.adminSession?.permissions?.includes("warehouse") &&
     order.status === "paid" &&
     order.items.some((item) => item.quantity > item.refundedQuantity) &&
     !shop.db.afterSales.some(
@@ -150,7 +151,7 @@ async function submit() {
         "
         >重置筛选</el-button
       >
-      <span class="admin-note">{{ filtered.length }} 笔订单</span>
+      <span class="admin-note">{{ total }} 笔订单</span>
     </div>
     <el-alert
       v-if="dateError"
@@ -216,7 +217,7 @@ async function submit() {
       <el-pagination
         v-model:current-page="page"
         :page-size="10"
-        :total="filtered.length"
+        :total="total"
         layout="prev,pager,next,total"
       />
     </div>

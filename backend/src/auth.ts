@@ -9,22 +9,23 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Request, Response } from "express";
 import type { Role, Session } from "../../shared/domain/types";
 import { readDatabase, transaction, writeDatabase } from "./database";
+import { BoundedQueue, ensureRuntimeSchema } from "./runtime";
+import { grants } from "./permissions";
+import type { StaffRole } from "../../shared/domain/operations";
 
-export class HttpError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import { HttpError } from "./errors";
+export { HttpError } from "./errors";
 export type Account = Session & { username: string; password_hash: string };
 const options = { N: 131072, r: 8, p: 1, maxmem: 160 * 1024 * 1024 };
+export const passwordQueue = new BoundedQueue(2, 8);
 const digest = (password: string, salt: string) =>
-  new Promise<Buffer>((resolve, reject) =>
-    scrypt(password, salt, 64, options, (error, key) =>
-      error ? reject(error) : resolve(key),
-    ),
+  passwordQueue.run(
+    () =>
+      new Promise<Buffer>((resolve, reject) =>
+        scrypt(password, salt, 64, options, (error, key) =>
+          error ? reject(error) : resolve(key),
+        ),
+      ),
   );
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -32,6 +33,7 @@ export async function hashPassword(password: string) {
 }
 export async function checkPassword(password: string, encoded: string) {
   const [, salt, hash] = encoded.split("$");
+  if (!salt || !hash || !/^[a-f0-9]{128}$/.test(hash)) return false;
   const actual = await digest(password, salt);
   return timingSafeEqual(actual, Buffer.from(hash, "hex"));
 }
@@ -56,7 +58,17 @@ export function findSession(
     WHERE s.token_hash=? AND s.expires_at>? AND a.role=?`,
     )
     .get(tokenHash(tokenFrom(req, role)), Date.now(), role);
-  return row ? (row as unknown as Session) : null;
+  if (!row) return null;
+  const session = row as unknown as Session;
+  if (role === "admin") {
+    const access = sql
+      .prepare("SELECT staff_role, active FROM staff_access WHERE account_id=?")
+      .get(session.id) as { staff_role: StaffRole; active: number } | undefined;
+    if (access && !access.active) return null;
+    session.staffRole = access?.staff_role ?? "owner";
+    session.permissions = grants[session.staffRole];
+  }
+  return session;
 }
 export function issueSession(
   sql: DatabaseSync,
@@ -121,6 +133,7 @@ export async function createAccount(
   input: { username: string; password: string; name: string },
   role: Role = "user",
 ) {
+  ensureRuntimeSchema(sql);
   const passwordHash = await hashPassword(input.password);
   const account = {
     id: randomUUID(),

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowUpRight,
@@ -10,7 +10,8 @@ import {
 } from "lucide-vue-next";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
-import { money } from "../../domain/types";
+import { request } from "../../services/repository";
+import { money, type Product } from "../../domain/types";
 import { useAction } from "../../components/shop/useAction";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import ProductCard from "../../components/shop/ProductCard.vue";
@@ -32,17 +33,32 @@ const product = computed(() =>
   ),
   favorite = computed(
     () => !!shop.db.favorites[shop.userId]?.includes(String(route.params.id)),
-  ),
-  related = computed(() =>
-    shop.db.products
-      .filter(
-        (p) =>
-          p.active &&
-          p.categoryId === product.value?.categoryId &&
-          p.id !== product.value?.id,
-      )
-      .slice(0, 4),
   );
+const related = ref<Product[]>([]);
+let recommendationSequence = 0;
+watch(
+  [() => product.value?.id, () => product.value?.categoryId],
+  async ([id, category]) => {
+    const current = ++recommendationSequence;
+    related.value = [];
+    if (!id || !category) return;
+    try {
+      const result = await request<{ items: Product[] }>(
+        `/api/collections/products?role=user&category=${encodeURIComponent(category)}&pageSize=5`,
+      );
+      if (current === recommendationSequence && product.value?.id === id)
+        related.value = result.items
+          .filter((item) => item.active && item.id !== id)
+          .slice(0, 4);
+    } catch {
+      // A recommendation failure must not prevent purchasing the current product.
+    }
+  },
+  { immediate: true },
+);
+onUnmounted(() => {
+  recommendationSequence++;
+});
 watch(
   () => route.params.id,
   () => {
@@ -91,7 +107,7 @@ function buyNow() {
 async function toggleFavorite() {
   if (requireLogin() && product.value)
     await run(
-      () => api.favorite(product.value!.id),
+      () => api.favorite(product.value!.id, !favorite.value),
       favorite.value ? "已取消收藏" : "已加入收藏",
     );
 }
@@ -151,7 +167,7 @@ async function toggleFavorite() {
             </button>
           </div>
           <p class="secondary">
-            {{ sku?.stock ? `当前库存 ${sku.stock} 件` : "当前规格暂时售罄" }}
+            {{ sku?.stock ? `当前可售 ${sku.stock} 件` : "当前规格暂时售罄" }}
           </p>
         </div>
         <div class="quantity-row">

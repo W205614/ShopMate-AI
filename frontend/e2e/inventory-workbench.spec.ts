@@ -233,7 +233,7 @@ test("库存提交成功后同步中断仍确认成功，恢复不重复补货",
   const before = await state(page);
   let blocked = false,
     writes = 0;
-  await page.route("**/api/state?role=admin", (route) =>
+  await page.route("**/api/bootstrap?role=admin", (route) =>
     blocked
       ? route.fulfill({ status: 503, json: { message: "库存同步故障" } })
       : route.continue(),

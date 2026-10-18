@@ -29,7 +29,7 @@ const filtered = computed(() =>
         f.keywords.some((k) => k.includes(query.value))),
   ),
 );
-const { page, rows } = useAdminPagination(filtered, filters);
+const { page, rows, total } = useAdminPagination(filtered, filters);
 const { dialog, detailId, missing, open, capture, finish, assertCurrent } =
   useAdminEditor(
     computed(() => shop.db.faqs),
@@ -107,7 +107,7 @@ async function toggle(f: Faq) {
         ><el-option label="已启用" value="active" /><el-option
           label="已停用"
           value="inactive" /></el-select
-      ><span class="admin-note">{{ filtered.length }} 条问答</span>
+      ><span class="admin-note">{{ total }} 条问答</span>
     </div>
     <el-table :data="rows" empty-text="暂无匹配的问答"
       ><el-table-column
@@ -144,7 +144,7 @@ async function toggle(f: Faq) {
       <el-pagination
         v-model:current-page="page"
         :page-size="10"
-        :total="filtered.length"
+        :total="total"
         layout="prev,pager,next,total"
       />
     </div>

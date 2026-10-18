@@ -3,6 +3,7 @@ import { computed, ref, watch, nextTick, onUnmounted } from "vue";
 import { ElMessageBox } from "element-plus";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
+import { request } from "../../services/repository";
 import { dateTime } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 import { useAdminQuery, useAdminPagination } from "./useAdminList";
@@ -67,9 +68,12 @@ const labels = {
   roles = { user: "用户", assistant: "模拟客服", agent: "人工客服" };
 const allConversations = computed(() =>
   [...shop.db.conversations].sort((a, b) => {
-    if (a.status === "waiting" && b.status !== "waiting") return -1;
-    if (b.status === "waiting" && a.status !== "waiting") return 1;
-    return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
+    const priority = { waiting: 0, human: 1, bot: 2, closed: 3 };
+    return (
+      priority[a.status] - priority[b.status] ||
+      b.createdAt.localeCompare(a.createdAt) ||
+      b.id.localeCompare(a.id)
+    );
   }),
 );
 const conversations = computed(() =>
@@ -87,10 +91,11 @@ const conversations = computed(() =>
         )),
   ),
 );
-const { page: storedPage, rows: visibleConversations } = useAdminPagination(
-  conversations,
-  filters,
-);
+const {
+  page: storedPage,
+  rows: visibleConversations,
+  total,
+} = useAdminPagination(conversations, filters);
 const page = computed({
   get: () => storedPage.value,
   set: (value) => {
@@ -105,20 +110,21 @@ const selected = computed(() =>
 const target = computed(() =>
   shop.db.conversations.find((c) => c.id === detailId.value),
 );
-function locate() {
-  const index = allConversations.value.findIndex(
-    (c) => c.id === selectedId.value,
-  );
-  if (index < 0) return;
-  const nextPage = Math.floor(index / 10) + 1;
-  void filters
-    .update({
+async function locate() {
+  const id = selectedId.value;
+  if (!id) return;
+  await run(async () => {
+    const result = await request<{ page: number; located: boolean }>(
+      `/api/collections/conversations?role=admin&locate=${encodeURIComponent(id)}&pageSize=10`,
+    );
+    if (!result.located) throw new Error("目标会话已不存在，请重新读取列表");
+    await filters.update({
       q: "",
       status: "",
-      page: nextPage > 1 ? String(nextPage) : "",
-      detail: selectedId.value,
-    })
-    .catch(() => undefined);
+      page: result.page > 1 ? String(result.page) : "",
+      detail: id,
+    });
+  }, "已定位会话");
 }
 const text = computed({
   get: () => (selected.value ? (drafts.value[selected.value.id] ?? "") : ""),
@@ -264,7 +270,7 @@ async function close() {
         v-model:current-page="page"
         size="small"
         :page-size="10"
-        :total="conversations.length"
+        :total="total"
         layout="prev,pager,next"
       />
     </aside>

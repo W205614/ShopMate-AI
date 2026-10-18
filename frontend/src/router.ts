@@ -4,6 +4,7 @@ import {
   refreshState,
   getSyncStatus,
   hasConfirmedLogout,
+  setRouteScope,
 } from "./services/api";
 
 const router = createRouter({
@@ -97,6 +98,16 @@ const router = createRouter({
           meta: { title: "购物与服务咨询", auth: "user" },
         },
         {
+          path: "notifications",
+          component: () => import("./views/shop/MemberView.vue"),
+          meta: { title: "站内通知", auth: "user" },
+        },
+        {
+          path: "points",
+          component: () => import("./views/shop/MemberView.vue"),
+          meta: { title: "会员积分", auth: "user" },
+        },
+        {
           path: "credits",
           component: () => import("./views/CreditsView.vue"),
           meta: { title: "素材与演示说明" },
@@ -164,6 +175,11 @@ const router = createRouter({
           meta: { title: "FAQ 管理" },
         },
         {
+          path: "operations",
+          component: () => import("./views/admin/OperationsAdminView.vue"),
+          meta: { title: "经营工作台" },
+        },
+        {
           path: "settings",
           component: () => import("./views/admin/SettingsAdminView.vue"),
           meta: { title: "演示设置" },
@@ -185,6 +201,7 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   document.title = `${String(to.meta.title ?? "商城")} · ShopMate-AI`;
   const role = to.meta.auth;
+  setRouteScope(to.path, to.query);
   try {
     await refreshState(to.path.startsWith("/admin") ? "admin" : "user");
   } catch {
@@ -199,5 +216,31 @@ router.beforeEach(async (to) => {
       path: role === "admin" ? "/admin/login" : "/login",
       query: { redirect: to.fullPath },
     };
+  if (
+    role === "admin" &&
+    getSession("admin") &&
+    !canOpenAdminPath(to.path, getSession("admin")?.permissions ?? [])
+  )
+    return "/forbidden";
 });
+export function canOpenAdminPath(path: string, permissions: string[]) {
+  const section = path.split("/")[2] ?? "";
+  const required: Record<string, string[]> = {
+    products: ["catalog"],
+    categories: ["catalog"],
+    inventory: ["warehouse"],
+    orders: ["warehouse", "support", "finance"],
+    "after-sales": ["warehouse", "support", "finance"],
+    finance: ["finance"],
+    coupons: ["marketing"],
+    reviews: ["catalog", "support"],
+    support: ["support"],
+    knowledge: ["support"],
+    settings: ["settings"],
+  };
+  return (
+    !required[section] ||
+    required[section].some((permission) => permissions.includes(permission))
+  );
+}
 export default router;

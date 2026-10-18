@@ -2,15 +2,20 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import {
-  initialDatabase,
-  openDatabase,
-  readDatabase,
-  writeDatabase,
-} from "../src/database";
+import { DatabaseSync } from "node:sqlite";
+import { initialDatabase, openDatabase, readDatabase } from "../src/database";
 import { createSeed } from "../../shared/domain/seed";
 import { migrateDatabase } from "../src/migration";
 import type { Database } from "../../shared/domain/types";
+
+function legacyFile(path: string, db: Database) {
+  const sql = new DatabaseSync(path);
+  sql.exec(`CREATE TABLE accounts(id TEXT PRIMARY KEY,username TEXT NOT NULL UNIQUE COLLATE NOCASE,name TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('user','admin')),password_hash TEXT NOT NULL,created_at INTEGER NOT NULL);
+    CREATE TABLE sessions(token_hash TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES accounts(id),expires_at INTEGER NOT NULL);
+    CREATE TABLE state(id INTEGER PRIMARY KEY CHECK(id=1),data TEXT NOT NULL);`);
+  sql.prepare("INSERT INTO state VALUES(1,?)").run(JSON.stringify(db));
+  return sql;
+}
 
 function legacyState(): Database {
   const db = createSeed();
@@ -44,14 +49,13 @@ describe("v1 业务状态升级", () => {
   it("v2 仅增量增加库存请求集合，不改旧业务，重启及恢复稳定", () => {
     const directory = mkdtempSync(join(tmpdir(), "shopmate-stock-migration-"));
     const path = join(directory, "v2.sqlite");
-    let sql = openDatabase(path);
+    const old = createSeed();
+    old.version = 2;
+    Reflect.deleteProperty(old, "inventoryRequests");
+    old.orders.find((o) => o.status === "pending")!.expiresAt =
+      "2026-10-01T00:00:00Z";
+    let sql = legacyFile(path, old);
     try {
-      const old = createSeed();
-      old.version = 2;
-      Reflect.deleteProperty(old, "inventoryRequests");
-      old.orders.find((o) => o.status === "pending")!.expiresAt =
-        "2026-10-01T00:00:00Z";
-      writeDatabase(sql, old);
       sql
         .prepare("INSERT INTO accounts VALUES (?, ?, ?, ?, ?, ?)")
         .run("u1", "lin", "旧用户", "user", "kept-hash", 1000);
@@ -62,7 +66,19 @@ describe("v1 业务状态升级", () => {
       copyFileSync(path, join(directory, "backup.sqlite"));
       sql = openDatabase(path);
       const migrated = readDatabase(sql);
-      expect(migrated).toEqual({ ...old, version: 3, inventoryRequests: [] });
+      const expected = structuredClone(old);
+      migrateDatabase(expected);
+      expect(migrated).toEqual(expected);
+      expect(
+        (
+          sql.prepare("SELECT data FROM state WHERE id=1").get() as {
+            data: string;
+          }
+        ).data,
+      ).toBe(JSON.stringify(old));
+      expect(() => sql.prepare("UPDATE state SET data='{}'").run()).toThrow(
+        "read-only",
+      );
       expect(
         sql.prepare("SELECT password_hash FROM accounts WHERE id='u1'").get(),
       ).toMatchObject({ password_hash: "kept-hash" });
@@ -89,7 +105,7 @@ describe("v1 业务状态升级", () => {
   });
   it("拒绝未来版本状态，避免旧程序覆盖新结构", () => {
     const db = createSeed();
-    db.version = 4;
+    db.version = 5;
     const before = structuredClone(db);
     expect(() => migrateDatabase(db)).toThrow("版本高于");
     expect(db).toEqual(before);
@@ -97,22 +113,21 @@ describe("v1 业务状态升级", () => {
   it("保留账号、会话、金额、流水和库存，稳定行 ID，重复启动不延长旧待付款期限", () => {
     const directory = mkdtempSync(join(tmpdir(), "shopmate-migration-"));
     const path = join(directory, "old.sqlite");
-    let sql = openDatabase(path);
+    const legacy = legacyState();
+    let sql = legacyFile(path, legacy);
     try {
-      const legacy = legacyState();
       sql
         .prepare("INSERT INTO accounts VALUES (?, ?, ?, ?, ?, ?)")
         .run("u1", "lin", "林小满", "user", "retained-password-hash", 1000);
       sql
         .prepare("INSERT INTO sessions VALUES (?, ?, ?)")
         .run("retained-token-hash", "u1", Date.now() + 86400000);
-      writeDatabase(sql, legacy);
       sql.close();
       copyFileSync(path, join(directory, "backup.sqlite"));
       const start = Date.now();
       sql = openDatabase(path);
       const migrated = readDatabase(sql);
-      expect(migrated.version).toBe(3);
+      expect(migrated.version).toBe(4);
       expect(migrated.orders.map((o) => o.total)).toEqual(
         legacy.orders.map((o) => o.total),
       );

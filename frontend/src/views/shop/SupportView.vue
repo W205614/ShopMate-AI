@@ -1,26 +1,27 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import CollectionPager from "../../components/shop/CollectionPager.vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   Send,
   Plus,
   ArrowUpRight,
   UserRound,
   MessageCircle,
-} from 'lucide-vue-next'
-import { useShop } from '../../stores/shop'
-import { api } from '../../services/api'
-import { dateTime, orderLabels, money } from '../../domain/types'
-import ProductCard from '../../components/shop/ProductCard.vue'
-import ActionNotice from '../../components/shop/ActionNotice.vue'
-import { useAction } from '../../components/shop/useAction'
+} from "lucide-vue-next";
+import { useShop } from "../../stores/shop";
+import { api } from "../../services/api";
+import { dateTime, orderLabels, money } from "../../domain/types";
+import ProductCard from "../../components/shop/ProductCard.vue";
+import ActionNotice from "../../components/shop/ActionNotice.vue";
+import { useAction } from "../../components/shop/useAction";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter(),
-  activeId = ref(''),
-  text = ref(''),
+  activeId = ref(""),
+  text = ref(""),
   messagesEl = ref<HTMLElement>(),
-  { busy, pending, error, notice, run } = useAction()
+  { busy, pending, error, notice, run } = useAction();
 const conversations = computed(() =>
     shop.db.conversations
       .filter((c) => c.userId === shop.userId)
@@ -34,74 +35,75 @@ const conversations = computed(() =>
   ),
   order = computed(() =>
     shop.myOrders.find((o) => o.id === conversation.value?.orderId),
-  )
+  );
 const statusLabels = {
-  bot: '模拟客服',
-  waiting: '等待人工接入',
-  human: '人工服务中',
-  closed: '会话已结束',
-}
+  bot: "模拟客服",
+  waiting: "等待人工接入",
+  human: "人工服务中",
+  closed: "会话已结束",
+};
 async function start(context?: { productId?: string; orderId?: string }) {
   if (!shop.user) {
-    await router.push({ path: '/login', query: { redirect: route.fullPath } })
-    return
+    await router.push({ path: "/login", query: { redirect: route.fullPath } });
+    return;
   }
   await run(async () => {
-    activeId.value = await api.createConversation(context)
-  })
+    activeId.value = await api.createConversation(context);
+  });
 }
 function transfer() {
   return run(
     () => api.transferConversation(activeId.value),
-    '已提交转人工，请在管理端客服工作台接入。',
-  )
+    "已提交转人工，请在管理端客服工作台接入。",
+  );
 }
 async function initialize() {
-  const productId = String(route.query.productId ?? ''),
-    orderId = String(route.query.orderId ?? '')
+  const productId = String(route.query.productId ?? ""),
+    orderId = String(route.query.orderId ?? "");
   if (productId || orderId) {
     const existing = conversations.value.find(
       (c) =>
-        c.status !== 'closed' &&
+        c.status !== "closed" &&
         c.productId === (productId || undefined) &&
         c.orderId === (orderId || undefined),
-    )
-    if (existing) activeId.value = existing.id
+    );
+    if (existing) activeId.value = existing.id;
     else
       await start({
         productId: productId || undefined,
         orderId: orderId || undefined,
-      })
-  } else if (!activeId.value) activeId.value = conversations.value[0]?.id ?? ''
+      });
+  } else if (!activeId.value) activeId.value = conversations.value[0]?.id ?? "";
 }
-onMounted(initialize)
-watch(() => route.query, initialize)
+onMounted(initialize);
+watch(() => route.query, initialize);
 watch(
   () => conversation.value?.messages.length,
   async () => {
-    await nextTick()
+    await nextTick();
     messagesEl.value?.scrollTo({
       top: messagesEl.value.scrollHeight,
-      behavior: 'smooth',
-    })
+      behavior: "smooth",
+    });
   },
-)
+);
 async function send(value?: string) {
-  const content = (value ?? text.value).trim()
-  if (!content) return
+  const content = (value ?? text.value).trim();
+  if (!content) return;
   if (!conversation.value) {
     if (!shop.user) {
-      await router.push({ path: '/login', query: { redirect: '/support' } })
-      return
+      await router.push({ path: "/login", query: { redirect: "/support" } });
+      return;
     }
     if (
       !(await run(async () => {
-        activeId.value = await api.createConversation()
+        activeId.value = await api.createConversation();
       }))
     )
-      return
+      return;
   }
-  if (await run(() => api.sendMessage(activeId.value, content))) text.value = ''
+  if (await run(() => api.sendMessage(activeId.value, content)))
+    text.value = "";
 }
 </script>
 <template>
@@ -149,14 +151,17 @@ async function send(value?: string) {
           还没有会话，从一个问题开始。
         </p>
       </aside>
-      <section class="chat-panel" :class="{ 'has-conversation': !!conversation }">
+      <section
+        class="chat-panel"
+        :class="{ 'has-conversation': !!conversation }"
+      >
         <header class="chat-header">
           <div>
-            <h2>{{ conversation?.title ?? '今天想了解什么？' }}</h2>
+            <h2>{{ conversation?.title ?? "今天想了解什么？" }}</h2>
             <span class="secondary">{{
               conversation
                 ? statusLabels[conversation.status]
-                : '规则匹配演示 · 未连接大模型'
+                : "规则匹配演示 · 未连接大模型"
             }}</span>
           </div>
           <button
@@ -199,11 +204,11 @@ async function send(value?: string) {
               </div>
               <div class="message-content">
                 <span class="message-author">{{
-                  m.role === 'user'
+                  m.role === "user"
                     ? shop.user?.name
-                    : m.role === 'agent'
-                      ? '人工客服'
-                      : '模拟客服'
+                    : m.role === "agent"
+                      ? "人工客服"
+                      : "模拟客服"
                 }}</span>
                 <p>{{ m.text }}</p>
                 <div v-if="m.productIds?.length" class="chat-recommendations">
@@ -267,7 +272,7 @@ async function send(value?: string) {
             :disabled="busy || !text.trim()"
             aria-label="发送消息"
           >
-            <Send :size="18" /><span>{{ pending ? '发送中' : '发送' }}</span>
+            <Send :size="18" /><span>{{ pending ? "发送中" : "发送" }}</span>
           </button>
         </form>
         <div v-else class="chat-closed">
@@ -279,5 +284,6 @@ async function send(value?: string) {
         </p>
       </section>
     </div>
+    <CollectionPager />
   </div>
 </template>

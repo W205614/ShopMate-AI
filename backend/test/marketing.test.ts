@@ -8,7 +8,7 @@ import { createSeed } from "../../shared/domain/seed";
 import { marketingApi, publicReviews } from "../src/marketing";
 import { commerceApi } from "../src/commerce";
 import { context } from "../src/repository";
-import type { Session } from "../../shared/domain/types";
+import type { Database, Session } from "../../shared/domain/types";
 
 let sql: DatabaseSync, server: Server, base: string;
 const headers = {
@@ -32,7 +32,7 @@ async function snapshot(cookie = "", role = "user") {
 }
 beforeEach(async () => {
   sql = openDatabase(":memory:");
-  const app = await createApp(sql, { origins: ["http://localhost"] });
+  const app = await createApp(sql, { origins: ["http://localhost"], allowLegacyCommands: true });
   server = app.listen(0, "127.0.0.1");
   await new Promise<void>((r) => server.on("listening", r));
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -60,6 +60,28 @@ const run = <T>(fn: () => T) =>
 function seed() {
   writeDatabase(sql, createSeed());
   user = { id: "u1", role: "user", name: "林小满" };
+}
+
+// Privacy fixtures retain valid references so database constraints remain exercised.
+function privateOrder(db: Database, uid: string, orderId: string) {
+  const order = structuredClone(createSeed().orders[0]!);
+  order.id = orderId;
+  order.userId = uid;
+  order.address.userId = uid;
+  order.items = order.items.map((item, index) => ({
+    ...item,
+    id: `${orderId}-line-${index}`,
+  }));
+  db.orders.push(order);
+  db.ledger.push({
+    id: `${orderId}-payment`,
+    type: "payment",
+    amount: order.total,
+    reference: orderId,
+    note: "有效隐私测试订单",
+    createdAt: order.paidAt!,
+  });
+  return order;
 }
 
 describe("profile and marketing boundaries", () => {
@@ -140,7 +162,14 @@ describe("profile and marketing boundaries", () => {
       (
         await post(
           "/api/actions/saveCoupon",
-          { args: [{ ...original, discount: original.discount + 1 }] },
+          {
+            args: [
+              {
+                ...readDatabase(sql).coupons[0]!,
+                discount: original.discount + 1,
+              },
+            ],
+          },
           adminCookie,
         )
       ).status,
@@ -149,6 +178,12 @@ describe("profile and marketing boundaries", () => {
       const changed = readDatabase(sql);
       changed.couponClaims[0]!.status = status;
       changed.couponClaims[0]!.orderId = "historical-order";
+      if (!changed.orders.some((o) => o.id === "historical-order"))
+        privateOrder(
+          changed,
+          changed.couponClaims[0]!.userId,
+          "historical-order",
+        );
       writeDatabase(sql, changed);
       expect((await snapshot(b)).db.coupons[0].claimedCount).toBe(1);
     }
@@ -194,7 +229,8 @@ describe("profile and marketing boundaries", () => {
         )
       ).status,
     ).toBe(409);
-    expect(readDatabase(sql).settings).toEqual(input);
+    expect(readDatabase(sql).settings).toMatchObject(input);
+    expect(readDatabase(sql).settings.version).toBe(2);
   });
   it("validates profile and revokes every user session after password change while preserving admin", async () => {
     const input = {
@@ -321,6 +357,8 @@ describe("profile and marketing boundaries", () => {
     ).toBe(401);
     const db = readDatabase(sql),
       uid = db.users[0]!.id;
+    db.coupons.push({ ...coupon(), id: "c" });
+    const privatePurchase = privateOrder(db, uid, "private-order");
     db.couponClaims.push({
       id: "private-claim",
       userId: uid,
@@ -333,7 +371,7 @@ describe("profile and marketing boundaries", () => {
       userId: uid,
       productId: "p01",
       orderId: "private-order",
-      orderItemId: "line",
+      orderItemId: privatePurchase.items[0]!.id,
       createdAt: new Date().toISOString(),
       rating: 5,
       content: "私有评价记录",
@@ -471,8 +509,9 @@ describe("profile and marketing boundaries", () => {
     ).toBe(203);
     expect(db.couponClaims[0]!.status).toBe("used");
     expect(db.products[0]!.skus[0]!.stock).toBe(
-      fixture.products[0]!.skus[0]!.stock,
+      fixture.products[0]!.skus[0]!.stock - 3,
     );
+    expect(db.returnInspections!.reduce((n, i) => n + i.quantity, 0)).toBe(3);
     const before = readDatabase(sql);
     await expect(
       run(() => marketingApi.moderateReview(reviewId, false)),

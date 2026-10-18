@@ -1,4 +1,7 @@
 import type { Database, Role, Session } from "../domain/types";
+import { readCatalogueQuery } from "../domain/catalogue";
+import type { LocationQuery } from "vue-router";
+import type { MemberSummary } from "../../../shared/domain/operations";
 const emptyDatabase = (): Database => ({
   version: 3,
   inventoryRequests: [],
@@ -23,11 +26,95 @@ const emptyDatabase = (): Database => ({
   settings: { name: "ShopMate-AI", slogan: "好物与答案，一起找到", notice: "" },
 });
 let database = emptyDatabase();
+const emptyMemberSummary = (): MemberSummary => ({
+  orderCount: 0,
+  afterSaleCount: 0,
+  couponClaimCount: 0,
+  favoriteCount: 0,
+  cartQuantity: 0,
+});
+let memberSummary = emptyMemberSummary();
+export const getMemberSummary = () => ({ ...memberSummary });
 let sessions: Record<Role, Session | null> = { user: null, admin: null };
 let issue = "";
 let scope: Role = "user";
 let sequence = 0;
 let hasSnapshot = false;
+let routePath = "/";
+let routeQuery: Record<string, unknown> = {};
+export interface CollectionPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+  ids?: string[];
+  totals?: { payment: string; refund: string; purchase: string; net: string };
+}
+let collectionPages: Record<string, CollectionPage> = {};
+export const getCollectionPage = (name: string) => collectionPages[name];
+export function setRouteScope(path: string, query: Record<string, unknown>) {
+  routePath = path;
+  routeQuery = { ...query };
+}
+export function routeCollection(path = routePath): string | undefined {
+  const segment = path.split("/").filter(Boolean);
+  const name = segment[segment[0] === "admin" ? 1 : 0] ?? "";
+  return (
+    {
+      products: "products",
+      categories: "categories",
+      orders: "orders",
+      "after-sales": "afterSales",
+      inventory: routeQuery.tab === "records" ? "inventory" : "products",
+      coupons: "coupons",
+      reviews: "reviews",
+      finance: "ledger",
+      support: "conversations",
+      knowledge: "faqs",
+      operations: [
+        "shippingRules",
+        "promotions",
+        "suppliers",
+        "purchaseOrders",
+        "returnInspections",
+        "auditEntries",
+        "staff",
+        "reconciliation",
+        "jobs",
+      ].includes(String(routeQuery.tab))
+        ? String(routeQuery.tab)
+        : "",
+      notifications: "notifications",
+      points: "pointsEntries",
+    } as Record<string, string>
+  )[name];
+}
+function collectionTargets(role: Role) {
+  const primary = routeCollection();
+  const targets = new Set<string>(primary ? [primary] : []);
+  if (role === "user") {
+    if (
+      routePath === "/cart" ||
+      (routePath === "/checkout" && !routeQuery.productId)
+    )
+      targets.add("carts");
+    if (routePath === "/checkout" && routeQuery.productId)
+      targets.add("products");
+    if (routePath === "/account") {
+      const section = routeQuery.section;
+      if (section === "reviews") targets.add("reviews");
+      if (section === "addresses") targets.add("addresses");
+      if (section === "coupons") targets.add("couponClaims");
+      if (section === "pending-reviews") {
+        targets.add("orders");
+      }
+      if (!section || section === "overview") targets.add("products");
+    }
+  }
+  return [...targets].filter(
+    (name) => !["staff", "reconciliation", "jobs"].includes(name),
+  );
+}
 let confirmedNotice = "";
 const confirmedLogouts = new Set<Role>();
 export const hasConfirmedLogout = (role: Role) => confirmedLogouts.has(role);
@@ -73,6 +160,7 @@ export function invalidateIdentitySnapshot(role: Role) {
   confirmedLogouts.delete(role);
   if (scope === role) {
     database = emptyDatabase();
+    memberSummary = emptyMemberSummary();
     hasSnapshot = false;
     syncStatus = { role, phase: "unavailable" };
     notify();
@@ -101,6 +189,7 @@ export function confirmSession(
   else confirmedLogouts.add(role);
   if (scope === role && (identityBoundary || changedIdentity)) {
     database = emptyDatabase();
+    memberSummary = emptyMemberSummary();
     hasSnapshot = false;
     syncStatus = { role: scope, phase: "unavailable" };
   } else if (role === "user" && session) {
@@ -166,7 +255,11 @@ export async function request<T>(url: string, body?: unknown): Promise<T> {
     );
   }
   if (!response.ok) {
-    if (response.status === 401 && !url.startsWith("/api/state"))
+    if (
+      response.status === 401 &&
+      !url.startsWith("/api/bootstrap") &&
+      !url.startsWith("/api/collections/")
+    )
       await refreshState().catch(() => undefined);
     throw new RequestError(
       data?.message ?? "请求失败",
@@ -179,6 +272,7 @@ export async function request<T>(url: string, body?: unknown): Promise<T> {
 export async function refreshState(role: Role = scope) {
   if (scope !== role) {
     database = emptyDatabase();
+    memberSummary = emptyMemberSummary();
     hasSnapshot = false;
     confirmedNotice = "";
     issue = "";
@@ -191,10 +285,10 @@ export async function refreshState(role: Role = scope) {
     const value = await request<{
       db: Database;
       sessions: Record<Role, Session | null>;
-    }>(`/api/state?role=${role}`);
+      memberSummary?: MemberSummary | null;
+    }>(`/api/bootstrap?role=${role}`);
     if (
       !value?.db ||
-      !Array.isArray(value.db.orders) ||
       !value.sessions ||
       !("user" in value.sessions) ||
       !("admin" in value.sessions) ||
@@ -203,7 +297,168 @@ export async function refreshState(role: Role = scope) {
     )
       throw new RequestError("服务状态响应异常，请重新连接", "read-failed");
     if (current === sequence) {
-      database = value.db;
+      const next = { ...emptyDatabase(), ...value.db };
+      const pages: Record<string, CollectionPage> = {};
+      const permittedTargets = collectionTargets(role).filter((name) => {
+        if (role === "user" && routePath === "/account" && !value.sessions.user)
+          return false;
+        if (role === "admin") {
+          const session = value.sessions.admin;
+          if (!session) return false;
+          const grants: Record<string, string[]> = {
+            orders: ["warehouse", "support", "finance"],
+            afterSales: ["warehouse", "support", "finance"],
+            inventory: ["warehouse"],
+            ledger: ["finance"],
+            conversations: ["support"],
+            shippingRules: ["settings"],
+            suppliers: ["warehouse"],
+            purchaseOrders: ["warehouse"],
+            returnInspections: ["warehouse"],
+            auditEntries: ["audit"],
+          };
+          return (
+            !grants[name] ||
+            grants[name].some((permission) =>
+              session.permissions?.includes(permission),
+            )
+          );
+        }
+        return (
+          !!value.sessions.user ||
+          ["products", "categories", "coupons", "faqs", "promotions"].includes(
+            name,
+          )
+        );
+      });
+      const results = await Promise.all(
+        permittedTargets.map(async (name) => {
+          const params = new URLSearchParams({
+            role,
+            page: String(routeQuery.page ?? 1),
+            pageSize: routePath === "/products" ? "12" : "10",
+          });
+          if (
+            role === "admin" &&
+            routePath === "/admin/inventory" &&
+            name === "products"
+          )
+            params.set("view", "inventory");
+          for (const [key, raw] of Object.entries(routeQuery)) {
+            if (typeof raw === "string" && key !== "page")
+              params.set(key === "q" ? "search" : key, raw);
+          }
+          if (
+            role === "user" &&
+            routePath === "/products" &&
+            name === "products"
+          ) {
+            const normalized = readCatalogueQuery(routeQuery as LocationQuery);
+            for (const key of [
+              "page",
+              "sort",
+              "search",
+              "min",
+              "max",
+              "category",
+              "stock",
+            ])
+              params.delete(key);
+            params.set("page", String(normalized.page));
+            params.set("sort", normalized.sort);
+            if (normalized.q) params.set("search", normalized.q);
+            if (normalized.category)
+              params.set("category", normalized.category);
+            if (normalized.min !== undefined)
+              params.set("min", String(normalized.min / 100));
+            if (normalized.max !== undefined)
+              params.set("max", String(normalized.max / 100));
+            if (normalized.inStock) params.set("stock", "1");
+          }
+          const segments = routePath.split("/").filter(Boolean);
+          const detail = role === "admin" ? routeQuery.detail : segments[1];
+          if (
+            role !== "admin" &&
+            typeof detail === "string" &&
+            detail &&
+            detail !== "pay"
+          )
+            params.set("id", detail);
+          if (
+            name === "products" &&
+            routePath === "/checkout" &&
+            typeof routeQuery.productId === "string"
+          ) {
+            params.delete("productId");
+            params.set("id", routeQuery.productId);
+          }
+          if (
+            name === "carts" &&
+            routePath === "/checkout" &&
+            typeof routeQuery.cartIds === "string"
+          ) {
+            params.set("id", routeQuery.cartIds);
+            params.set("pageSize", "100");
+          }
+          if (routePath === "/account" && name === "products") {
+            params.set("favorites", "1");
+          }
+          if (
+            routePath === "/account" &&
+            name === "orders" &&
+            typeof routeQuery.orderId === "string"
+          ) {
+            params.delete("orderId");
+            params.set("id", routeQuery.orderId);
+          }
+          const result = await request<
+            CollectionPage & { items: unknown[]; related?: Partial<Database> }
+          >(`/api/collections/${name}?${params}`);
+          if (!Array.isArray(result.items))
+            throw new RequestError("列表响应异常", "read-failed");
+          const detailResult =
+            role === "admin" && typeof detail === "string" && detail
+              ? await request<{
+                  items: unknown[];
+                  related?: Partial<Database>;
+                }>(
+                  `/api/collections/${name}?role=${role}&id=${encodeURIComponent(detail)}&pageSize=1`,
+                )
+              : undefined;
+          const ids = result.items.map((item) => (item as { id: string }).id);
+          pages[name] = {
+            total: result.total,
+            page: result.page,
+            pageSize: result.pageSize,
+            pages: result.pages,
+            ids,
+            totals: result.totals,
+          };
+          const items = [
+            ...result.items,
+            ...(detailResult?.items ?? []).filter(
+              (item) => !ids.includes((item as { id: string }).id),
+            ),
+          ];
+          return {
+            name,
+            items,
+            related: { ...result.related, ...detailResult?.related },
+          };
+        }),
+      );
+      // Merge referenced records first, then primary pages. Completion order of
+      // concurrent reads must never replace a requested page with a related slice.
+      for (const result of results) Object.assign(next, result.related);
+      for (const result of results)
+        Object.assign(next, { [result.name]: result.items });
+      if (current !== sequence) return value;
+      database = next;
+      memberSummary = value.sessions.user
+        ? (value.memberSummary ?? emptyMemberSummary())
+        : emptyMemberSummary();
+      value.db = next;
+      collectionPages = pages;
       sessions = value.sessions;
       if (sessions.user) confirmedLogouts.delete("user");
       if (sessions.admin) confirmedLogouts.delete("admin");
@@ -226,7 +481,7 @@ export async function refreshState(role: Role = scope) {
 if (typeof window !== "undefined") {
   window.setInterval(() => {
     if (!document.hidden) void refreshState().catch(() => undefined);
-  }, 2000);
+  }, 2_000);
   window.addEventListener(
     "focus",
     () => void refreshState().catch(() => undefined),

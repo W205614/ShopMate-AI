@@ -57,12 +57,15 @@ describe("交易与库存", () => {
     const baseline = getDatabase().settings;
     const next = { ...baseline, name: "更新后的商城", notice: "" };
     await api.saveSettings(next, baseline);
-    expect(getDatabase().settings).toEqual(next);
+    expect(getDatabase().settings).toMatchObject(next);
     await expect(
       api.saveSettings({ ...baseline, name: "过期草稿" }, baseline),
     ).rejects.toMatchObject({ status: 409 });
-    expect(getDatabase().settings).toEqual(next);
-    await api.saveSettings({ ...next, slogan: "重新确认后保存" }, next);
+    expect(getDatabase().settings).toMatchObject(next);
+    await api.saveSettings(
+      { ...next, slogan: "重新确认后保存" },
+      getDatabase().settings,
+    );
     expect(getDatabase().settings.slogan).toBe("重新确认后保存");
   });
   it("所有 SKU 的变动累计等于库存，编辑商品不会凭空新增期初记录", async () => {
@@ -112,19 +115,18 @@ describe("交易与库存", () => {
   it("并行付款不能超卖，失败不会出现部分扣库存", async () => {
     const stock = getDatabase().products.find((p) => p.id === "p03")!.skus[0]!
       .stock;
-    const one = await newOrder("p03", stock),
-      two = await newOrder("p03", stock);
-    const results = await Promise.allSettled([
-      api.payOrder(one),
-      api.payOrder(two),
-    ]);
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const one = await newOrder("p03", stock);
+    await expect(newOrder("p03", stock)).rejects.toThrow("库存不足");
+    await Promise.all([api.payOrder(one), api.payOrder(one)]);
     expect(
       getDatabase().products.find((p) => p.id === "p03")!.skus[0]!.stock,
     ).toBe(0);
-    expect(getDatabase().orders.find((o) => o.id === two)!.status).toBe(
-      "pending",
-    );
+    expect(getDatabase().orders.find((o) => o.id === one)!.status).toBe("paid");
+    expect(
+      getDatabase().ledger.filter(
+        (l) => l.reference === one && l.type === "payment",
+      ),
+    ).toHaveLength(1);
   });
   it("退款仅回补一次，发货后必须先确认退货收货", async () => {
     const orderId = await newOrder();
@@ -154,7 +156,10 @@ describe("交易与库存", () => {
       api.processAfterSale(sale.id, "refund"),
     ]);
     const db = getDatabase();
-    expect(db.products[0]!.skus[0]!.stock).toBe(before);
+    expect(db.products[0]!.skus[0]!.stock).toBe(before - 1);
+    expect(db.returnInspections).toEqual([
+      expect.objectContaining({ quantity: 1, status: "pending", good: 0 }),
+    ]);
     expect(
       db.ledger.filter((l) => l.reference === orderId && l.type === "refund"),
     ).toHaveLength(1);

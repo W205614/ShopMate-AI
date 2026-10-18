@@ -150,8 +150,9 @@ test("尚未找到订单时保留原标识，迟到提交与明确重试返回�
   expect(late.ok(), await late.text()).toBe(true);
   await page.getByRole("button", { name: "按原请求重试", exact: true }).click();
   await expect(page).toHaveURL(/\/orders\/[^/]+\/pay$/);
-  expect(payloads).toHaveLength(2);
-  expect(payloads[1]).toEqual(payloads[0]);
+  // The late POST already completed the original command. Lookup-before-retry
+  // recovers its result without issuing a second browser POST.
+  expect(payloads).toHaveLength(1);
   expect(quotes).toBe(0);
   await verifyOneOrder(page, before);
 });

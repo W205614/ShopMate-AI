@@ -3,5 +3,17 @@
 services:
   api:
     image: shopmate-ai-api:${ACCEPTANCE_TAG:-acceptance}
+    labels:
+      shopmate.acceptance: ${ACCEPTANCE_PURPOSE:-test}
+    environment:
+      BACKUP_DIR: ""
+      LOG_REQUESTS: "false"
+      SHOPMATE_ENV: acceptance
+      # Opt-in only for the retained legacy HTTP regression fixtures.
+      ALLOW_LEGACY_COMMANDS: ${ACCEPTANCE_LEGACY_COMMANDS:-true}
+    volumes:
+      - acceptance_backups:/app/backups
   web:
     image: shopmate-ai-web:${ACCEPTANCE_TAG:-acceptance}
+volumes:
+  acceptance_backups:

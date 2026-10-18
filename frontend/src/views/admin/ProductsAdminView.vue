@@ -35,7 +35,6 @@ const filtered = computed(() =>
   shop.db.products
     .filter(
       (p) =>
-        (!query.value || p.name.includes(query.value)) &&
         (!category.value || p.categoryId === category.value) &&
         (!status.value || String(p.active) === status.value),
     )
@@ -49,7 +48,7 @@ const minPrice = (product: Product) =>
   Math.min(...product.skus.map((s) => s.price));
 const totalStock = (product: Product) =>
   product.skus.reduce((total, sku) => total + sku.stock, 0);
-const { page, rows } = useAdminPagination(filtered, filters);
+const { page, rows, total } = useAdminPagination(filtered, filters);
 const { dialog, detailId, missing, open, capture, finish, assertCurrent } =
   useAdminEditor(
     computed(() => shop.db.products),
@@ -77,9 +76,10 @@ function load(p?: Product) {
   Object.assign(
     form,
     p
-      ? JSON.parse(JSON.stringify(p))
+      ? { ...JSON.parse(JSON.stringify(p)), version: p.version ?? 1 }
       : {
           id: undefined,
+          version: undefined,
           name: "",
           subtitle: "",
           categoryId: shop.db.categories[0]?.id || "",
@@ -115,7 +115,9 @@ async function save() {
         ...form,
         images: [...form.images],
         skus: form.skus.map((s, index) => ({
-          ...s,
+          id: s.id,
+          name: s.name,
+          stock: s.stock,
           price: yuanToCents(priceInputs.value[index] ?? ""),
         })),
       };
@@ -141,7 +143,10 @@ async function toggle(p: Product) {
       "商品状态",
       { type: "warning" },
     );
-    await run(() => api.toggleProduct(p.id), "商品状态已更新");
+    await run(
+      () => api.toggleProduct(p.id, !p.active, p.version ?? 1),
+      "商品状态已更新",
+    );
   } catch {
     /* dismissed */
   }
@@ -182,7 +187,7 @@ async function toggle(p: Product) {
         ><el-option label="已上架" value="true" /><el-option
           label="已下架"
           value="false" /></el-select
-      ><span class="admin-note">共 {{ filtered.length }} 件商品</span>
+      ><span class="admin-note">共 {{ total }} 件商品</span>
     </div>
     <el-table
       ref="table"
@@ -252,7 +257,7 @@ async function toggle(p: Product) {
       <el-pagination
         v-model:current-page="page"
         :page-size="10"
-        :total="filtered.length"
+        :total="total"
         layout="prev,pager,next,total"
       />
     </div>

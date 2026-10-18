@@ -23,7 +23,7 @@ test("设置草稿跨轮询保留，冲突不会覆盖远端，公告可清空�
   // Wait for two real polling responses rather than a fixed delay.
   for (let i = 0; i < 2; i++) {
     await page.waitForResponse(
-      (r) => r.url().includes("/api/state?") && r.ok(),
+      (r) => r.url().includes("/api/bootstrap?") && r.ok(),
     );
   }
   await expect(name).toHaveValue("本地尚未保存的草稿");
@@ -74,7 +74,7 @@ test("保存失败后草稿仍可编辑并重新提交", async ({ page }) => {
   );
   await page.getByRole("button", { name: "保存信息", exact: true }).click();
   await expect(page.getByText("测试保存失败", { exact: true })).toBeVisible();
-  await page.waitForResponse((r) => r.url().includes("/api/state?") && r.ok());
+  await page.waitForResponse((r) => r.url().includes("/api/bootstrap?") && r.ok());
   await expect(name).toHaveValue("保存失败后保留");
   await page.getByRole("button", { name: "保存信息", exact: true }).click();
   await expect(page.getByText("商城信息已保存", { exact: true })).toBeVisible();
@@ -93,7 +93,7 @@ test("409 后加载最新值必须等待服务端读取，期间保留草稿", a
     await (await page.request.get("/api/state?role=admin")).json()
   ).db.settings;
   const held: Route[] = [];
-  await page.route("**/api/state?role=admin", (route) => {
+  await page.route("**/api/bootstrap?role=admin", (route) => {
     held.push(route);
   });
   const name = page.locator(".admin-settings-form input").nth(0);
@@ -127,5 +127,5 @@ test("409 后加载最新值必须等待服务端读取，期间保留草稿", a
   await held[0]!.continue();
   await expect(name).toHaveValue(remote.name);
   await Promise.all(held.slice(1).map((route) => route.continue()));
-  await page.unroute("**/api/state?role=admin");
+  await page.unroute("**/api/bootstrap?role=admin");
 });

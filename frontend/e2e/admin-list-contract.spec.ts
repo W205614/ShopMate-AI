@@ -72,7 +72,9 @@ test("商品四页URL筛选、全量价格排序与独立编辑定位，历史�
   await dialog
     .getByLabel("副标题", { exact: true })
     .fill("轮询后仍保留编辑草稿");
-  await page.waitForResponse((r) => r.url().includes("/api/state?role=admin"));
+  await page.waitForResponse((r) =>
+    r.url().includes("/api/bootstrap?role=admin"),
+  );
   await expect(dialog.getByLabel("副标题", { exact: true })).toHaveValue(
     "轮询后仍保留编辑草稿",
   );
@@ -148,7 +150,9 @@ test("FAQ四页查询和启停过滤、URL回退、末页收敛与草稿不被�
   await dialog
     .getByLabel("回复内容", { exact: true })
     .fill("轮询不得覆盖知识编辑草稿");
-  await page.waitForResponse((r) => r.url().includes("/api/state?role=admin"));
+  await page.waitForResponse((r) =>
+    r.url().includes("/api/bootstrap?role=admin"),
+  );
   await expect(dialog.getByLabel("回复内容", { exact: true })).toHaveValue(
     "轮询不得覆盖知识编辑草稿",
   );
@@ -188,6 +192,8 @@ test("客服四页与URL定位，跨页草稿不丢、翻页取消确认，筛�
   await page
     .getByRole("button", { name: "清除筛选并定位", exact: true })
     .click();
+  await expect(page).toHaveURL(/page=4/);
+  await expect(page).not.toHaveURL(/status=closed/);
   await expect(page.locator(".admin-chat-body")).toContainText(ids[0]!);
   await page.reload();
   await expect(page.locator(".admin-chat-body")).toContainText(ids[0]!);

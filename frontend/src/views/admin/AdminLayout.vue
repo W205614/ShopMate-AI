@@ -21,6 +21,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import "element-plus/dist/index.css";
 import "../../styles/admin.css";
 import { useShop } from "../../stores/shop";
+import { canOpenAdminPath } from "../../router";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter();
@@ -40,7 +41,7 @@ const icons = [
   Settings2,
 ];
 const expanded = ref(false);
-const links = [
+const allLinks = [
   ["/admin", "经营概览", "Overview"],
   ["/admin/products", "商品管理", "Products"],
   ["/admin/categories", "分类管理", "Categories"],
@@ -53,9 +54,15 @@ const links = [
   ["/admin/support", "客服工作台", "Support"],
   ["/admin/knowledge", "FAQ 管理", "Knowledge"],
   ["/admin/settings", "演示设置", "Settings"],
+  ["/admin/operations", "经营工作台", "Operations"],
 ];
+const links = computed(() =>
+  allLinks.filter((link) =>
+    canOpenAdminPath(link[0]!, shop.adminSession?.permissions ?? []),
+  ),
+);
 const title = computed(
-  () => links.find((l) => l[0] === route.path)?.[1] || "管理中心",
+  () => links.value.find((l) => l[0] === route.path)?.[1] || "管理中心",
 );
 async function logout() {
   await shop.logout("admin");
@@ -81,7 +88,11 @@ async function logout() {
           :to="link[0]!"
           :class="{ selected: route.path === link[0] }"
           @click="expanded = false"
-          ><component :is="icons[i]" :size="17" aria-hidden="true" /><span
+          ><component
+            :is="icons[i] ?? Boxes"
+            :size="17"
+            aria-hidden="true"
+          /><span
             >{{ link[1] }}<small>{{ link[2] }}</small></span
           ></RouterLink
         >

@@ -190,6 +190,7 @@ test("结算地址编辑要求重新确认报价；购物车批量只选择可�
   await page
     .getByRole("button", { name: "编辑 林小满（演示） 的地址" })
     .click();
+  await page.getByLabel("配送省份", { exact: true }).fill("上海市");
   await page.getByLabel("详细地址", { exact: true }).fill("验收新路 10 号");
   await page.getByRole("button", { name: "保存地址", exact: true }).click();
   await expect(

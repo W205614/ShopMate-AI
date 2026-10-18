@@ -19,7 +19,7 @@ test("真实服务端完成领券、报价下单、收货评价和分批退货�
   const headers = { "X-ShopMate-Request": "1" };
   async function action<T = void>(method: string, args: unknown[]): Promise<T> {
     const response = await request.post(`/api/actions/${method}`, {
-      data: { args },
+      data: { args, requestId: randomUUID() },
       headers,
     });
     expect(response.ok(), await response.text()).toBe(true);
@@ -48,6 +48,7 @@ test("真实服务端完成领券、报价下单、收货评价和分批退货�
     {
       name: "验收收货人",
       phone: "13800000000",
+      province: "上海市",
       region: "上海市 徐汇区",
       detail: "隔离验收地址一号",
       isDefault: true,
@@ -131,6 +132,19 @@ test("真实服务端完成领券、报价下单、收货评价和分批退货�
     await action("processAfterSale", [sale.id, "approve", "批准隔离验收申请"]);
     await action("submitReturn", [sale.id, "模拟物流", `ACCEPT-IN-${i}`]);
     await action("processAfterSale", [sale.id, "receive", "模拟收到退货"]);
+    const inspection = (await state("admin")).returnInspections!.find(
+      (i) => i.afterSaleId === sale.id,
+    )!;
+    expect(inspection).toMatchObject({ status: "pending", quantity: 1 });
+    await action("inspectReturn", [
+      {
+        id: inspection.id,
+        version: inspection.version,
+        good: 1,
+        defective: 0,
+        note: "隔离验收质检良品",
+      },
+    ]);
     await action("processAfterSale", [sale.id, "refund", "完成模拟退款"]);
     await action("processAfterSale", [sale.id, "refund", "重复请求不重复退款"]);
   }

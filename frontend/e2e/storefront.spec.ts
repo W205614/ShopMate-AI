@@ -84,6 +84,11 @@ test("切换账号后隔离订单、地址和商品收藏", async ({ page }) => 
 });
 
 test("关键词筛选、缺货状态与购物车登录回跳", async ({ page }) => {
+  await page.goto("/products/p01");
+  const related = page.locator(".related-products");
+  await expect(related).toBeVisible();
+  await expect(related.locator(".product-card")).toHaveCount(3);
+  await expect(related.locator('a[href="/products/p02"]')).toBeVisible();
   await page.goto("/products?q=不会存在的演示商品");
   await expect(
     page.getByRole("heading", { name: "换个关键词试试", exact: true }),

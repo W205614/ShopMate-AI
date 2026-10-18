@@ -43,7 +43,7 @@ const filtered = computed(() =>
         b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
     ),
 );
-const { page, rows } = useAdminPagination(filtered, filters);
+const { page, rows, total } = useAdminPagination(filtered, filters);
 const selected = computed(() =>
   shop.db.afterSales.find((a) => a.id === selectedId.value),
 );
@@ -114,7 +114,7 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
   try {
     const confirmed = await Promise.race([
       ElMessageBox.confirm(
-        `确认${labels[type]}（售后 ${sale.id}，订单 ${sale.orderId}）？${type === "refund" ? "将生成退款流水并回补库存。" : ""}`,
+        `确认${labels[type]}（售后 ${sale.id}，订单 ${sale.orderId}）？${type === "refund" ? "将登记退款流水；已发货退货需经仓储质检后良品入库。" : ""}`,
         `${labels[type]}确认`,
         { type: "warning" },
       ).then(() => true),
@@ -177,7 +177,7 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
         "
         >重置筛选</el-button
       >
-      <span class="admin-note">{{ filtered.length }} 笔申请</span>
+      <span class="admin-note">{{ total }} 笔申请</span>
     </div>
     <p v-if="orderId" class="admin-note">
       指定订单 {{ orderId }}
@@ -237,7 +237,7 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
       <el-pagination
         v-model:current-page="page"
         :page-size="10"
-        :total="filtered.length"
+        :total="total"
         layout="prev,pager,next,total"
       />
     </div>

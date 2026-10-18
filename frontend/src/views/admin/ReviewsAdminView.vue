@@ -61,7 +61,7 @@ const filtered = computed(() =>
         b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
     ),
 );
-const { page, rows } = useAdminPagination(filtered, filters);
+const { page, rows, total } = useAdminPagination(filtered, filters);
 </script>
 <template>
   <div class="admin-page-head">
@@ -91,7 +91,7 @@ const { page, rows } = useAdminPagination(filtered, filters);
         "
         >重置筛选</el-button
       ><span class="admin-note"
-        >{{ filtered.length }} 条评价<span v-if="orderId">
+        >{{ total }} 条评价<span v-if="orderId">
           · 订单 {{ orderId }}</span
         ></span
       >
@@ -157,7 +157,7 @@ const { page, rows } = useAdminPagination(filtered, filters);
       <el-pagination
         v-model:current-page="page"
         :page-size="10"
-        :total="filtered.length"
+        :total="total"
         layout="prev,pager,next,total"
       />
     </div>

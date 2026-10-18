@@ -51,7 +51,8 @@ export function ledgerCsv(
 }
 export function ledgerAssociation(
   entry: LedgerEntry,
-  db: Pick<Database, "orders" | "inventory">,
+  db: Pick<Database, "orders" | "inventory"> &
+    Pick<Partial<Database>, "purchaseOrders">,
 ) {
   if (entry.type !== "purchase")
     return db.orders.some((o) => o.id === entry.reference)
@@ -64,7 +65,16 @@ export function ledgerAssociation(
       : { label: "", notice: "关联订单不可用", path: "", query: {} };
   if (entry.inventoryMovementId)
     return db.inventory.some(
-      (m) => m.id === entry.inventoryMovementId && m.skuId === entry.reference,
+      (m) =>
+        m.id === entry.inventoryMovementId &&
+        (m.skuId === entry.reference ||
+          db.purchaseOrders?.some((order) =>
+            order.receipts.some(
+              (receipt) =>
+                receipt.id === entry.reference &&
+                receipt.movementIds.includes(m.id),
+            ),
+          )),
     )
       ? {
           label: "查看库存变动",

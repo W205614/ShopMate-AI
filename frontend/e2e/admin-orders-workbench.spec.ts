@@ -49,7 +49,7 @@ test("同步缓慢时逐字输入不丢字符，多条件和页码校正不会�
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/api/state?role=admin", async (route) => {
+  await page.route("**/api/bootstrap?role=admin", async (route) => {
     const response = await route.fetch();
     await held;
     await route.fulfill({ response });
@@ -89,6 +89,7 @@ test("订单四页数据支持收件人/商品/编号、状态和本地日期筛
   const address = (await state(page)).addresses.find(
     (a: { name: string }) => a.name === "运营定位收件人",
   );
+  await action(page, "adjustStock", "p05", "p05-s1", 50, 0, "订单分页夹具：提供31笔订单的预占库存");
   const ids = [];
   for (let i = 0; i < 31; i++) ids.push(await createOrder(page, 1, address.id));
   await page.goto("/admin/orders?q=运营定位收件人&status=pending");
@@ -133,6 +134,8 @@ test("订单四页数据支持收件人/商品/编号、状态和本地日期筛
   await page.getByLabel("下单开始日期", { exact: true }).fill(today);
   await page.getByLabel("下单结束日期", { exact: true }).fill(today);
   await expect(rows).toHaveCount(10);
+  await expect(page).toHaveURL(new RegExp(`from=${today}`));
+  await expect(page).toHaveURL(new RegExp(`to=${today}`));
   const url = page.url();
   await page.reload();
   await expect(page).toHaveURL(url);

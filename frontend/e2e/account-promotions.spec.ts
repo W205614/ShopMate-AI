@@ -34,9 +34,20 @@ test("昵称修改可持久化，改密撤销所有用户会话并保留管理�
   const otherContext = await browser.newContext({ baseURL });
   try {
     const otherDevice = await otherContext.newPage();
-    await login(otherDevice);
     const management = await context.newPage();
-    await login(management, true);
+    // Auxiliary sessions exercise revocation; the primary login and both
+    // password re-login attempts below still go through the real form.
+    for (const [device, role, username, password] of [
+      [otherDevice, "user", "lin", TEST_USER_PASSWORD],
+      [management, "admin", "admin", TEST_ADMIN_PASSWORD],
+    ] as const) {
+      const response = await device.request.post("/api/auth/login", {
+        headers: { "X-ShopMate-Request": "1" },
+        data: { role, username, password },
+      });
+      expect(response.ok(), await response.text()).toBe(true);
+    }
+    await management.goto("/admin");
     const adminCookie = (await context.cookies()).find(
       (cookie) => cookie.name === "shopmate_admin",
     )!.value;
@@ -297,6 +308,7 @@ test("新增账号、优惠券及评价页面在桌面平板手机可刷新且�
       "/account?section=reviews",
     ]) {
       await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       expect(

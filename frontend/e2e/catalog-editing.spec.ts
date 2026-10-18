@@ -208,6 +208,7 @@ test("分类创建修改支持三种可解码图片，删除仍保护关联商�
     await expect(dialog.getByAltText("分类图片预览")).toHaveCount(1);
     await dialog.getByRole("button", { name: "保存", exact: true }).click();
     await expect(dialog).not.toBeVisible();
+    await expect(page).not.toHaveURL(/detail=/);
     await page.reload();
     const db = (await (await page.request.get("/api/state?role=admin")).json())
       .db;

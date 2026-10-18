@@ -1,3 +1,4 @@
+import { checkVersion } from "./versions";
 import type { ShopApi } from "../../shared/domain/api";
 import { reviewState } from "../../shared/domain/reviews";
 import type {
@@ -106,7 +107,9 @@ export const marketingApi: Pick<
         "领取与使用时间范围无效，领取截止不能晚于使用截止",
       );
       const old = db.coupons.find((c) => c.id === input.id);
+      if (old) checkVersion(old, input.version);
       const value: CouponInput = {
+        version: (old?.version ?? (old ? 1 : 0)) + 1,
         id: input.id,
         name: input.name.trim(),
         threshold: input.threshold,
@@ -136,6 +139,7 @@ export const marketingApi: Pick<
           "已有领取记录的优惠券只能启停，请新建其他优惠券",
         );
         old.active = input.active;
+        old.version = value.version;
       } else if (old) Object.assign(old, value);
       else db.coupons.unshift({ ...value, id: id("coupon-") });
     });
@@ -173,12 +177,14 @@ export const marketingApi: Pick<
       });
     });
   },
-  async toggleCoupon(couponId) {
+  async toggleCoupon(couponId, active, version) {
     await transact((db) => {
       admin();
       const coupon = db.coupons.find((c) => c.id === couponId);
       requireThat(coupon, "优惠券不存在");
-      coupon.active = !coupon.active;
+      checkVersion(coupon, version);
+      coupon.active = active ?? !coupon.active;
+      coupon.version = (coupon.version ?? 1) + 1;
     });
   },
   async submitReview(input) {

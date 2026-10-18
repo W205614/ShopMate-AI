@@ -32,6 +32,7 @@ onUnmounted(() => {
   alive = false;
 });
 const form = reactive({
+  version: undefined as number | undefined,
   name: "",
   threshold: 100,
   discount: 10,
@@ -59,10 +60,10 @@ const filtered = computed(() =>
         (!status.value || c.active === (status.value === "active")),
     ),
 );
-const { page, rows } = useAdminPagination(filtered, filters);
+const { page, rows, total } = useAdminPagination(filtered, filters);
 async function toggle(coupon: Coupon) {
   await run(
-    () => api.toggleCoupon(coupon.id),
+    () => api.toggleCoupon(coupon.id, !coupon.active, coupon.version ?? 1),
     coupon.active ? "已停止新领取及新订单使用" : "优惠券已启用",
   );
 }
@@ -81,6 +82,7 @@ function loadForm(coupon?: Coupon) {
   const now = new Date(),
     end = new Date(Date.now() + 30 * 86400_000);
   Object.assign(form, {
+    version: coupon?.version ?? 1,
     name: coupon?.name ?? "",
     threshold: (coupon?.threshold ?? 10000) / 100,
     discount: (coupon?.discount ?? 1000) / 100,
@@ -111,6 +113,7 @@ async function save() {
       () =>
         api.saveCoupon({
           id: id || undefined,
+          version: draft.version,
           name: draft.name,
           totalLimit: draft.totalLimit,
           active: draft.active,
@@ -153,7 +156,7 @@ async function save() {
       ><el-button
         @click="filters.update({ q: '', status: '' }, { resetPage: true })"
         >重置筛选</el-button
-      ><span class="admin-note">{{ filtered.length }} 张优惠券</span>
+      ><span class="admin-note">{{ total }} 张优惠券</span>
     </div>
     <el-table :data="rows" empty-text="暂无优惠券，创建后用户可在领券中心领取">
       <el-table-column prop="name" label="名称" min-width="160" />
@@ -202,7 +205,7 @@ async function save() {
       <el-pagination
         v-model:current-page="page"
         :page-size="10"
-        :total="filtered.length"
+        :total="total"
         layout="prev,pager,next,total"
       />
     </div>

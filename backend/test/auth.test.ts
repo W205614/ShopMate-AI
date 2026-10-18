@@ -35,6 +35,8 @@ beforeEach(async () => {
   const app = await createApp(sql, {
     origins: ["http://localhost"],
     sessionTtl: 60_000,
+    allowDemoReset: true,
+    allowLegacyCommands: true,
   });
   server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.on("listening", resolve));

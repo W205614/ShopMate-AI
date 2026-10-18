@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CollectionPager from "../../components/shop/CollectionPager.vue";
 import { computed } from "vue";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
@@ -206,7 +207,7 @@ function clearInvalid() {
         </article>
       </div>
       <aside class="order-summary">
-        <h2>选购小计</h2>
+        <h2>本页选购小计</h2>
         <div>
           <span>已选商品</span
           ><span
@@ -216,11 +217,17 @@ function clearInvalid() {
             件</span
           >
         </div>
-        <div><span>配送费</span><span>免运费</span></div>
+        <div><span>配送费</span><span>结算时按地址核算</span></div>
         <div class="summary-total">
           <span>合计</span><strong>{{ money(total) }}</strong>
         </div>
-        <RouterLink v-if="valid && !busy" to="/checkout" class="button"
+        <RouterLink
+          v-if="valid && !busy"
+          :to="{
+            path: '/checkout',
+            query: { cartIds: selected.map((row) => row.item.id).join(',') },
+          }"
+          class="button"
           >去结算 <ArrowRight :size="18" /></RouterLink
         ><button v-else class="button" disabled>请选择有库存的商品</button>
         <p class="secondary">演示交易，不会产生真实付款。</p>
@@ -231,5 +238,6 @@ function clearInvalid() {
       <p>先去逛逛，把喜欢的加入购物车。</p>
       <RouterLink to="/products" class="button">浏览商品</RouterLink>
     </div>
+    <CollectionPager collection="carts" />
   </div>
 </template>

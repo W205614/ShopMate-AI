@@ -1,6 +1,10 @@
 import type { Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { DatabaseSync } from "node:sqlite";
+import {
+  openDatabase,
+  readDatabase,
+  writeDatabase,
+} from "../../backend/src/database";
 import { resolve } from "node:path";
 import type { Database } from "../../shared/domain/types";
 import {
@@ -22,18 +26,13 @@ async function state(page: Page): Promise<Database> {
   return (await (await page.request.get("/api/state?role=admin")).json()).db;
 }
 function fixture(change: (db: Database) => void) {
-  const sql = new DatabaseSync(resolve("../backend/.e2e/shopmate.sqlite"));
+  const sql = openDatabase(resolve("../backend/.e2e/shopmate.sqlite"));
   try {
     sql.exec("BEGIN IMMEDIATE");
-    const db = JSON.parse(
-      (
-        sql.prepare("SELECT data FROM state WHERE id=1").get() as {
-          data: string;
-        }
-      ).data,
-    );
+    const db = readDatabase(sql);
     change(db);
-    sql.prepare("UPDATE state SET data=? WHERE id=1").run(JSON.stringify(db));
+    db.revision++;
+    writeDatabase(sql, db);
     sql.exec("COMMIT");
   } finally {
     sql.close();
@@ -180,7 +179,9 @@ test("新采购精确定位单次库存变动，历史SKU及缺失关联明确�
     dialog.getByRole("link", { name: "查看库存变动", exact: true }),
   ).toHaveCount(0);
   await page.goto("/admin/finance?detail=missing-ledger");
-  await expect(page.getByRole("alert").filter({ hasText: "没有找到该流水" })).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "没有找到该流水" }),
+  ).toBeVisible();
 });
 test("同一订单多次部分退款查询守恒，详情跳转订单且金额不受分页影响", async ({
   page,

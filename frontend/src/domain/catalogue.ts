@@ -40,8 +40,9 @@ export function catalogueCategories(
     .sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id))
     .map((category) => ({
       ...category,
-      count: products.filter((p) => p.active && p.categoryId === category.id)
-        .length,
+      count:
+        (category as Category & { productCount?: number }).productCount ??
+        products.filter((p) => p.active && p.categoryId === category.id).length,
     }));
 }
 

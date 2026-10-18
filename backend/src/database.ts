@@ -4,6 +4,14 @@ import { dirname, resolve } from "node:path";
 import type { Database } from "../../shared/domain/types";
 import { createSeed } from "../../shared/domain/seed";
 import { migrateDatabase } from "./migration";
+import {
+  createStorageSchema,
+  loadStoredDatabase,
+  saveStoredDatabase,
+  preserveBeforeClose,
+  type DatabaseReadScope,
+} from "./storage";
+export { queryPage, queryRecord, tableFor, readMetadata } from "./storage";
 
 // Keep the existing catalog; historical demo people and orders are not real accounts.
 export function initialDatabase(): Database {
@@ -53,26 +61,61 @@ export function openDatabase(path: string) {
   sql
     .prepare("INSERT OR IGNORE INTO state VALUES (1, ?)")
     .run(JSON.stringify(initialDatabase()));
-  transaction(sql, () => {
-    const db = readDatabase(sql);
-    if (migrateDatabase(db)) writeDatabase(sql, db);
-  });
+  try {
+    transaction(sql, () => {
+      createStorageSchema(sql);
+      const meta = sql
+        .prepare("SELECT schema_version FROM storage_meta WHERE id=1")
+        .get() as { schema_version: number } | undefined;
+      if (meta && meta.schema_version > 1)
+        throw new Error("数据库存储版本高于当前程序支持范围");
+      if (!meta) {
+        const db = JSON.parse(
+          (
+            sql.prepare("SELECT data FROM state WHERE id=1").get() as {
+              data: string;
+            }
+          ).data,
+        ) as Database;
+        migrateDatabase(db);
+        saveStoredDatabase(sql, db);
+      } else {
+        const db = readDatabase(sql);
+        if (migrateDatabase(db)) writeDatabase(sql, db);
+      }
+      // Preserve the exact legacy bytes as migration evidence; business writes never touch them.
+      sql.exec(`CREATE TRIGGER IF NOT EXISTS legacy_state_immutable_update BEFORE UPDATE ON state BEGIN SELECT RAISE(ABORT,'legacy state is read-only migration evidence'); END;
+        CREATE TRIGGER IF NOT EXISTS legacy_state_immutable_delete BEFORE DELETE ON state BEGIN SELECT RAISE(ABORT,'legacy state is read-only migration evidence'); END;`);
+    });
+  } catch (error) {
+    sql.close();
+    throw error;
+  }
+  const close = sql.close.bind(sql);
+  sql.close = () => {
+    preserveBeforeClose(sql);
+    close();
+  };
   return sql;
 }
 
-export function readDatabase(sql: DatabaseSync): Database {
-  return JSON.parse(
-    (sql.prepare("SELECT data FROM state WHERE id=1").get() as { data: string })
-      .data,
-  );
+export function readDatabase(
+  sql: DatabaseSync,
+  scope?: DatabaseReadScope,
+): Database {
+  return loadStoredDatabase(sql, scope);
 }
 export function writeDatabase(sql: DatabaseSync, db: Database) {
-  sql.prepare("UPDATE state SET data=? WHERE id=1").run(JSON.stringify(db));
+  const save = () => saveStoredDatabase(sql, db);
+  if (sql.isTransaction) save();
+  else transaction(sql, save);
 }
 export function transaction<T>(sql: DatabaseSync, action: () => T): T {
   sql.exec("BEGIN IMMEDIATE");
   try {
     const result = action();
+    if (result && typeof (result as { then?: unknown }).then === "function")
+      throw new Error("数据库事务中禁止异步操作");
     sql.exec("COMMIT");
     return result;
   } catch (error) {

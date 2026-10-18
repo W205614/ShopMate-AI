@@ -4,7 +4,8 @@ import type { TableInstance } from "element-plus";
 import { useShop } from "../../stores/shop";
 import { api, RequestError, refreshState } from "../../services/api";
 import { dateTime, money } from "../../domain/types";
-import type { SKU } from "../../domain/types";
+import type { SKU, StockAdjustmentResult } from "../../domain/types";
+import { request } from "../../services/repository";
 import { yuanToCents, centsToYuan } from "../../domain/amount";
 import {
   readStockRecovery,
@@ -121,24 +122,37 @@ const movements = computed(() =>
 const filtered = computed(() =>
   tab.value === "stock" ? stockFiltered.value : movements.value,
 );
-const { page } = useAdminPagination<{ id: string }>(filtered, filters);
-const rows = computed(() =>
-  stockFiltered.value.slice((page.value - 1) * 10, page.value * 10),
-);
-const records = computed(() =>
-  movements.value.slice((page.value - 1) * 10, page.value * 10),
-);
+const { page, total } = useAdminPagination<{ id: string }>(filtered, filters);
+const rows = computed(() => stockFiltered.value);
+const records = computed(() => movements.value);
 const selectedMovement = computed(() =>
   shop.db.inventory.find((m) => m.id === detailId.value),
 );
-const matchedRequest = computed(
-  () =>
-    submitted.value &&
-    shop.db.inventoryRequests.find(
-      (r) =>
-        r.adminId === shop.adminSession?.id &&
-        r.requestId === submitted.value?.options.requestId,
-    ),
+const matchedRequest = ref<{ result: StockAdjustmentResult } | null>(null);
+watch(
+  [() => submitted.value?.options.requestId, () => shop.db.revision],
+  async () => {
+    const id = submitted.value?.options.requestId;
+    matchedRequest.value = null;
+    if (!id) return;
+    try {
+      const response = await request<{
+        found: boolean;
+        result?: StockAdjustmentResult;
+      }>(
+        `/api/requests/${encodeURIComponent(id)}?method=adjustStock&role=admin`,
+      );
+      if (
+        submitted.value?.options.requestId === id &&
+        response.found &&
+        response.result
+      )
+        matchedRequest.value = { result: response.result };
+    } catch {
+      /* Keep the original marker for a later lookup or same-key retry. */
+    }
+  },
+  { immediate: true },
 );
 const afterStock = computed(() =>
   form.mode === "count" ? form.quantity : form.stock + form.quantity,
@@ -298,7 +312,7 @@ async function save() {
       ><el-button
         @click="filters.update({ q: '', low: '' }, { resetPage: true })"
         >重置筛选</el-button
-      ><span class="admin-note">{{ filtered.length }} 条</span>
+      ><span class="admin-note">{{ total }} 条</span>
     </div>
     <el-table
       v-if="tab === 'stock'"
@@ -396,7 +410,7 @@ async function save() {
       <el-pagination
         v-model:current-page="page"
         :page-size="10"
-        :total="filtered.length"
+        :total="total"
         layout="prev,pager,next,total"
       />
     </div>

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useShop } from "../../stores/shop";
-import { api } from "../../services/api";
+import { api, getCollectionPage } from "../../services/api";
 import { money, dateTime, orderLabels } from "../../domain/types";
 import type { OrderStatus } from "../../domain/types";
 import OrderItems from "../../components/shop/OrderItems.vue";
@@ -30,13 +30,13 @@ const shop = useShop(),
       )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   );
-const pages = computed(() => Math.max(1, Math.ceil(orders.value.length / 10)));
-const pageNumber = computed(() =>
-  Math.min(pages.value, Math.max(1, Math.floor(Number(route.query.page) || 1))),
-);
-const visibleOrders = computed(() =>
-  orders.value.slice((pageNumber.value - 1) * 10, pageNumber.value * 10),
-);
+const listing = computed(() => {
+  void shop.db.revision;
+  return getCollectionPage("orders");
+});
+const pages = computed(() => listing.value?.pages ?? 1);
+const pageNumber = computed(() => listing.value?.page ?? 1);
+const visibleOrders = computed(() => orders.value);
 watch(
   () => route.query.q,
   (value) => {

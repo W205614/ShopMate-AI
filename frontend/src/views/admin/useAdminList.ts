@@ -1,11 +1,13 @@
 import { computed, ref, watch, type Ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { getCollectionPage, routeCollection } from "../../services/api";
 export function useAdminQuery() {
   const route = useRoute(),
     router = useRouter();
   // Inputs must update synchronously while guards await HTTP. All fields and
   // pagination share this draft, so a second edit cannot discard the first.
   const query = ref({ ...route.query });
+  const navigating = ref(false);
   let navigation = 0;
   watch(
     () => route.fullPath,
@@ -24,6 +26,7 @@ export function useAdminQuery() {
     }
     if (options.resetPage) delete next.page;
     const current = ++navigation;
+    navigating.value = true;
     query.value = next;
     try {
       const failure = await router[options.replace ? "replace" : "push"]({
@@ -34,6 +37,8 @@ export function useAdminQuery() {
     } catch (error) {
       if (current === navigation) query.value = { ...route.query };
       throw error;
+    } finally {
+      if (current === navigation) navigating.value = false;
     }
   }
   function field(
@@ -56,14 +61,22 @@ export function useAdminQuery() {
       },
     });
   }
-  return { field, update, query };
+  return { field, update, query, navigating };
 }
 export function useAdminPagination<T>(
   items: Readonly<Ref<T[]>>,
   state: ReturnType<typeof useAdminQuery>,
 ) {
   const { update, query } = state;
-  const pages = computed(() => Math.max(1, Math.ceil(items.value.length / 10)));
+  const metadata = computed(() => {
+    void items.value;
+    return getCollectionPage(routeCollection() ?? "");
+  });
+  const total = computed(() => metadata.value?.total ?? items.value.length);
+  const pages = computed(
+    () =>
+      metadata.value?.pages ?? Math.max(1, Math.ceil(items.value.length / 10)),
+  );
   const page = computed({
     get: () => {
       const raw =
@@ -80,8 +93,9 @@ export function useAdminPagination<T>(
     },
   });
   watch(
-    [() => query.value.page, pages],
+    [() => query.value.page, pages, state.navigating],
     () => {
+      if (state.navigating.value) return;
       const expected = page.value > 1 ? String(page.value) : undefined;
       if (query.value.page !== expected)
         void update({ page: expected }, { replace: true }).catch(
@@ -91,7 +105,12 @@ export function useAdminPagination<T>(
     { immediate: true },
   );
   const rows = computed(() =>
-    items.value.slice((page.value - 1) * 10, page.value * 10),
+    metadata.value
+      ? items.value.filter(
+          (item) =>
+            metadata.value?.ids?.includes((item as { id: string }).id) ?? true,
+        )
+      : items.value.slice((page.value - 1) * 10, page.value * 10),
   );
-  return { page, rows, pages };
+  return { page, rows, pages, total };
 }

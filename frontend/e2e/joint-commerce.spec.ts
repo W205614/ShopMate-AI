@@ -228,6 +228,7 @@ test("双独立身份真实界面完成用券购买、故障恢复、分批退�
       .getByLabel("收货人", { exact: true })
       .fill("联合验收长姓名收货人");
     await user.getByLabel("联系电话", { exact: true }).fill("123");
+    await user.getByLabel("配送省份", { exact: true }).fill("上海市");
     await user
       .getByLabel("省 / 市 / 区", { exact: true })
       .fill("上海市 徐汇区 长地址分区");
@@ -412,6 +413,9 @@ test("双独立身份真实界面完成用券购买、故障恢复、分批退�
 
     await admin.goto("/admin/products");
     await admin.getByPlaceholder("搜索商品名称").fill(productName);
+    await expect(admin.locator(".el-table__body-wrapper tbody tr")).toHaveCount(
+      1,
+    );
     await admin
       .locator(".el-table__body-wrapper tbody tr")
       .getByRole("button", { name: "编辑", exact: true })
@@ -465,12 +469,20 @@ test("双独立身份真实界面完成用券购买、故障恢复、分批退�
     );
     expect(
       final.products.find((p) => p.id === product.id)!.skus[0]!.stock,
-    ).toBe(7);
+    ).toBe(5);
     expect(
       final.inventory
         .filter((m) => m.skuId === product.skus[0]!.id)
         .reduce((n, m) => n + m.delta, 0),
-    ).toBe(7);
+    ).toBe(5);
+    expect(
+      final.returnInspections!.filter(
+        (i) => i.afterSaleId && i.productId === product.id,
+      ),
+    ).toEqual([
+      expect.objectContaining({ quantity: 1, status: "pending", good: 0 }),
+      expect.objectContaining({ quantity: 1, status: "pending", good: 0 }),
+    ]);
     const payments = final.ledger.filter(
         (l) => l.reference === orderId && l.type === "payment",
       ),
@@ -494,7 +506,7 @@ test("双独立身份真实界面完成用券购买、故障恢复、分批退�
         .filter((m) => m.skuId === product.skus[0]!.id)
         .map((m) => m.delta)
         .sort((a, b) => a - b),
-    ).toEqual([-3, 1, 1, 1, 7]);
+    ).toEqual([-3, 1, 7]);
     const privateUser = await read(user, "user");
     for (const records of [
       privateUser.ledger,

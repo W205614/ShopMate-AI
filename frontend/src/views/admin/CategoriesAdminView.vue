@@ -32,7 +32,7 @@ const filtered = computed(() =>
     )
     .sort((a, b) => (a.sort - b.sort) * (direction.value === "desc" ? -1 : 1)),
 );
-const { page, rows } = useAdminPagination(filtered, filters);
+const { page, rows, total } = useAdminPagination(filtered, filters);
 const { dialog, detailId, missing, open, capture, finish, assertCurrent } =
   useAdminEditor(
     computed(() => shop.db.categories),
@@ -66,9 +66,10 @@ function load(c?: Category) {
   Object.assign(
     form,
     c
-      ? { ...c }
+      ? { ...c, version: c.version ?? 1 }
       : {
           id: undefined,
+          version: undefined,
           name: "",
           description: "",
           image: "",
@@ -85,7 +86,14 @@ async function save() {
     });
   if (
     await run(async () => {
-      const input = { ...form };
+      const input = {
+        id: form.id,
+        version: form.version,
+        name: form.name,
+        description: form.description,
+        image: form.image,
+        sort: form.sort,
+      };
       await validateDecodedImages([input.image], 1);
       assertCurrent(target);
       await api.saveCategory(input);
@@ -100,7 +108,7 @@ async function remove(c: Category) {
       "删除分类",
       { type: "warning" },
     );
-    await run(() => api.deleteCategory(c.id), "分类已删除");
+    await run(() => api.deleteCategory(c.id, c.version ?? 1), "分类已删除");
   } catch {
     /* dismissed */
   }
@@ -122,7 +130,7 @@ async function remove(c: Category) {
         v-model="query"
         placeholder="搜索分类名称或描述"
         clearable
-      /><span class="admin-note">{{ filtered.length }} 个分类</span>
+      /><span class="admin-note">{{ total }} 个分类</span>
     </div>
     <el-table
       ref="table"
@@ -156,6 +164,7 @@ async function remove(c: Category) {
         width="100"
       /><el-table-column label="商品数" width="110"
         ><template #default="{ row }">{{
+          row.productCount ??
           shop.db.products.filter((p) => p.categoryId === row.id).length
         }}</template></el-table-column
       ><el-table-column label="操作" width="140"
@@ -176,7 +185,7 @@ async function remove(c: Category) {
       <el-pagination
         v-model:current-page="page"
         :page-size="10"
-        :total="filtered.length"
+        :total="total"
         layout="prev,pager,next,total"
       />
     </div>

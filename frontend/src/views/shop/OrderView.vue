@@ -152,6 +152,28 @@ async function request() {
             {{ money(order.discount)
             }}{{ order.coupon ? `（${order.coupon.name}）` : "" }}
           </p>
+          <p class="secondary">
+            运费
+            {{
+              money(order.shippingFee ?? 0)
+            }}。未发货全额退款退运费，其他退款仅退商品实付，不承担退货运费。
+          </p>
+          <p
+            v-if="
+              order.inventoryPolicy === 'reserved-v1' &&
+              order.status === 'pending'
+            "
+            class="secondary"
+          >
+            库存已预占，超时或取消后释放。
+          </p>
+          <p v-if="order.afterSaleDays" class="secondary">
+            本单确认收货后
+            {{
+              order.afterSaleDays
+            }}
+            天内可新申请售后（演示规则）；已受理申请继续处理。
+          </p>
           <p v-if="order.refundedAmount" class="commerce-amount-note">
             已退款 {{ money(order.refundedAmount) }}，剩余实付
             {{ money(order.total - order.refundedAmount) }}

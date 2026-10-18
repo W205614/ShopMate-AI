@@ -364,6 +364,24 @@ export function createSeed(): Database {
   });
   return {
     version: 3,
+    shippingRules: [
+      {
+        id: "shipping-default",
+        name: "默认免运费",
+        province: "*",
+        enabled: true,
+        fee: 0,
+        freeAbove: 0,
+        version: 1,
+      },
+    ],
+    promotions: [],
+    pointsEntries: [],
+    suppliers: [],
+    purchaseOrders: [],
+    returnInspections: [],
+    notifications: [],
+    auditEntries: [],
     inventoryRequests: [],
     coupons: [],
     couponClaims: [],

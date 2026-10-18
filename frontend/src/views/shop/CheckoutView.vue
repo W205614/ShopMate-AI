@@ -40,7 +40,11 @@ try {
 } catch {
   /* A new submission must first save its own recovery marker. */
 }
-const cartIds = ref(shop.myCart.filter((i) => i.selected).map((i) => i.id));
+const cartIds = ref(
+  typeof route.query.cartIds === "string"
+    ? route.query.cartIds.split(",").filter(Boolean)
+    : shop.myCart.filter((i) => i.selected).map((i) => i.id),
+);
 const source = computed<CheckoutSource>(() =>
   route.query.productId || route.query.skuId
     ? {
@@ -478,7 +482,7 @@ watch(
             aria-label="使用优惠券"
             :disabled="submitting || disconnected"
           >
-            <option value="">不使用优惠券</option>
+            <option value="">自动选择最优优惠（满减同额优先）</option>
             <option
               v-for="{ claim, coupon, reason } in couponOptions"
               :key="claim.id"
@@ -531,14 +535,30 @@ watch(
             <span>商品小计</span><span>{{ money(quote.subtotal) }}</span>
           </div>
           <div>
-            <span>优惠减免</span><span>−{{ money(quote.discount) }}</span>
+            <span
+              >优惠减免{{
+                quote.promotion
+                  ? ` · ${quote.promotion.name}`
+                  : quote.coupon
+                    ? ` · ${quote.coupon.name}`
+                    : ""
+              }}</span
+            ><span>−{{ money(quote.discount) }}</span>
           </div>
-          <div><span>配送费</span><span>¥0.00</span></div>
+          <div>
+            <span
+              >配送费{{
+                quote.shipping ? ` · ${quote.shipping.name}` : ""
+              }}</span
+            ><span>{{ money(quote.shippingFee ?? 0) }}</span>
+          </div>
           <div class="summary-total">
             <span>应付金额</span><strong>{{ money(quote.total) }}</strong>
           </div>
           <p class="secondary">
-            报价有效至 {{ dateTime(quote.expiresAt) }}
+            报价有效至
+            {{ dateTime(quote.expiresAt) }}。报价不占库存，提交订单后预占 30
+            分钟。
           </p></template
         >
         <p v-if="expired || stale" role="status" class="stock-error">

@@ -54,6 +54,21 @@ jobs:
         if: failure()
         working-directory: .
         run: docker ps -a --filter label=com.docker.compose.project=shopmate-auth-ci
+      - name: Start a separate operations acceptance deployment
+        working-directory: .
+        env:
+          ADMIN_PASSWORD: CIContainer123!
+          APP_PORT: "18091"
+          APP_ORIGINS: http://127.0.0.1:18091
+          VCS_REF: ${{ github.sha }}
+          ACCEPTANCE_LEGACY_COMMANDS: "false"
+        run: docker compose -p shopmate-operations-ci -f compose.yaml -f deploy/compose.acceptance.yaml up -d --wait
+      - name: Verify extended commerce and staff forms through containers
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:18091
+          E2E_ADMIN_PASSWORD: CIContainer123!
+          E2E_MUTATIONS_ALLOWED: "1"
+        run: npm run test:e2e -- e2e/extension-feature.spec.ts e2e/operations-ui.spec.ts --output=test-results-operations
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -61,3 +76,4 @@ jobs:
           path: |
             frontend/test-results
             frontend/test-results-container
+            frontend/test-results-operations

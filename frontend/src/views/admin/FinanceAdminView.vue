@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from "vue";
 import type { TableInstance } from "element-plus";
+import { ElMessage } from "element-plus";
+import type { LedgerEntry } from "../../domain/types";
+import { request } from "../../services/repository";
 import { useShop } from "../../stores/shop";
+import { getCollectionPage } from "../../services/api";
 import { dateTime } from "../../domain/types";
 import {
   ledgerLabels as labels,
@@ -74,8 +78,18 @@ const filtered = computed(() =>
         : b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
     ),
 );
-const { page, rows } = useAdminPagination(filtered, filters);
-const sums = computed(() => sumLedger(filtered.value));
+const { page, rows, total } = useAdminPagination(filtered, filters);
+const sums = computed(() => {
+  void shop.db.revision;
+  const totals = getCollectionPage("ledger")?.totals;
+  return totals
+    ? {
+        payment: BigInt(totals.payment),
+        refund: BigInt(totals.refund),
+        purchase: BigInt(totals.purchase),
+      }
+    : sumLedger(filtered.value);
+});
 const selected = computed(() =>
   shop.db.ledger.find((l) => l.id === selectedId.value),
 );
@@ -97,17 +111,68 @@ watch(sort, async () => {
     );
   else table.value?.clearSort();
 });
-function download() {
-  const url = URL.createObjectURL(
-      new Blob([ledgerCsv(filtered.value, dateTime)], {
-        type: "text/csv;charset=utf-8",
-      }),
-    ),
-    link = document.createElement("a");
-  link.href = url;
-  link.download = "ShopMate-演示流水.csv";
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+const exporting = ref(false);
+async function download() {
+  if (exporting.value || dateError.value) return;
+  exporting.value = true;
+  const actor = shop.adminSession?.id;
+  const assertActor = () => {
+    if (
+      actor !== shop.adminSession?.id ||
+      !shop.adminSession?.permissions?.includes("finance")
+    )
+      throw new Error("管理员身份或权限已变化，导出已取消");
+  };
+  try {
+    const params = new window.URLSearchParams({
+      role: "admin",
+      pageSize: "100",
+    });
+    for (const [key, value] of Object.entries(filters.query.value)) {
+      if (typeof value === "string" && !["page", "detail"].includes(key))
+        params.set(key === "q" ? "search" : key, value);
+    }
+    type ExportPage = {
+      items: LedgerEntry[];
+      revision: number;
+      pages: number;
+      total: number;
+    };
+    const first = await request<ExportPage>(
+      `/api/collections/ledger?${params}`,
+    );
+    assertActor();
+    const entries = [...first.items];
+    for (let number = 2; number <= first.pages; number++) {
+      params.set("page", String(number));
+      const result = await request<ExportPage>(
+        `/api/collections/ledger?${params}`,
+      );
+      assertActor();
+      if (result.revision !== first.revision || result.total !== first.total)
+        throw new Error("导出期间数据已变化，请重新导出以取得一致记录");
+      entries.push(...result.items);
+    }
+    if (
+      entries.length !== first.total ||
+      new Set(entries.map((entry) => entry.id)).size !== entries.length
+    )
+      throw new Error("导出记录不完整，请重新读取后重试");
+    const url = URL.createObjectURL(
+        new Blob([ledgerCsv(entries, dateTime)], {
+          type: "text/csv;charset=utf-8",
+        }),
+      ),
+      link = document.createElement("a");
+    link.href = url;
+    link.download = "ShopMate-演示流水.csv";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "导出失败");
+  } finally {
+    exporting.value = false;
+  }
 }
 </script>
 <template>
@@ -116,7 +181,10 @@ function download() {
       <h1>收支流水</h1>
       <p>记录每笔款项。净收支不代表利润。</p>
     </div>
-    <el-button @click="download" :disabled="!filtered.length"
+    <el-button
+      @click="download"
+      :loading="exporting"
+      :disabled="!total || exporting"
       >导出当前 CSV</el-button
     >
   </div>
@@ -184,7 +252,7 @@ function download() {
         "
         >重置筛选</el-button
       >
-      <span class="admin-note">{{ filtered.length }} 条演示流水</span>
+      <span class="admin-note">{{ total }} 条演示流水</span>
     </div>
     <p v-if="from || to" class="admin-note">
       当前日期：{{ from || "不限" }} 至
@@ -269,7 +337,7 @@ function download() {
       <el-pagination
         v-model:current-page="page"
         :page-size="10"
-        :total="filtered.length"
+        :total="total"
         layout="prev,pager,next,total"
       />
     </div>

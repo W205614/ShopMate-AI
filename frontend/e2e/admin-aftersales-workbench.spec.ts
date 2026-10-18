@@ -180,6 +180,7 @@ test("售后四页数据查询、状态、刷新和前进后退保留 URL", asyn
   await expect(page).toHaveURL(/page=4/);
   await expect(rows).toHaveCount(1);
   await page.locator(".el-pager li").filter({ hasText: /^3$/ }).click();
+  await expect(page).toHaveURL(/page=3/);
   await page.goBack();
   await expect(page).toHaveURL(/page=4/);
   await page.goForward();

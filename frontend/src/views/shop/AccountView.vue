@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CollectionPager from "../../components/shop/CollectionPager.vue";
 import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter, type LocationQuery } from "vue-router";
 import { useShop } from "../../stores/shop";
@@ -40,6 +41,7 @@ const form = reactive<AddressInput>({
   name: "",
   phone: "",
   region: "",
+  province: "",
   detail: "",
   isDefault: false,
 });
@@ -133,6 +135,7 @@ function edit(a?: Address) {
     name: a?.name ?? "",
     phone: a?.phone ?? "",
     region: a?.region ?? "",
+    province: a?.province ?? "",
     detail: a?.detail ?? "",
     isDefault: a?.isDefault ?? shop.myAddresses.length === 0,
   });
@@ -150,7 +153,7 @@ async function logout() {
   if (await run(() => shop.logout("user"))) await router.push("/");
 }
 async function removeFavorite(id: string) {
-  await run(() => api.favorite(id), "已取消收藏");
+  await run(() => api.favorite(id, false), "已取消收藏");
 }
 async function saveProfile() {
   await run(() => api.updateProfile(profileName.value), "昵称已更新");
@@ -214,19 +217,23 @@ async function deleteReview(id: string) {
       </button>
     </div>
     <div class="account-shortcuts">
+      <RouterLink to="/points"
+        ><span>会员积分</span><strong>余额与明细</strong><ArrowUpRight
+      /></RouterLink>
+      <RouterLink to="/notifications"
+        ><span>站内通知</span><strong>交易动态</strong><ArrowUpRight
+      /></RouterLink>
       <RouterLink to="/orders"
-        ><span>我的订单</span><strong>{{ shop.myOrders.length }}</strong
+        ><span>我的订单</span><strong>{{ shop.summary.orderCount }}</strong
         ><ArrowUpRight
       /></RouterLink>
       <RouterLink to="/after-sales"
-        ><span>售后服务</span
-        ><strong>{{
-          shop.db.afterSales.filter((a) => a.userId === shop.userId).length
-        }}</strong
+        ><span>售后服务</span><strong>{{ shop.summary.afterSaleCount }}</strong
         ><ArrowUpRight
       /></RouterLink>
       <RouterLink to="/coupons"
-        ><span>领券中心</span><strong>{{ coupons.length }}</strong
+        ><span>领券中心</span
+        ><strong>{{ shop.summary.couponClaimCount }}</strong
         ><ArrowUpRight
       /></RouterLink>
     </div>
@@ -244,7 +251,7 @@ async function deleteReview(id: string) {
     <section v-if="section === 'overview'">
       <div class="section-heading">
         <h2>留给下次的喜欢</h2>
-        <span>{{ favorites.length }} 件收藏</span>
+        <span>{{ shop.summary.favoriteCount }} 件收藏</span>
       </div>
       <div v-if="favorites.length" class="product-grid">
         <article v-for="p in favorites" :key="p.id" class="favorite-entry">
@@ -299,6 +306,13 @@ async function deleteReview(id: string) {
               autocomplete="tel"
           /></label>
         </div>
+        <label
+          >配送省份<input
+            v-model.trim="form.province"
+            required
+            maxlength="30"
+            placeholder="如：浙江省"
+        /></label>
         <label
           >省 / 市 / 区<input
             v-model.trim="form.region"
@@ -617,5 +631,18 @@ async function deleteReview(id: string) {
         <p>购买并确认收货后，留下你的使用感受。</p>
       </div>
     </section>
+    <CollectionPager
+      :collection="
+        section === 'overview'
+          ? 'products'
+          : section === 'addresses'
+            ? 'addresses'
+            : section === 'coupons'
+              ? 'couponClaims'
+              : section === 'reviews'
+                ? 'reviews'
+                : 'orders'
+      "
+    />
   </div>
 </template>

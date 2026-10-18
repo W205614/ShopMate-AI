@@ -1,8 +1,20 @@
+import type {
+  ShippingRule,
+  Promotion,
+  PointsEntry,
+  Supplier,
+  PurchaseOrder,
+  ReturnInspection,
+  Notification,
+  AuditEntry,
+} from "./operations";
 export type Role = "user" | "admin";
 export interface Session {
   id: string;
   name: string;
   role: Role;
+  permissions?: string[];
+  staffRole?: "owner" | "operations" | "warehouse" | "support" | "finance";
 }
 export interface User {
   id: string;
@@ -10,6 +22,8 @@ export interface User {
   name: string;
 }
 export interface Category {
+  productCount?: number;
+  version?: number;
   id: string;
   name: string;
   description: string;
@@ -23,6 +37,7 @@ export interface SKU {
   stock: number;
 }
 export interface Product {
+  version?: number;
   id: string;
   name: string;
   subtitle: string;
@@ -43,6 +58,7 @@ export interface CartItem {
   selected: boolean;
 }
 export interface Address {
+  province?: string;
   id: string;
   userId: string;
   name: string;
@@ -73,6 +89,14 @@ export interface OrderItem {
   quantity: number;
 }
 export interface Order {
+  inventoryPolicy?: "reserved-v1";
+  shipping?: { ruleId: string; name: string; fee: number };
+  shippingFee?: number;
+  shippingRefunded?: number;
+  promotion?: { id: string; name: string; discount: number };
+  afterSaleDays?: number;
+  pointsPolicy?: "earned-v1";
+  pointsAwarded?: number;
   subtotal: number;
   discount: number;
   refundedAmount: number;
@@ -109,6 +133,7 @@ export interface AfterSaleLine {
   amount: number;
 }
 export interface AfterSale {
+  shippingRefund?: number;
   lines: AfterSaleLine[];
   refundAmount: number;
   events: BusinessEvent[];
@@ -188,11 +213,13 @@ export interface Faq {
   active: boolean;
 }
 export interface Settings {
+  version?: number;
   name: string;
   slogan: string;
   notice: string;
 }
 export interface Coupon {
+  version?: number;
   claimedCount?: number;
   id: string;
   name: string;
@@ -249,6 +276,9 @@ export interface CheckoutInput {
   couponClaimId?: string;
 }
 export interface CheckoutQuote {
+  shipping?: { ruleId: string; name: string; fee: number };
+  shippingFee?: number;
+  promotion?: { id: string; name: string; discount: number };
   id: string;
   userId: string;
   input: CheckoutInput;
@@ -276,6 +306,14 @@ export interface ReorderResult {
   skipped: string[];
 }
 export interface Database {
+  shippingRules?: ShippingRule[];
+  promotions?: Promotion[];
+  pointsEntries?: PointsEntry[];
+  suppliers?: Supplier[];
+  purchaseOrders?: PurchaseOrder[];
+  returnInspections?: ReturnInspection[];
+  notifications?: Notification[];
+  auditEntries?: AuditEntry[];
   inventoryRequests: InventoryRequest[];
   coupons: Coupon[];
   couponClaims: CouponClaim[];
@@ -299,7 +337,7 @@ export interface Database {
   settings: Settings;
 }
 export type ProductInput = Omit<Product, "id"> & { id?: string };
-export type CategoryInput = Omit<Category, "id"> & { id?: string };
+export type CategoryInput = Omit<Category, "id" | "productCount"> & { id?: string };
 export type AddressInput = Omit<Address, "id" | "userId"> & { id?: string };
 export type FaqInput = Omit<Faq, "id"> & { id?: string };
 export const orderLabels: Record<OrderStatus, string> = {

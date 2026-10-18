@@ -12,8 +12,22 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env before first startup}
       APP_ORIGINS: ${APP_ORIGINS:-http://localhost:18086,http://127.0.0.1:18086}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: "true"
+      BACKUP_DIR: /app/backups
+      LOG_REQUESTS: ${LOG_REQUESTS:-true}
+      AFTER_SALE_DAYS: ${AFTER_SALE_DAYS:-7}
+      ALLOW_LEGACY_COMMANDS: ${ALLOW_LEGACY_COMMANDS:-false}
     volumes:
       - api_data:/app/data
+      - ${BACKUP_PATH:-./backups}:/app/backups
+    stop_grace_period: 20s
+    mem_limit: 1g
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
   web:
     image: shopmate-ai-web:local
@@ -27,5 +41,10 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 volumes:
   api_data:

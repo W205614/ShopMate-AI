@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import {
   api,
   getDatabase,
+  getMemberSummary,
   getSession,
   getStorageIssue,
   subscribeDatabase,
@@ -12,6 +13,7 @@ import type { Role } from "../domain/types";
 
 export const useShop = defineStore("shop", () => {
   const db = ref(getDatabase());
+  const summary = ref(getMemberSummary());
   const storageIssue = ref(getStorageIssue());
   const syncStatus = ref(getSyncStatus());
   const userSession = ref(getSession("user"));
@@ -32,6 +34,7 @@ export const useShop = defineStore("shop", () => {
   );
   subscribeDatabase((value) => {
     db.value = value;
+    summary.value = getMemberSummary();
     storageIssue.value = getStorageIssue();
     syncStatus.value = getSyncStatus();
     userSession.value = getSession("user");
@@ -52,6 +55,7 @@ export const useShop = defineStore("shop", () => {
   }
   return {
     db,
+    summary,
     storageIssue,
     syncStatus,
     user,

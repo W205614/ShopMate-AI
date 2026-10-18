@@ -6,6 +6,8 @@ import {
   hasPasswordChangeNotice,
   refreshState,
   hasConfirmedLogout,
+  getPendingCommands,
+  resolvePendingCommand,
 } from "./services/api";
 const shop = useShop();
 const route = useRoute(),
@@ -13,6 +15,7 @@ const route = useRoute(),
 const expectedRole = computed(() =>
   route.path.startsWith("/admin") ? "admin" : "user",
 );
+let redirecting = false;
 watch(
   () => [
     shop.userSession,
@@ -32,19 +35,50 @@ watch(
       (role === "user" && !shop.userSession) ||
       (role === "admin" && !shop.adminSession)
     ) {
+      if (redirecting) return;
+      redirecting = true;
       const changed = role === "user" && hasPasswordChangeNotice();
-      void router.replace({
-        path: role === "admin" ? "/admin/login" : "/login",
-        query: {
-          redirect: route.fullPath,
-          ...(changed ? { changed: "1" } : {}),
-        },
-      });
+      void router
+        .replace({
+          path: role === "admin" ? "/admin/login" : "/login",
+          query: {
+            redirect: route.fullPath,
+            ...(changed ? { changed: "1" } : {}),
+          },
+        })
+        .finally(() => {
+          redirecting = false;
+        });
     }
   },
 );
 const error = ref("");
 const reconnecting = ref(false);
+const pendingVersion = ref(0),
+  commandNotice = ref("");
+const pendingCommands = computed(() => {
+  void shop.db;
+  void pendingVersion.value;
+  return getPendingCommands();
+});
+async function checkCommands() {
+  if (reconnecting.value) return;
+  reconnecting.value = true;
+  try {
+    let unresolved = 0;
+    for (const command of pendingCommands.value)
+      if (!(await resolvePendingCommand(command))) unresolved++;
+    commandNotice.value = unresolved
+      ? "部分请求尚无已完成记录。请回到原表单，用相同内容重试；不要修改内容后重复提交。"
+      : "已核对已完成的请求，请查看最新业务记录。";
+    pendingVersion.value++;
+  } catch (cause) {
+    commandNotice.value =
+      cause instanceof Error ? cause.message : "暂时无法核对";
+  } finally {
+    reconnecting.value = false;
+  }
+}
 const authPage = computed(
   () =>
     route.path === "/login" ||
@@ -85,6 +119,14 @@ onErrorCaptured((cause) => {
 });
 </script>
 <template>
+  <aside v-if="pendingCommands.length" class="storage-warning" role="status">
+    有 {{ pendingCommands.length }} 个提交结果待核对。<button
+      :disabled="reconnecting"
+      @click="checkCommands"
+    >
+      核对上次提交</button
+    >{{ commandNotice }}
+  </aside>
   <aside
     v-if="shop.storageIssue && !unavailable"
     class="storage-warning"

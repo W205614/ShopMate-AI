@@ -11,6 +11,7 @@ import {
   searchProducts,
 } from "../../domain/catalogue";
 import { money } from "../../domain/types";
+import { getCollectionPage } from "../../services/api";
 import ProductCard from "../../components/shop/ProductCard.vue";
 
 const shop = useShop(),
@@ -44,13 +45,14 @@ watch(
 const filtered = computed(() =>
   searchProducts(shop.db.products, shop.db.categories, filters.value),
 );
-const pages = computed(() =>
-  Math.max(1, Math.ceil(filtered.value.length / PAGE_SIZE)),
-);
-const page = computed(() => Math.min(filters.value.page, pages.value));
-const visible = computed(() =>
-  filtered.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE),
-);
+const listing = computed(() => {
+  void shop.db.revision;
+  return getCollectionPage("products");
+});
+const total = computed(() => listing.value?.total ?? filtered.value.length);
+const pages = computed(() => listing.value?.pages ?? 1);
+const page = computed(() => listing.value?.page ?? 1);
+const visible = computed(() => filtered.value);
 const chips = computed(() => [
   ...(filters.value.q
     ? [{ key: "q", label: `关键词：${filters.value.q}` }]
@@ -196,9 +198,9 @@ function applyPrices() {
         </div>
         <div class="results-top">
           <p role="status">
-            共 {{ filtered.length }} 件商品<span v-if="filtered.length">
+            共 {{ total }} 件商品<span v-if="filtered.length">
               · 第 {{ (page - 1) * PAGE_SIZE + 1 }}–{{
-                Math.min(page * PAGE_SIZE, filtered.length)
+                Math.min(page * PAGE_SIZE, total)
               }}
               件</span
             >

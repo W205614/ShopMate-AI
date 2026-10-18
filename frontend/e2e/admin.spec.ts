@@ -32,6 +32,7 @@ test("商品上下架即时同步到已打开的商城标签页，并在刷新�
   ).toBeEnabled();
   await page.goto("/admin/products");
   await page.getByPlaceholder("搜索商品名称").fill("静听 无线头戴耳机");
+  await expect(page.locator(".el-table__body-wrapper tbody tr")).toHaveCount(1);
   await page.getByRole("button", { name: "下架", exact: true }).click();
   await page.getByRole("button", { name: "确定", exact: true }).click();
   await expect(page.getByText("商品状态已更新", { exact: true })).toBeVisible();
@@ -63,7 +64,8 @@ test("补货增加指定 SKU 库存并写入采购流水，导出的是筛选后
   await page.goto("/admin/inventory");
   await page
     .getByPlaceholder("搜索商品、规格或变动编号 / 原因")
-    .fill("明度 桌面阅读灯");
+    .fill("p03-s1");
+  await expect(page.locator(".el-table__body-wrapper tbody tr")).toHaveCount(1);
   const row = page.locator(".el-table__body-wrapper tbody tr").first();
   const before = Number(
     (await row.locator("td").nth(2).innerText()).replace(/\D/g, ""),
@@ -143,7 +145,7 @@ test("新增 FAQ 参与用户规则回复，转人工后管理回复同步到用
   await expect(user.getByText("会话已结束，历史记录仍可查看。")).toBeVisible();
 });
 
-test("引用中的分类禁止删除，恢复初始数据必须输入确认词", async ({ page }) => {
+test("引用中的分类禁止删除，默认关闭网页演示重置", async ({ page }) => {
   await login(page);
   await page.goto("/admin/categories");
   const row = page
@@ -156,12 +158,15 @@ test("引用中的分类禁止删除，恢复初始数据必须输入确认词",
   ).toBeVisible();
   await expect(row).toBeVisible();
   await page.goto("/admin/settings");
-  await page.getByRole("button", { name: "恢复演示数据" }).click();
-  const dialog = page.getByRole("dialog", { name: "恢复初始数据" });
-  await dialog.getByRole("textbox").fill("错误确认词");
-  await dialog.getByRole("button", { name: "恢复初始数据" }).click();
-  await expect(dialog.getByText("请输入完整的「恢复演示」")).toBeVisible();
-  await dialog.getByRole("textbox").fill("恢复演示");
-  await dialog.getByRole("button", { name: "恢复初始数据" }).click();
-  await expect(page.getByText("演示数据已恢复", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "恢复演示数据" })).toHaveCount(
+    0,
+  );
+  expect(
+    (
+      await page.request.post("/api/actions/resetDemo", {
+        headers: { "X-ShopMate-Request": "1" },
+        data: { args: [] },
+      })
+    ).status(),
+  ).toBe(403);
 });

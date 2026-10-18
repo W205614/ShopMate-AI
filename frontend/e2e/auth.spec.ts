@@ -79,6 +79,8 @@ test("新用户添加地址、下单和模拟付款，管理端可看到真实�
   await page.getByRole("button", { name: "添加地址", exact: true }).click();
   await page.getByLabel("收货人", { exact: true }).fill("新用户收货人");
   await page.getByLabel("联系电话", { exact: true }).fill("13800000001");
+  await page.getByLabel("配送省份", { exact: true }).fill("上海市");
+  await page.getByLabel("配送省份", { exact: true }).fill("上海市");
   await page.getByLabel("省 / 市 / 区", { exact: true }).fill("上海市 徐汇区");
   await page.getByLabel("详细地址", { exact: true }).fill("测试路 100 号");
   await page.getByRole("button", { name: "保存地址", exact: true }).click();

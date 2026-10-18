@@ -167,20 +167,23 @@ test("他人领取同券只更新领取数，不能使已有有效报价失效",
   const submit = page.getByRole("button", { name: "提交订单", exact: true });
   await expect(submit).toBeEnabled();
   const before = quotes;
+  const beforeRevision = (await state(page)).revision;
   const otherContext = await browser.newContext({ baseURL });
   try {
     const other = await otherContext.newPage();
     await login(other, "user", "chen");
     const synchronized = page.waitForResponse(
       async (response) =>
-        response.url().includes("/api/state?role=user") &&
+        response.url().includes("/api/bootstrap?role=user") &&
         response.ok() &&
-        (await response.json()).db.coupons.find(
-          (c: { id: string }) => c.id === value.id,
-        )?.claimedCount === 2,
+        (await response.json()).db.revision > beforeRevision,
     );
     await action(other, "claimCoupon", value.id);
     await synchronized;
+    const couponPage = await (
+      await page.request.get(`/api/collections/coupons?id=${value.id}`)
+    ).json();
+    expect(couponPage.items[0].claimedCount).toBe(2);
     await page.evaluate(
       () =>
         new Promise((resolve) =>
@@ -216,6 +219,7 @@ test("后台四页名称和启停状态筛选、刷新回退及停用后页码�
   await expect(page).toHaveURL(/page=4/);
   await expect(rows).toHaveCount(1);
   await page.locator(".el-pager li").filter({ hasText: /^3$/ }).click();
+  await expect(page).toHaveURL(/page=3/);
   await page.goBack();
   await expect(page).toHaveURL(/page=4/);
   await page.goForward();
@@ -251,9 +255,11 @@ test("未领取配置带只读计数仍可编辑，保存失败保留草稿且�
   await page.route("**/api/actions/saveCoupon", async (route) => {
     const input = route.request().postDataJSON().args[0];
     expect(input).not.toHaveProperty("claimedCount");
+    expect(input.version).toBe(value.version ?? 1);
     expect(Object.keys(input).sort()).toEqual(
       [
         "id",
+        "version",
         "name",
         "threshold",
         "discount",

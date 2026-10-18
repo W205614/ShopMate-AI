@@ -19,7 +19,7 @@ test("后台提交已成功但状态读取失败，保留成功结果并允许�
   await page.goto("/admin/settings");
   let blocked = false,
     writes = 0;
-  await page.route("**/api/state?role=admin", (route) =>
+  await page.route("**/api/bootstrap?role=admin", (route) =>
     blocked
       ? route.fulfill({ status: 503, json: { message: "测试同步不可用" } })
       : route.continue(),
@@ -59,7 +59,7 @@ test("首次读取故障保留目标 URL，恢复后才根据真实会话显示�
     data: { role: "user", username: "lin", password: TEST_USER_PASSWORD },
   });
   let blocked = true;
-  await page.route("**/api/state?role=user", (route) =>
+  await page.route("**/api/bootstrap?role=user", (route) =>
     blocked ? route.abort() : route.continue(),
   );
   await page.goto("/orders");
@@ -107,7 +107,7 @@ test("写入后响应丢失显示结果未知，不自动重发", async ({ page 
   await expect(
     page.getByRole("alert").filter({ hasText: "结果暂无法确认" }),
   ).toBeVisible();
-  await page.waitForResponse((r) => r.url().includes("/api/state?") && r.ok());
+  await page.waitForResponse((r) => r.url().includes("/api/bootstrap?") && r.ok());
   expect(writes).toBe(1);
   const after = (
     await (await page.request.get("/api/state")).json()
@@ -128,7 +128,7 @@ test("用户加购成功后同步中断仍显示成功，重新连接不重复�
   await page.goto("/products/p01");
   let blocked = false,
     writes = 0;
-  await page.route("**/api/state?role=user", (route) =>
+  await page.route("**/api/bootstrap?role=user", (route) =>
     blocked ? route.abort() : route.continue(),
   );
   await page.route("**/api/actions/addCart", async (route) => {
@@ -160,7 +160,7 @@ test("管理端切换商城时读取故障不会展示旧管理快照", async ({
     page.getByRole("heading", { name: "收支流水", exact: true }),
   ).toBeVisible();
   let blocked = true;
-  await page.route("**/api/state?role=user", (route) =>
+  await page.route("**/api/bootstrap?role=user", (route) =>
     blocked ? route.abort() : route.continue(),
   );
   await page.getByRole("link", { name: /前往商城/ }).click();
@@ -178,7 +178,7 @@ test("管理端切换商城时读取故障不会展示旧管理快照", async ({
 test("游客已加载公开目录后连接中断，受保护页面仍保持隐藏", async ({ page }) => {
   await page.goto("/products");
   await expect(page.locator(".product-grid")).toBeVisible();
-  await page.route("**/api/state?role=user", (route) => route.abort());
+  await page.route("**/api/bootstrap?role=user", (route) => route.abort());
   await page.getByRole("link", { name: "我的订单", exact: true }).click();
   await expect(page).toHaveURL(/\/orders$/);
   await expect(

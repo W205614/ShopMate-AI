@@ -2,6 +2,7 @@ import type { ShopApi } from "../../shared/domain/api";
 import type { DatabaseSync } from "node:sqlite";
 import type { Database, Order } from "../../shared/domain/types";
 import { readDatabase, writeDatabase, transaction } from "./database";
+import { ensureRuntimeSchema, enqueue } from "./runtime";
 import {
   context,
   transact,
@@ -19,6 +20,8 @@ import {
   admin,
 } from "./repository";
 import {
+  availableStock,
+  syncOrderPoints,
   activeAfterSale,
   checkoutSnapshot,
   expireOrders,
@@ -27,10 +30,26 @@ import {
 } from "./commerce-rules";
 
 export function expirePendingOrders(sql: DatabaseSync) {
+  ensureRuntimeSchema(sql);
   return transaction(sql, () => {
-    const db = readDatabase(sql);
+    const db = readDatabase(sql, { pendingOnly: true });
+    const pendingIds = new Set(
+      db.orders.filter((o) => o.status === "pending").map((o) => o.id),
+    );
     const changed = expireOrders(db);
     if (changed) {
+      for (const order of db.orders)
+        if (pendingIds.has(order.id) && order.status === "cancelled")
+          enqueue(
+            sql,
+            "notification",
+            {
+              userId: order.userId,
+              orderId: order.id,
+              text: "订单付款超时，已关闭并释放库存预占",
+            },
+            `expiry:${order.id}`,
+          );
       db.revision++;
       writeDatabase(sql, db);
     }
@@ -53,7 +72,7 @@ const validCart = (
     !!product?.active &&
     !!sku &&
     item.quantity > 0 &&
-    item.quantity <= sku.stock
+    item.quantity <= availableStock(db, product.id, sku.id)
   );
 };
 const hasSale = (db: Database, orderId: string) =>
@@ -95,7 +114,8 @@ export const commerceApi: Pick<
           c.userId === uid && c.productId === productId && c.skuId === skuId,
       );
       requireThat(
-        (existing?.quantity ?? 0) + quantity <= sku.stock,
+        (existing?.quantity ?? 0) + quantity <=
+          availableStock(db, product.id, sku.id),
         "库存不足",
       );
       if (existing) {
@@ -123,7 +143,7 @@ export const commerceApi: Pick<
         requireThat(
           product.active &&
             integer(patch.quantity, 1) &&
-            patch.quantity <= sku.stock,
+            patch.quantity <= availableStock(db, product.id, sku.id),
           "数量必须为正整数且不能超过库存",
         );
         item.quantity = patch.quantity;
@@ -175,13 +195,16 @@ export const commerceApi: Pick<
       );
     });
   },
-  async favorite(productId) {
+  async favorite(productId, desired) {
     await transact((db) => {
       const uid = userId(),
         favorites = db.favorites[uid] ?? [];
-      if (favorites.includes(productId))
+      if (
+        desired === false ||
+        (desired === undefined && favorites.includes(productId))
+      )
         db.favorites[uid] = favorites.filter((p) => p !== productId);
-      else {
+      else if (!favorites.includes(productId)) {
         requireThat(
           db.products.some((p) => p.id === productId && p.active),
           "商品不存在或已下架",
@@ -325,6 +348,14 @@ export const commerceApi: Pick<
           ...item,
           id: `${orderId}-${item.id}`,
         })),
+        inventoryPolicy: "reserved-v1",
+        pointsPolicy: "earned-v1",
+        pointsAwarded: 0,
+        afterSaleDays: context.getStore()?.afterSaleDays ?? 7,
+        shipping: clone(quote.shipping),
+        shippingFee: quote.shippingFee ?? 0,
+        shippingRefunded: 0,
+        promotion: clone(quote.promotion),
         subtotal: quote.subtotal,
         discount: quote.discount,
         total: quote.total,
@@ -375,7 +406,13 @@ export const commerceApi: Pick<
       for (const item of order.items) {
         const { product, sku } = productSku(db, item.productId, item.skuId);
         requireThat(
-          product.active && sku.stock >= item.quantity,
+          product.active &&
+            availableStock(
+              db,
+              product.id,
+              sku.id,
+              order.inventoryPolicy === "reserved-v1" ? order.id : undefined,
+            ) >= item.quantity,
           `${item.name}已下架或库存不足，无法支付`,
         );
       }
@@ -424,6 +461,7 @@ export const commerceApi: Pick<
       order.status = "completed";
       order.completedAt = now();
       addEvent(order, "completed", "user");
+      syncOrderPoints(db, order);
     });
   },
   async reorder(orderId) {
@@ -451,7 +489,7 @@ export const commerceApi: Pick<
               ? "规格已失效"
               : !integer(item.quantity, 1) || !integer(requested.quantity, 1)
                 ? "购买数量无效"
-                : requested.quantity > sku.stock
+                : requested.quantity > availableStock(db, product!.id, sku.id)
                   ? `库存不足（库存 ${sku.stock} 件，购物车已有 ${existing?.quantity ?? 0} 件，本次需 ${item.quantity} 件）`
                   : "";
         if (reason) {
@@ -484,6 +522,13 @@ export const commerceApi: Pick<
         "该状态不能申请售后",
       );
       requireThat(
+        !order.completedAt ||
+          order.afterSaleDays === undefined ||
+          Date.now() <=
+            Date.parse(order.completedAt) + order.afterSaleDays * 86400000,
+        "已超过该订单售后申请期限",
+      );
+      requireThat(
         text(reason, 100) && text(description, 1000),
         "请填写售后原因与说明",
       );
@@ -509,6 +554,17 @@ export const commerceApi: Pick<
         };
       });
       const at = now();
+      const fullRemaining = order.items.every(
+        (item) =>
+          item.refundedQuantity +
+            (details.find((line) => line.orderItemId === item.id)?.quantity ??
+              0) ===
+          item.quantity,
+      );
+      const shippingRefund =
+        order.status === "paid" && fullRemaining
+          ? (order.shippingFee ?? 0) - (order.shippingRefunded ?? 0)
+          : 0;
       db.afterSales.unshift({
         id: id("as-"),
         orderId,
@@ -520,7 +576,9 @@ export const commerceApi: Pick<
         createdAt: at,
         note: "",
         lines: details,
-        refundAmount: details.reduce((n, l) => n + l.amount, 0),
+        shippingRefund,
+        refundAmount:
+          details.reduce((n, l) => n + l.amount, 0) + shippingRefund,
         events: [{ at, actor: "user", action: "requested" }],
       });
       addEvent(order, "afterSaleRequested", "user");
@@ -605,6 +663,28 @@ export const commerceApi: Pick<
           "只有已提交退货单号的申请可以记录收货",
         );
         sale.status = "received";
+        if (order.inventoryPolicy === "reserved-v1") {
+          const inspections = (db.returnInspections ??= []);
+          for (const line of sale.lines) {
+            const item = order.items.find((i) => i.id === line.orderItemId)!;
+            requireThat(item, "退货订单条目不存在");
+            inspections.push({
+              id: id("inspection-"),
+              afterSaleId: sale.id,
+              orderItemId: item.id,
+              productId: item.productId,
+              skuId: item.skuId,
+              quantity: line.quantity,
+              good: 0,
+              defective: 0,
+              disposed: 0,
+              status: "pending",
+              note: "",
+              createdAt: now(),
+              version: 1,
+            });
+          }
+        }
       } else {
         requireThat(action === "refund", "售后操作无效");
         requireThat(
@@ -632,6 +712,23 @@ export const commerceApi: Pick<
           requireThat(expected === line.amount, "退款分摊金额无效");
           amount += expected;
         }
+        const shippingRefund = sale.shippingRefund ?? 0;
+        requireThat(
+          integer(shippingRefund) &&
+            (!shippingRefund ||
+              (!sale.requiresReturn &&
+                shippingRefund ===
+                  (order.shippingFee ?? 0) - (order.shippingRefunded ?? 0) &&
+                order.items.every(
+                  (item) =>
+                    item.refundedQuantity +
+                      (sale.lines.find((l) => l.orderItemId === item.id)
+                        ?.quantity ?? 0) ===
+                    item.quantity,
+                ))),
+          "运费退款金额无效",
+        );
+        amount += shippingRefund;
         requireThat(
           amount === sale.refundAmount &&
             order.refundedAmount + amount <= order.total,
@@ -639,18 +736,21 @@ export const commerceApi: Pick<
         );
         for (const line of sale.lines) {
           const item = order.items.find((i) => i.id === line.orderItemId)!;
-          move(
-            db,
-            item.productId,
-            item.skuId,
-            line.quantity,
-            `售后退款回补 ${order.id}`,
-          );
+          if (!sale.requiresReturn || order.inventoryPolicy !== "reserved-v1")
+            move(
+              db,
+              item.productId,
+              item.skuId,
+              line.quantity,
+              `售后退款回补 ${order.id}`,
+            );
           item.refundedQuantity += line.quantity;
         }
         ledger(db, "refund", amount, order.id, `模拟售后退款 ${sale.id}`);
         sale.status = "refunded";
         order.refundedAmount += amount;
+        order.shippingRefunded = (order.shippingRefunded ?? 0) + shippingRefund;
+        syncOrderPoints(db, order);
         if (order.items.every((i) => i.refundedQuantity === i.quantity))
           order.status = "refunded";
         addEvent(order, "refund", "admin", `退款 ${amount} 分`);

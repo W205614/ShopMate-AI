@@ -3,6 +3,7 @@
 **/dist
 **/test-results
 **/test-results-container
+**/test-results-operations
 **/playwright-report
 .taste-skill
 .env*
@@ -10,3 +11,5 @@ docs
 backend/data
 backend/test
 backend/.e2e
+backups
+.delivery

@@ -45,6 +45,24 @@ it("只使用精确库存关联，不猜测旧SKU或丢失的变动", () => {
     ledgerAssociation({ ...row, inventoryMovementId: "missing" }, db),
   ).toMatchObject({ label: "", notice: "关联库存变动不可用" });
   expect(
+    ledgerAssociation(
+      { ...row, reference: "wrong-sku", inventoryMovementId: "move1" },
+      db,
+    ),
+  ).toMatchObject({ label: "", notice: "关联库存变动不可用" });
+  const receiptDb = {
+    ...db,
+    purchaseOrders: [
+      { receipts: [{ id: "receipt1", movementIds: ["move1"] }] },
+    ],
+  } as Pick<Database, "orders" | "inventory" | "purchaseOrders">;
+  expect(
+    ledgerAssociation(
+      { ...row, reference: "receipt1", inventoryMovementId: "move1" },
+      receiptDb,
+    ),
+  ).toMatchObject({ label: "查看库存变动", query: { detail: "move1" } });
+  expect(
     ledgerAssociation({ ...row, type: "refund", reference: "order1" }, db),
   ).toMatchObject({ label: "查看订单", query: { detail: "order1" } });
 });

@@ -26,6 +26,7 @@ export default defineConfig({
             DATABASE_PATH: resolve("../backend/.e2e/shopmate.sqlite"),
             ADMIN_PASSWORD: "TestAdmin123!",
             APP_ORIGINS: "http://127.0.0.1:5173",
+            ALLOW_LEGACY_COMMANDS: "true",
           },
         },
         {

@@ -8,9 +8,12 @@ import {
   unknownMutation,
   invalidateIdentitySnapshot,
   RequestError,
+  getSession,
+  getSyncStatus,
 } from "./repository";
 export {
   getDatabase,
+  getMemberSummary,
   getStorageIssue,
   getSession,
   subscribeDatabase,
@@ -18,30 +21,172 @@ export {
   getSyncStatus,
   hasConfirmedLogout,
   RequestError,
+  getCollectionPage,
+  setRouteScope,
+  routeCollection,
 } from "./repository";
 export type { ShopApi } from "../domain/api";
 
 // Retain until the next user login: route guards may refresh sessions during redirect.
 let passwordChanged = false;
+const commandStorageKey = "shopmate:pending-commands";
+const inFlightCommands = new Set<string>();
+interface PendingCommand {
+  fingerprint: string;
+  requestId: string;
+  method: string;
+  role: Role;
+  actorId: string;
+}
+function removePendingCommands(matches: (entry: PendingCommand) => boolean) {
+  // Other commands may have started since this request was sent.
+  const current = JSON.parse(
+    sessionStorage.getItem(commandStorageKey) ?? "[]",
+  ) as PendingCommand[];
+  if (!Array.isArray(current))
+    throw new Error("请求恢复记录损坏，请核对已提交记录");
+  sessionStorage.setItem(
+    commandStorageKey,
+    JSON.stringify(current.filter((entry) => !matches(entry))),
+  );
+}
+export function getPendingCommands() {
+  try {
+    const pending = JSON.parse(
+      sessionStorage.getItem(commandStorageKey) ?? "[]",
+    ) as PendingCommand[];
+    const role = getSyncStatus().role,
+      actorId = getSession(role)?.id;
+    return Array.isArray(pending)
+      ? pending.filter(
+          (entry) => entry.role === role && entry.actorId === actorId,
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+export async function resolvePendingCommand(command: PendingCommand) {
+  const result = await request<{ found: boolean }>(
+    `/api/requests/${encodeURIComponent(command.requestId)}?method=${encodeURIComponent(command.method)}&role=${command.role}`,
+  );
+  if (result.found) {
+    removePendingCommands((entry) => entry.fingerprint === command.fingerprint);
+    await synchronizeConfirmedMutation();
+  }
+  return result.found;
+}
 export function hasPasswordChangeNotice() {
   return passwordChanged;
 }
 
+export async function commerceAction<T = void>(
+  method: string,
+  ...args: unknown[]
+): Promise<T> {
+  return action<T>(method, args);
+}
 async function action<T>(
   method: string,
   args: unknown[],
   validate?: (value: T) => boolean,
 ): Promise<T> {
   requireFreshState();
-  const response = await request<{ result: T }>(`/api/actions/${method}`, {
-    args,
-  });
+  args = JSON.parse(JSON.stringify(args)) as unknown[];
+  const role = getSyncStatus().role;
+  const actorId = getSession(role)?.id ?? "anonymous";
+  const assertIdentity = () => {
+    if (
+      getSyncStatus().role !== role ||
+      (getSession(role)?.id ?? "anonymous") !== actorId
+    )
+      throw new Error("登录身份已变化，请重新核对后操作");
+  };
+  const fingerprint = Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(JSON.stringify([role, actorId, method, args])),
+      ),
+    ),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+  assertIdentity();
+  const storageKey = commandStorageKey;
+  let pending: PendingCommand[];
+  try {
+    pending = JSON.parse(
+      sessionStorage.getItem(storageKey) ?? "[]",
+    ) as PendingCommand[];
+  } catch {
+    throw new Error("无法读取请求恢复记录，请先恢复浏览器会话存储");
+  }
+  if (!Array.isArray(pending))
+    throw new Error("请求恢复记录损坏，请核对已提交记录");
+  const previous = pending.find((entry) => entry.fingerprint === fingerprint);
+  const otherPending = pending.find(
+    (entry) =>
+      entry.role === role &&
+      entry.actorId === (getSession(role)?.id ?? "anonymous") &&
+      entry.method === method &&
+      entry.fingerprint !== fingerprint &&
+      !inFlightCommands.has(entry.fingerprint),
+  );
+  if (otherPending) {
+    const completed = await resolvePendingCommand(otherPending);
+    throw new Error(
+      completed
+        ? "上次操作已完成，请核对最新记录后再提交新操作"
+        : "原请求结果尚未确认，不能更改参数再次提交；请先核对上次提交或使用原参数重试",
+    );
+  }
+  const businessRequestId =
+    method === "adjustStock"
+      ? (args[5] as { requestId?: string } | undefined)?.requestId
+      : method === "createOrder"
+        ? (args[0] as { requestId?: string } | undefined)?.requestId
+        : undefined;
+  const marker = previous ?? {
+    fingerprint,
+    requestId: businessRequestId ?? crypto.randomUUID(),
+    method,
+    role,
+    actorId,
+  };
+  const clear = () =>
+    removePendingCommands((entry) => entry.fingerprint === marker.fingerprint);
+  if (!previous) {
+    pending.push(marker);
+    sessionStorage.setItem(storageKey, JSON.stringify(pending));
+  }
+  let response: { result: T };
+  inFlightCommands.add(fingerprint);
+  try {
+    const resolved = previous
+      ? await request<{ found: boolean; result?: T }>(
+          `/api/requests/${encodeURIComponent(marker.requestId)}?method=${encodeURIComponent(method)}&role=${role}`,
+        )
+      : undefined;
+    assertIdentity();
+    response = resolved?.found
+      ? { result: resolved.result as T }
+      : await request<{ result: T }>(`/api/actions/${method}`, {
+          args,
+          requestId: marker.requestId,
+        });
+  } catch (error) {
+    if (error instanceof RequestError && error.outcome === "rejected") clear();
+    throw error;
+  } finally {
+    inFlightCommands.delete(fingerprint);
+  }
   if (
     !response ||
     !Object.hasOwn(response, "result") ||
     (validate && !validate(response.result))
   )
     throw unknownMutation();
+  clear();
   await synchronizeConfirmedMutation();
   return response.result;
 }
@@ -133,6 +278,7 @@ export const api: ShopApi = {
     return result;
   },
   async resolveOrderRequest(input) {
+    const actorId = getSession("user")?.id;
     const result = await request<{ orderId: string | null }>(
       `/api/order-requests/${encodeURIComponent(input.requestId)}?quoteId=${encodeURIComponent(input.quoteId)}`,
     );
@@ -142,12 +288,28 @@ export const api: ShopApi = {
         (typeof result.orderId !== "string" || !result.orderId))
     )
       throw new Error("无法确认原请求结果，请重新核对");
+    if (result.orderId)
+      removePendingCommands(
+        (entry) =>
+          entry.role === "user" &&
+          entry.actorId === actorId &&
+          entry.method === "createOrder" &&
+          entry.requestId === input.requestId,
+      );
     return result.orderId;
   },
   async retireCheckout(input) {
+    const actorId = getSession("user")?.id;
     const result = await action<unknown>("retireCheckout", [input]);
     if (result !== null && (typeof result !== "string" || !result))
       throw unknownMutation();
+    removePendingCommands(
+      (entry) =>
+        entry.role === "user" &&
+        entry.actorId === actorId &&
+        entry.method === "createOrder" &&
+        entry.requestId === input.requestId,
+    );
     return result;
   },
   payOrder: (...args) => action("payOrder", args),

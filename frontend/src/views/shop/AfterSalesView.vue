@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CollectionPager from "../../components/shop/CollectionPager.vue";
 import { computed, reactive } from "vue";
 import { useShop } from "../../stores/shop";
 import { afterSaleLabels, dateTime, money } from "../../domain/types";
@@ -164,5 +165,6 @@ function submitReturn(id: string) {
       <p>需要退货或退款时，从对应订单发起申请。</p>
       <RouterLink to="/orders" class="button">查看我的订单</RouterLink>
     </div>
+    <CollectionPager />
   </div>
 </template>

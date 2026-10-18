@@ -57,6 +57,7 @@ const settings = z
     name: text(40),
     slogan: text(80),
     notice: z.string().trim().max(200),
+    version: z.number().int().nonnegative().optional(),
   })
   .strict();
 const integer = z.number().int().safe();
@@ -66,6 +67,7 @@ const address = z
     name: text(50),
     phone: text(20),
     region: text(100),
+    province: text(30).optional(),
     detail: text(200),
     isDefault: z.boolean(),
   })
@@ -73,6 +75,7 @@ const address = z
 const category = z
   .object({
     id: id.optional(),
+    version: integer.nonnegative().optional(),
     name: text(30),
     description: text(200),
     image,
@@ -82,6 +85,7 @@ const category = z
 const product = z
   .object({
     id: id.optional(),
+    version: integer.nonnegative().optional(),
     name: text(80),
     subtitle: text(120),
     description: text(3000),
@@ -167,6 +171,7 @@ export const methods = {
       z
         .object({
           id: id.optional(),
+          version: integer.nonnegative().optional(),
           name: text(60),
           threshold: integer.positive(),
           discount: integer.positive(),
@@ -181,7 +186,14 @@ export const methods = {
     ]),
   },
   claimCoupon: { role: "user", args: z.tuple([id]) },
-  toggleCoupon: { role: "admin", args: z.tuple([id]) },
+  toggleCoupon: {
+    role: "admin",
+    args: z.tuple([
+      id,
+      z.boolean().optional(),
+      integer.nonnegative().optional(),
+    ]),
+  },
   submitReview: {
     role: "user",
     args: z.tuple([
@@ -213,7 +225,7 @@ export const methods = {
     ]),
   },
   removeCart: { role: "user", args: z.tuple([id]) },
-  favorite: { role: "user", args: z.tuple([id]) },
+  favorite: { role: "user", args: z.tuple([id, z.boolean().optional()]) },
   saveAddress: { role: "user", args: z.tuple([address]) },
   deleteAddress: { role: "user", args: z.tuple([id]) },
   createOrder: {
@@ -249,9 +261,19 @@ export const methods = {
   sendMessage: { role: "user", args: z.tuple([id, text(1000)]) },
   transferConversation: { role: "user", args: z.tuple([id]) },
   saveProduct: { role: "admin", args: z.tuple([product]) },
-  toggleProduct: { role: "admin", args: z.tuple([id]) },
+  toggleProduct: {
+    role: "admin",
+    args: z.tuple([
+      id,
+      z.boolean().optional(),
+      integer.nonnegative().optional(),
+    ]),
+  },
   saveCategory: { role: "admin", args: z.tuple([category]) },
-  deleteCategory: { role: "admin", args: z.tuple([id]) },
+  deleteCategory: {
+    role: "admin",
+    args: z.tuple([id, integer.nonnegative().optional()]),
+  },
   adjustStock: {
     role: "admin",
     args: z.tuple([
@@ -301,4 +323,142 @@ export const methods = {
     args: z.tuple([settings, settings]),
   },
   resetDemo: { role: "admin", args: z.tuple([]) },
+  saveShippingRule: {
+    role: "admin",
+    args: z.tuple([
+      z
+        .object({
+          id: id.optional(),
+          name: text(60),
+          province: text(30),
+          enabled: z.boolean(),
+          fee: integer.nonnegative(),
+          freeAbove: integer.nonnegative(),
+          version: integer.nonnegative(),
+        })
+        .strict(),
+    ]),
+  },
+  savePromotion: {
+    role: "admin",
+    args: z.tuple([
+      z
+        .object({
+          id: id.optional(),
+          name: text(60),
+          threshold: integer.positive(),
+          discount: integer.positive(),
+          startsAt: z.string().datetime({ offset: true }),
+          endsAt: z.string().datetime({ offset: true }),
+          active: z.boolean(),
+          version: integer.nonnegative(),
+        })
+        .strict(),
+    ]),
+  },
+  saveSupplier: {
+    role: "admin",
+    args: z.tuple([
+      z
+        .object({
+          id: id.optional(),
+          name: text(100),
+          contact: z.string().trim().max(100),
+          active: z.boolean(),
+          version: integer.nonnegative(),
+        })
+        .strict(),
+    ]),
+  },
+  createPurchaseOrder: {
+    role: "admin",
+    args: z.tuple([
+      z
+        .object({
+          supplierId: id,
+          lines: z
+            .array(
+              z
+                .object({
+                  productId: id,
+                  skuId: id,
+                  quantity: integer.positive(),
+                  unitCost: integer.nonnegative(),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(100),
+        })
+        .strict(),
+    ]),
+  },
+  orderPurchase: { role: "admin", args: z.tuple([id, integer.positive()]) },
+  cancelPurchase: { role: "admin", args: z.tuple([id, integer.positive()]) },
+  receivePurchase: {
+    role: "admin",
+    args: z.tuple([
+      z
+        .object({
+          id,
+          version: integer.positive(),
+          lines: z
+            .array(
+              z.object({ skuId: id, quantity: integer.positive() }).strict(),
+            )
+            .min(1)
+            .max(100),
+        })
+        .strict(),
+    ]),
+  },
+  inspectReturn: {
+    role: "admin",
+    args: z.tuple([
+      z
+        .object({
+          id,
+          version: integer.positive(),
+          good: integer.nonnegative(),
+          defective: integer.nonnegative(),
+          note: text(500),
+        })
+        .strict(),
+    ]),
+  },
+  disposeReturn: {
+    role: "admin",
+    args: z.tuple([
+      z
+        .object({
+          id,
+          version: integer.positive(),
+          quantity: integer.positive(),
+          note: text(500),
+        })
+        .strict(),
+    ]),
+  },
+  markNotificationRead: { role: "user", args: z.tuple([id]) },
+  saveStaff: {
+    role: "admin",
+    args: z.tuple([
+      z
+        .object({
+          id: id.optional(),
+          username: usernameSchema,
+          name: registerSchema.shape.name,
+          password: passwordSchema.optional(),
+          staffRole: z.enum([
+            "owner",
+            "operations",
+            "warehouse",
+            "support",
+            "finance",
+          ]),
+          active: z.boolean(),
+        })
+        .strict(),
+    ]),
+  },
 } as const;

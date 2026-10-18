@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CollectionPager from "../../components/shop/CollectionPager.vue";
 import { computed } from "vue";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
@@ -94,5 +95,6 @@ async function claim(id: string) {
       <p>新的优惠活动会在这里更新。</p>
       <RouterLink to="/products" class="button">去逛逛</RouterLink>
     </div>
+    <CollectionPager />
   </div>
 </template>

@@ -1,5 +1,9 @@
 import type { Page } from "@playwright/test";
-import { DatabaseSync } from "node:sqlite";
+import {
+  openDatabase,
+  readDatabase,
+  writeDatabase,
+} from "../../backend/src/database";
 import { resolve } from "node:path";
 import type { Database } from "../../shared/domain/types";
 import {
@@ -21,18 +25,13 @@ async function state(page: Page): Promise<Database> {
   return (await (await page.request.get("/api/state?role=admin")).json()).db;
 }
 function fixture(change: (db: Database) => void) {
-  const sql = new DatabaseSync(resolve("../backend/.e2e/shopmate.sqlite"));
+  const sql = openDatabase(resolve("../backend/.e2e/shopmate.sqlite"));
   try {
     sql.exec("BEGIN IMMEDIATE");
-    const db: Database = JSON.parse(
-      (
-        sql.prepare("SELECT data FROM state WHERE id=1").get() as {
-          data: string;
-        }
-      ).data,
-    );
+    const db = readDatabase(sql);
     change(db);
-    sql.prepare("UPDATE state SET data=? WHERE id=1").run(JSON.stringify(db));
+    db.revision++;
+    writeDatabase(sql, db);
     sql.exec("COMMIT");
   } finally {
     sql.close();

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CollectionPager from "../../components/shop/CollectionPager.vue";
 import { computed } from "vue";
 import { catalogueCategories } from "../../domain/catalogue";
 import { useShop } from "../../stores/shop";
@@ -31,5 +32,6 @@ const categories = computed(() =>
         <span class="secondary">{{ c.count }} 件商品</span></RouterLink
       >
     </div>
+    <CollectionPager />
   </div>
 </template>

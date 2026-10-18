@@ -60,7 +60,7 @@ function submit() {
           }}</span></RouterLink
         ><RouterLink to="/cart" aria-label="购物车"
           ><ShoppingBag :size="21" /><span>{{
-            shop.myCart.reduce((n, i) => n + i.quantity, 0)
+            shop.summary.cartQuantity
           }}</span></RouterLink
         ><button
           class="mobile-menu"

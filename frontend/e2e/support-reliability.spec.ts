@@ -70,7 +70,7 @@ test("切换会话保留各自草稿和轮询，筛选空结果不显示旧会�
   );
   await page.waitForResponse(
     (r) =>
-      r.url().includes("/api/state?role=admin") &&
+      r.url().includes("/api/bootstrap?role=admin") &&
       r.request().method() === "GET",
   );
   await expect(page.getByPlaceholder(placeholder)).toHaveValue(
@@ -185,19 +185,39 @@ test("未知回复保留草稿且不自动重发，同管理员断网恢复保�
   );
   await page.waitForResponse(
     (r) =>
-      r.url().includes("/api/state?role=admin") &&
+      r.url().includes("/api/bootstrap?role=admin") &&
       r.request().method() === "GET",
   );
   expect(posts).toBe(1);
-  await page.route("**/api/state?role=admin", (route) => route.abort("failed"));
+  let offline = true,
+    resume!: () => void;
+  const resumed = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  let observeOffline!: () => void;
+  const disconnected = new Promise<void>((resolve) => {
+    observeOffline = resolve;
+  });
+  await page.route("**/api/bootstrap?role=admin", async (route) => {
+    if (offline) {
+      await route.abort("failed");
+      observeOffline();
+      return;
+    }
+    await resumed;
+    await route.continue();
+  });
+  await disconnected;
   await expect(
     page.getByRole("button", { name: "重新连接", exact: true }),
   ).toBeVisible();
   await expect(page.getByPlaceholder(placeholder)).toHaveValue(
     "结果未知应先核对这条回复",
   );
-  await page.unroute("**/api/state?role=admin");
+  offline = false;
   await page.getByRole("button", { name: "重新连接", exact: true }).click();
+  resume();
+  await page.unroute("**/api/bootstrap?role=admin");
   await expect(page.getByPlaceholder(placeholder)).toHaveValue(
     "结果未知应先核对这条回复",
   );
@@ -360,7 +380,7 @@ test("旧回复跨管理员及页面返回后不能清除新实例草稿", async
       await login(tab, "admin2");
       await page.waitForResponse(
         (r) =>
-          r.url().includes("/api/state?role=admin") &&
+          r.url().includes("/api/bootstrap?role=admin") &&
           r.request().method() === "GET",
       );
       await expect(page.getByPlaceholder(placeholder)).toHaveValue("");
@@ -377,7 +397,7 @@ test("旧回复跨管理员及页面返回后不能清除新实例草稿", async
     for (let i = 0; i < 2; i++)
       await page.waitForResponse(
         (r) =>
-          r.url().includes("/api/state?role=admin") &&
+          r.url().includes("/api/bootstrap?role=admin") &&
           r.request().method() === "GET",
       );
     await expect(page.getByPlaceholder(placeholder)).toHaveValue(

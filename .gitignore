@@ -2,6 +2,7 @@ node_modules/
 frontend/dist/
 frontend/test-results/
 frontend/test-results-container/
+frontend/test-results-operations/
 frontend/playwright-report/
 .taste-skill/inspect/
 .taste-skill/page-audit/
@@ -15,4 +16,6 @@ frontend/playwright-report/
 backend/data/
 backend/test-results/
 backend/.e2e/
+backups/
+.delivery/
 .DS_Store

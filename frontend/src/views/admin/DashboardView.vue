@@ -1,76 +1,146 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch, onUnmounted } from "vue";
 import { RouterLink } from "vue-router";
 import { useShop } from "../../stores/shop";
-import { localDate } from "./useAdmin";
 import { money, orderLabels, dateTime } from "../../domain/types";
-import { sumLedger } from "../../domain/finance";
-const shop = useShop();
-const sums = computed(() => sumLedger(shop.db.ledger));
-const income = computed(() => sums.value.payment);
-const refund = computed(() => sums.value.refund);
-const lowStock = computed(() =>
-  shop.db.products.flatMap((p) =>
-    p.skus.filter((s) => s.stock <= 5).map((s) => ({ ...s, product: p.name })),
-  ),
+import type { Order } from "../../domain/types";
+import { request } from "../../services/repository";
+interface Dashboard {
+  orders: number | null;
+  activeProducts: number;
+  income: string | null;
+  refund: string | null;
+  purchase: string | null;
+  net: string | null;
+  tasks: { paid: number; requested: number; waiting: number };
+  trend: { label: string; total: string }[];
+  ranking: {
+    id?: string;
+    productId?: string;
+    name: string;
+    images?: string[];
+    count?: number;
+    quantity?: number;
+  }[];
+  lowStock: {
+    productId: string;
+    name: string;
+    skuId: string;
+    skuName: string;
+    stock: number;
+    available: number;
+  }[];
+  recentOrders: Order[];
+}
+const shop = useShop(),
+  data = ref<Dashboard>(),
+  error = ref("");
+let sequence = 0;
+async function load() {
+  const current = ++sequence,
+    actor = shop.adminSession?.id;
+  try {
+    const result = await request<Dashboard>("/api/admin/dashboard");
+    if (current !== sequence || actor !== shop.adminSession?.id) return;
+    data.value = result;
+    error.value = "";
+  } catch (cause) {
+    if (current === sequence)
+      error.value = cause instanceof Error ? cause.message : "读取经营汇总失败";
+  }
+}
+watch(
+  () => shop.db.revision,
+  () => {
+    void load();
+  },
+  { immediate: true },
 );
-const tasks = computed(() => [
-  {
-    name: "待发货订单",
-    count: shop.db.orders.filter((o) => o.status === "paid").length,
-    link: "/admin/orders?status=paid",
+watch(
+  [
+    () => shop.adminSession?.id,
+    () => shop.adminSession?.permissions?.join(","),
+  ],
+  () => {
+    sequence++;
+    data.value = undefined;
+    error.value = "";
+    void load();
   },
-  {
-    name: "待审核售后",
-    count: shop.db.afterSales.filter((a) => a.status === "requested").length,
-    link: "/admin/after-sales?status=requested",
-  },
-  {
-    name: "等待人工接入",
-    count: shop.db.conversations.filter((c) => c.status === "waiting").length,
-    link: "/admin/support?status=waiting",
-  },
-]);
+  { flush: "sync" },
+);
+onUnmounted(() => {
+  sequence++;
+});
+const permitted = (permission: string) =>
+  shop.adminSession?.permissions?.includes(permission);
+const income = computed(() => BigInt(data.value?.income ?? "0")),
+  refund = computed(() => BigInt(data.value?.refund ?? "0"));
+const lowStock = computed(() =>
+  (data.value?.lowStock ?? []).map((row) => ({
+    ...row,
+    id: row.skuId,
+    product: row.name,
+    name: row.skuName,
+  })),
+);
+const tasks = computed(() =>
+  [
+    {
+      name: "待发货订单",
+      count: data.value?.tasks.paid ?? 0,
+      link: "/admin/orders?status=paid",
+      permission: "warehouse",
+    },
+    {
+      name: "待审核售后",
+      count: data.value?.tasks.requested ?? 0,
+      link: "/admin/after-sales?status=requested",
+      permission: "support",
+    },
+    {
+      name: "等待人工接入",
+      count: data.value?.tasks.waiting ?? 0,
+      link: "/admin/support?status=waiting",
+      permission: "support",
+    },
+  ].filter((task) => permitted(task.permission)),
+);
 const trend = computed(() =>
-  Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - 6 + i);
-    const key = localDate(d);
-    return {
-      label: `${d.getMonth() + 1}/${d.getDate()}`,
-      total: shop.db.ledger
-        .filter((l) => l.type === "payment" && localDate(l.createdAt) === key)
-        .reduce((n, l) => n + BigInt(l.amount), 0n),
-    };
-  }),
+  (data.value?.trend ?? []).map((row) => ({
+    label: row.label,
+    total: BigInt(row.total),
+  })),
 );
 const max = computed(() =>
-  trend.value.reduce((n, t) => (t.total > n ? t.total : n), 0n),
+  trend.value.reduce(
+    (value, row) => (row.total > value ? row.total : value),
+    0n,
+  ),
 );
-// Only the drawing ratio becomes floating point; labels keep exact integer cents.
 const chartY = (total: bigint) =>
   180 - Number((total * 150000n) / (max.value || 1n)) / 1000;
 const points = computed(() =>
-  trend.value.map((t, i) => `${20 + i * 100},${chartY(t.total)}`).join(" "),
+  trend.value
+    .map((row, index) => `${20 + index * 100},${chartY(row.total)}`)
+    .join(" "),
 );
 const ranking = computed(() =>
-  shop.db.products
-    .map((p) => {
-      const count = shop.db.orders
-        .filter((o) =>
-          ["paid", "shipped", "completed", "refunded"].includes(o.status),
-        )
-        .flatMap((o) => o.items)
-        .filter((i) => i.productId === p.id)
-        .reduce((n, i) => n + i.quantity - i.refundedQuantity, 0);
-      return { ...p, count };
-    })
-    .filter((p) => p.count > 0)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 4),
+  (data.value?.ranking ?? []).map((row) => ({
+    ...row,
+    id: row.id ?? row.productId ?? row.name,
+    images: row.images ?? [],
+    count: row.count ?? row.quantity ?? 0,
+  })),
 );
 </script>
 <template>
+  <el-alert
+    v-if="error"
+    :title="error"
+    type="error"
+    :closable="false"
+  /><el-button v-if="error" @click="load">重新读取</el-button>
   <div class="admin-page-head">
     <div>
       <h1>经营概览</h1>
@@ -79,7 +149,7 @@ const ranking = computed(() =>
     <el-tag effect="plain">模拟交易实时数据</el-tag>
   </div>
   <div class="admin-kpis">
-    <div class="admin-kpi">
+    <div v-if="permitted('finance')" class="admin-kpi">
       <div class="admin-kpi-label">累计模拟收款</div>
       <div class="admin-kpi-value">{{ money(income) }}</div>
       <span class="admin-kpi-note">来自支付流水，不含未付款订单</span>
@@ -87,11 +157,11 @@ const ranking = computed(() =>
     <div class="admin-kpi">
       <div class="admin-kpi-label">全部订单</div>
       <div class="admin-kpi-value">
-        {{ shop.db.orders.length }}<small> 笔</small>
+        {{ data?.orders ?? "—" }}<small> 笔</small>
       </div>
       <span class="admin-kpi-note">包含取消与已退款订单</span>
     </div>
-    <div class="admin-kpi">
+    <div v-if="permitted('finance')" class="admin-kpi">
       <div class="admin-kpi-label">累计退款</div>
       <div class="admin-kpi-value">{{ money(refund) }}</div>
       <span class="admin-kpi-note">已完成的模拟退款</span>
@@ -99,15 +169,19 @@ const ranking = computed(() =>
     <div class="admin-kpi">
       <div class="admin-kpi-label">在售商品</div>
       <div class="admin-kpi-value">
-        {{ shop.db.products.filter((p) => p.active).length }}<small> 件</small>
+        {{ data?.activeProducts ?? "—" }}<small> 件</small>
       </div>
       <span class="admin-kpi-note"
-        >{{ lowStock.length }} 个 SKU 库存不足 6 件</span
+        >{{ lowStock.length }} 个 SKU 可售库存不足 6 件</span
       >
     </div>
   </div>
+  <p v-if="permitted('finance') && data" class="admin-note">
+    净收支 {{ money(BigInt(data.net ?? "0")) }}，采购支出
+    {{ money(BigInt(data.purchase ?? "0")) }}；净收支不代表利润。
+  </p>
   <div class="admin-two-column">
-    <section class="admin-panel">
+    <section v-if="permitted('finance')" class="admin-panel">
       <div class="admin-panel-head">
         <h2>近七日收款趋势</h2>
         <span class="admin-note">单位：元 · 支付流水原额，退款另计</span>
@@ -162,20 +236,19 @@ const ranking = computed(() =>
     </section>
   </div>
   <div class="admin-two-column">
-    <section class="admin-panel">
+    <section
+      v-if="
+        permitted('warehouse') || permitted('support') || permitted('finance')
+      "
+      class="admin-panel"
+    >
       <div class="admin-panel-head">
         <h2>最近订单</h2>
         <RouterLink class="admin-text-button" to="/admin/orders"
           >查看全部 ↗</RouterLink
         >
       </div>
-      <el-table
-        :data="
-          [...shop.db.orders]
-            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-            .slice(0, 5)
-        "
-        empty-text="暂无订单"
+      <el-table :data="data?.recentOrders ?? []" empty-text="暂无订单"
         ><el-table-column label="订单号" min-width="140"
           ><template #default="{ row }"
             ><RouterLink
@@ -228,10 +301,16 @@ const ranking = computed(() =>
       </div>
     </section>
   </div>
-  <section class="admin-panel">
+  <section
+    v-if="permitted('warehouse') || permitted('catalog')"
+    class="admin-panel"
+  >
     <div class="admin-panel-head">
       <h2>低库存提醒</h2>
-      <RouterLink class="admin-text-button" to="/admin/inventory?low=1"
+      <RouterLink
+        v-if="permitted('warehouse')"
+        class="admin-text-button"
+        to="/admin/inventory?low=1"
         >前往补货 ↗</RouterLink
       >
     </div>
@@ -243,6 +322,7 @@ const ranking = computed(() =>
         label="建议"
         ><template #default="{ row }"
           ><RouterLink
+            v-if="permitted('warehouse')"
             :to="{
               path: '/admin/inventory',
               query: { tab: 'stock', q: row.id },

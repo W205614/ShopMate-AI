@@ -12,6 +12,7 @@ const form = reactive<AddressInput>({
   name: props.address?.name ?? "",
   phone: props.address?.phone ?? "",
   region: props.address?.region ?? "",
+  province: props.address?.province ?? "",
   detail: props.address?.detail ?? "",
   isDefault: props.address?.isDefault ?? props.first,
 });
@@ -39,6 +40,14 @@ const form = reactive<AddressInput>({
           autocomplete="tel"
       /></label>
     </div>
+    <label
+      >配送省份<input
+        v-model.trim="form.province"
+        required
+        maxlength="30"
+        autocomplete="address-level1"
+        placeholder="如：浙江省"
+    /></label>
     <label
       >省 / 市 / 区<input
         v-model.trim="form.region"

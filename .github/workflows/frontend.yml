@@ -22,13 +22,15 @@ jobs:
             backend/package-lock.json
       - run: npm ci
         working-directory: backend
+      # A cross-boundary regression imports the storefront review eligibility helper.
+      # Install both workspaces before either suite resolves their tsconfig dependencies.
+      - run: npm ci
       - run: npm run typecheck
         working-directory: backend
       - run: npm test
         working-directory: backend
       - run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
         working-directory: backend
-      - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test

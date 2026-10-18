@@ -12,6 +12,8 @@
 | `ADMIN_USERNAME`、`ADMIN_PASSWORD` | 首次管理员初始化及密码维护命令使用 |
 | `APP_ORIGINS` | 允许写入请求的访问源，多个地址用逗号分隔；更换端口时同步修改 |
 | `COOKIE_SECURE` | HTTPS 部署时设为 `true`，同时配置实际访问源 |
+| `BACKUP_PATH` | 主机备份目录，默认 `./backups`，独立于业务卷 |
+| `LOG_REQUESTS` | 默认记录脱敏请求 ID、路径、状态和耗时，容器日志轮转 |
 
 Docker 默认只监听 `127.0.0.1`，后端没有主机映射端口。修改 `APP_ORIGINS` 不会自动开放外部监听，公开部署还需配置入口、HTTPS 和访问控制。`localhost` 与 `127.0.0.1` 的 Cookie 独立，体验双端时统一使用一种地址。
 
@@ -87,9 +89,9 @@ npm --prefix frontend run test:e2e
 
 Compose 项目名为 `shopmate-ai`，SQLite 文件位于 API 容器 `/app/data/shopmate.sqlite`，挂载卷为 `shopmate-ai_api_data`。不要执行 `docker compose down -v`。备份应使用 SQLite 在线备份机制，或停服后备份完整数据；不能只复制运行中的主文件而忽略 WAL。
 
-当前业务状态版本为 v3，启动时自动迁移。升级前保留一致数据库备份和旧镜像；迁移规则及回滚边界见 [业务与迁移说明](traditional-commerce.md)。数据保存在 SQLite 事务化业务 JSON 中，适用于当前单实例项目，尚未实现多实例扩展。
+当前业务状态版本为 v4，启动时自动迁移。升级前保留一致数据库备份和旧镜像；维护停机、备份及恢复命令见 [可靠性与运维](reliability.md)。业务存储已拆为分领域记录表及 SKU／订单行关系表，历史快照保留 JSON 字段，旧 `state` 只读保留为迁移证据。当前仍为单实例，尚未实现多实例扩展。
 
-管理端“恢复演示数据”会重置全体用户的业务数据并恢复初始商品，保留账号、密码和会话。这是有影响的业务重置操作，不用于日常排查。
+网页“恢复演示数据”默认关闭，不用于日常排查。需要恢复数据时执行停写、备份、离线恢复与核验流程，不能删除数据卷重来。
 
 ## 源码与详细记录
 
@@ -97,4 +99,4 @@ Compose 项目名为 `shopmate-ai`，SQLite 文件位于 API 容器 `/app/data/s
 - `shared/domain/`：共享类型、API 契约与商品种子。
 - `frontend/src/views/`：商城和后台页面；`frontend/src/services/`：HTTP 客户端及状态缓存。
 - `frontend/e2e/`：浏览器测试；`deploy/`：Nginx 和隔离部署配置。
-- [分类搜索规则](catalogue.md)、[逐功能交付记录](incremental-delivery.md)、[设计记录](design.md)、[界面复审](ui-review.md)。
+- [当前业务与接口](commerce-v4.md)、[分类搜索规则](catalogue.md)、[逐功能交付记录](incremental-delivery.md)、[设计记录](design.md)、[界面复审](ui-review.md)。

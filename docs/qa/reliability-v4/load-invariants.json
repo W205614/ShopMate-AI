@@ -1,0 +1,132 @@
+[
+  {
+    "verified": true,
+    "dataset": 0,
+    "checks": {
+      "readOnlySnapshot": true,
+      "storageV4": true,
+      "integrity": true,
+      "foreignKeys": true,
+      "seedProductsUnchanged": true,
+      "noOrdersCreatedOrMutated": true,
+      "noInventoryCreatedOrMutated": true,
+      "noLedgerCreatedOrMutated": true,
+      "nonnegativeStocks": true,
+      "perSkuStockEqualsInventoryDeltas": true,
+      "reservationsWithinStock": true,
+      "skuProjection": true,
+      "orderItemProjection": true,
+      "validMoney": true,
+      "paymentConservation": true,
+      "refundConservation": true,
+      "purchaseConservation": true,
+      "noOrphanLedger": true,
+      "expectedSeedMoney": true,
+      "onlyExpectedCartMutation": true,
+      "onlyCartCommands": true
+    },
+    "meta": {
+      "schema_version": 1,
+      "version": 4,
+      "revision": 237110
+    },
+    "counts": {
+      "products": 24,
+      "skus": 48,
+      "orders": 0,
+      "orderItems": 0,
+      "inventory": 49,
+      "ledger": 0,
+      "purchases": 0,
+      "carts": 1,
+      "commands": 237108
+    },
+    "stockTotal": "1001391",
+    "reservations": "0",
+    "amounts": {
+      "orders": "0",
+      "refunded": "0",
+      "payment": "0",
+      "refund": "0",
+      "purchase": "0",
+      "net": "0"
+    },
+    "digests": {
+      "stocks": "3c341531012e154542565e8200596ef2fe388a98bf9f4840a1839a09498424ee",
+      "counts": "62e27747cd910fc34be0a4763b8ba841386374bce9c72506d701804eebec4bdf",
+      "amounts": "7f32e4ce28b70640d98004f573165d71cb6851ee492f93a97df7cc9c2acf5079",
+      "orders": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "inventory": "195dbb3470a32836a104eccd4aa27be1becc604ad4e907a3e6d3ca8b455b50aa",
+      "ledger": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "expectedOrders": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "expectedInventory": "195dbb3470a32836a104eccd4aa27be1becc604ad4e907a3e6d3ca8b455b50aa",
+      "expectedLedger": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "scope": "Read-only snapshot after 90% list/points reads and 10% cart-selection writes. Seed payments are synthetic historical bookkeeping, not gateway receipts; no purchase/refund occurs in this workload. Lifecycle concurrency is verified separately."
+  },
+  {
+    "verified": true,
+    "dataset": 10000,
+    "checks": {
+      "readOnlySnapshot": true,
+      "storageV4": true,
+      "integrity": true,
+      "foreignKeys": true,
+      "seedProductsUnchanged": true,
+      "noOrdersCreatedOrMutated": true,
+      "noInventoryCreatedOrMutated": true,
+      "noLedgerCreatedOrMutated": true,
+      "nonnegativeStocks": true,
+      "perSkuStockEqualsInventoryDeltas": true,
+      "reservationsWithinStock": true,
+      "skuProjection": true,
+      "orderItemProjection": true,
+      "validMoney": true,
+      "paymentConservation": true,
+      "refundConservation": true,
+      "purchaseConservation": true,
+      "noOrphanLedger": true,
+      "expectedSeedMoney": true,
+      "onlyExpectedCartMutation": true,
+      "onlyCartCommands": true
+    },
+    "meta": {
+      "schema_version": 1,
+      "version": 4,
+      "revision": 84669
+    },
+    "counts": {
+      "products": 24,
+      "skus": 48,
+      "orders": 10000,
+      "orderItems": 10000,
+      "inventory": 50,
+      "ledger": 10000,
+      "purchases": 0,
+      "carts": 1,
+      "commands": 84667
+    },
+    "stockTotal": "1001391",
+    "reservations": "0",
+    "amounts": {
+      "orders": "10000000",
+      "refunded": "0",
+      "payment": "10000000",
+      "refund": "0",
+      "purchase": "0",
+      "net": "10000000"
+    },
+    "digests": {
+      "stocks": "3c341531012e154542565e8200596ef2fe388a98bf9f4840a1839a09498424ee",
+      "counts": "a9cfe6a458d846223fda117d108cdcbb24f086766b8bdc7a44469f2be7b59cd7",
+      "amounts": "c1fc6ea6b681294476586abc8baf06333afe65904d86436eaf68ebfe496e592d",
+      "orders": "600f11ad5218c7082e2f94e3312dabeba540e94baf2227fd38c91738a39769da",
+      "inventory": "838299db5e72d4fceb2dde6be5bb14e2f4f47b860d2c489e71c8ba1a7b7b1c11",
+      "ledger": "f38970f553b4c70078e3fb4a8239e5b446fc8b0610c37e89b598a8f1bfe0d409",
+      "expectedOrders": "600f11ad5218c7082e2f94e3312dabeba540e94baf2227fd38c91738a39769da",
+      "expectedInventory": "838299db5e72d4fceb2dde6be5bb14e2f4f47b860d2c489e71c8ba1a7b7b1c11",
+      "expectedLedger": "f38970f553b4c70078e3fb4a8239e5b446fc8b0610c37e89b598a8f1bfe0d409"
+    },
+    "scope": "Read-only snapshot after 90% list/points reads and 10% cart-selection writes. Seed payments are synthetic historical bookkeeping, not gateway receipts; no purchase/refund occurs in this workload. Lifecycle concurrency is verified separately."
+  }
+]

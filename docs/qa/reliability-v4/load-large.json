@@ -1,0 +1,157 @@
+{
+  "dataset": "10000",
+  "concurrency": 50,
+  "elapsedSeconds": 600.058,
+  "requests": 415373,
+  "requestsPerSecond": 692.2214185962024,
+  "errors": 0,
+  "rejected": 0,
+  "statusCounts": {
+    "200": 415373
+  },
+  "errorSamples": [],
+  "p95Ms": 128,
+  "p99Ms": 187,
+  "resourceSamples": [
+    {
+      "at": "2026-10-18T07:21:55.876Z",
+      "stats": "{\"BlockIO\":\"0B / 1.75MB\",\"CPUPerc\":\"109.39%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"9.85%\",\"MemUsage\":\"100.8MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"357kB / 3.86MB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:22:25.952Z",
+      "stats": "{\"BlockIO\":\"0B / 63.5MB\",\"CPUPerc\":\"99.92%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"14.56%\",\"MemUsage\":\"149.1MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"11.6MB / 145MB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:22:55.958Z",
+      "stats": "{\"BlockIO\":\"0B / 137MB\",\"CPUPerc\":\"94.92%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"14.56%\",\"MemUsage\":\"149.1MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"23.4MB / 293MB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:23:25.943Z",
+      "stats": "{\"BlockIO\":\"0B / 213MB\",\"CPUPerc\":\"94.82%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"20.90%\",\"MemUsage\":\"214MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"35.6MB / 447MB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:23:55.946Z",
+      "stats": "{\"BlockIO\":\"0B / 290MB\",\"CPUPerc\":\"93.69%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.31%\",\"MemUsage\":\"259.1MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"47.8MB / 601MB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:24:25.941Z",
+      "stats": "{\"BlockIO\":\"0B / 365MB\",\"CPUPerc\":\"96.52%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.37%\",\"MemUsage\":\"259.8MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"59.6MB / 748MB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:24:55.956Z",
+      "stats": "{\"BlockIO\":\"0B / 442MB\",\"CPUPerc\":\"99.17%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.50%\",\"MemUsage\":\"261.1MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"71.7MB / 901MB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:25:25.947Z",
+      "stats": "{\"BlockIO\":\"0B / 517MB\",\"CPUPerc\":\"94.58%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.51%\",\"MemUsage\":\"261.2MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"83.7MB / 1.05GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:25:55.950Z",
+      "stats": "{\"BlockIO\":\"0B / 592MB\",\"CPUPerc\":\"97.08%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.56%\",\"MemUsage\":\"261.7MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"95.7MB / 1.2GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:26:25.990Z",
+      "stats": "{\"BlockIO\":\"0B / 664MB\",\"CPUPerc\":\"98.73%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.51%\",\"MemUsage\":\"261.2MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"107MB / 1.34GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:26:56.282Z",
+      "stats": "{\"BlockIO\":\"0B / 704MB\",\"CPUPerc\":\"99.02%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.51%\",\"MemUsage\":\"261.3MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"113MB / 1.42GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:27:25.963Z",
+      "stats": "{\"BlockIO\":\"0B / 768MB\",\"CPUPerc\":\"106.42%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"27.29%\",\"MemUsage\":\"279.5MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"123MB / 1.55GB\",\"PIDs\":\"30\"}"
+    },
+    {
+      "at": "2026-10-18T07:27:56.402Z",
+      "stats": "{\"BlockIO\":\"0B / 819MB\",\"CPUPerc\":\"93.93%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.65%\",\"MemUsage\":\"262.7MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"131MB / 1.65GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:28:25.955Z",
+      "stats": "{\"BlockIO\":\"0B / 880MB\",\"CPUPerc\":\"93.87%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.76%\",\"MemUsage\":\"263.8MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"141MB / 1.77GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:28:55.962Z",
+      "stats": "{\"BlockIO\":\"0B / 952MB\",\"CPUPerc\":\"90.47%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.93%\",\"MemUsage\":\"265.5MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"152MB / 1.91GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:29:25.952Z",
+      "stats": "{\"BlockIO\":\"0B / 1.03GB\",\"CPUPerc\":\"91.35%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"26.06%\",\"MemUsage\":\"266.8MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"164MB / 2.06GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:29:55.944Z",
+      "stats": "{\"BlockIO\":\"0B / 1.1GB\",\"CPUPerc\":\"92.86%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.99%\",\"MemUsage\":\"266.2MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"176MB / 2.21GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:30:25.951Z",
+      "stats": "{\"BlockIO\":\"0B / 1.18GB\",\"CPUPerc\":\"90.37%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"26.14%\",\"MemUsage\":\"267.6MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"188MB / 2.36GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:30:55.958Z",
+      "stats": "{\"BlockIO\":\"0B / 1.25GB\",\"CPUPerc\":\"92.85%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.93%\",\"MemUsage\":\"265.5MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"200MB / 2.51GB\",\"PIDs\":\"23\"}"
+    },
+    {
+      "at": "2026-10-18T07:31:25.952Z",
+      "stats": "{\"BlockIO\":\"0B / 1.33GB\",\"CPUPerc\":\"98.66%\",\"Container\":\"shopmate-reliability-large-final-20261018-api-1\",\"ID\":\"34d15e681efb\",\"MemPerc\":\"25.95%\",\"MemUsage\":\"265.7MiB / 1GiB\",\"Name\":\"shopmate-reliability-large-final-20261018-api-1\",\"NetIO\":\"212MB / 2.66GB\",\"PIDs\":\"23\"}"
+    }
+  ],
+  "workload": "90% paged products/orders/points reads;10% idempotent cart selection writes",
+  "node": "v24.19.0",
+  "sha": "9bd7ce477dc7c49ac14dd2a13a2daff6a909568a",
+  "serverSource": {
+    "sha256": "95d318b1b9ed9569a0272ea3cf3560a686dbd94ef2454ddf3f59b4476ffa2aa3",
+    "files": 31,
+    "node": "v24.22.0",
+    "image": "sha256:e86c6444a5b2e9a8a80f20d3060b3e1e83637a67559161eb54b8842bd332493d|9bd7ce477dc7c49ac14dd2a13a2daff6a909568a",
+    "proxySha256": "16166a291ac52ee59f83bd1b1f8c6cfdd85685b6766656892713cdd422ed0586",
+    "proxyImage": "sha256:18879b4713d0bfb177dbb7b76f2b681cc15b654b9ded2c1d85a6f94a66bdb4c1"
+  },
+  "serverState": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 74971,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-10-18T07:21:41.885634083Z",
+    "FinishedAt": "0001-01-01T00:00:00Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0,
+      "Log": [
+        {
+          "Start": "2026-10-18T07:30:45.746447589Z",
+          "End": "2026-10-18T07:30:46.097731928Z",
+          "ExitCode": 0,
+          "Output": ""
+        },
+        {
+          "Start": "2026-10-18T07:31:01.09684329Z",
+          "End": "2026-10-18T07:31:01.380949636Z",
+          "ExitCode": 0,
+          "Output": ""
+        },
+        {
+          "Start": "2026-10-18T07:31:16.38200226Z",
+          "End": "2026-10-18T07:31:16.68434966Z",
+          "ExitCode": 0,
+          "Output": ""
+        },
+        {
+          "Start": "2026-10-18T07:31:31.683902993Z",
+          "End": "2026-10-18T07:31:31.983379235Z",
+          "ExitCode": 0,
+          "Output": ""
+        },
+        {
+          "Start": "2026-10-18T07:31:46.984188724Z",
+          "End": "2026-10-18T07:31:47.295478924Z",
+          "ExitCode": 0,
+          "Output": ""
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "createdAt": "2026-10-18T07:32:09.826Z",
+  "source": {
+    "sha256": "95d318b1b9ed9569a0272ea3cf3560a686dbd94ef2454ddf3f59b4476ffa2aa3",
+    "files": 31,
+    "node": "v24.19.0"
+  },
+  "tests": {
+    "backend": 108,
+    "frontend": 45,
+    "localBrowser": {
+      "passed": 98,
+      "failedInFullRun": 5,
+      "targetedRerunsPassed": 5,
+      "unresolved": 0
+    },
+    "containerBrowser": {
+      "traditional": 7,
+      "extended": 4
+    },
+    "productionDependencyAudit": {
+      "backend": 0,
+      "frontend": 0
+    }
+  },
+  "load": [
+    {
+      "historyOrders": 0,
+      "concurrency": 50,
+      "elapsedSeconds": 600.037,
+      "requests": 527802,
+      "requestsPerSecond": 879.6157570283166,
+      "p95Ms": 111,
+      "p99Ms": 188,
+      "errors": 0,
+      "rejected": 0,
+      "statusCounts": {
+        "200": 527802
+      },
+      "maxSampledMemoryMiB": 531,
+      "maxSampledCpuPercent": 119.13,
+      "source": {
+        "sha256": "95d318b1b9ed9569a0272ea3cf3560a686dbd94ef2454ddf3f59b4476ffa2aa3",
+        "files": 31,
+        "node": "v24.22.0",
+        "image": "sha256:e86c6444a5b2e9a8a80f20d3060b3e1e83637a67559161eb54b8842bd332493d|9bd7ce477dc7c49ac14dd2a13a2daff6a909568a",
+        "proxySha256": "16166a291ac52ee59f83bd1b1f8c6cfdd85685b6766656892713cdd422ed0586",
+        "proxyImage": "sha256:18879b4713d0bfb177dbb7b76f2b681cc15b654b9ded2c1d85a6f94a66bdb4c1"
+      }
+    },
+    {
+      "historyOrders": 10000,
+      "concurrency": 50,
+      "elapsedSeconds": 600.058,
+      "requests": 415373,
+      "requestsPerSecond": 692.2214185962024,
+      "p95Ms": 128,
+      "p99Ms": 187,
+      "errors": 0,
+      "rejected": 0,
+      "statusCounts": {
+        "200": 415373
+      },
+      "maxSampledMemoryMiB": 279.5,
+      "maxSampledCpuPercent": 109.39,
+      "source": {
+        "sha256": "95d318b1b9ed9569a0272ea3cf3560a686dbd94ef2454ddf3f59b4476ffa2aa3",
+        "files": 31,
+        "node": "v24.22.0",
+        "image": "sha256:e86c6444a5b2e9a8a80f20d3060b3e1e83637a67559161eb54b8842bd332493d|9bd7ce477dc7c49ac14dd2a13a2daff6a909568a",
+        "proxySha256": "16166a291ac52ee59f83bd1b1f8c6cfdd85685b6766656892713cdd422ed0586",
+        "proxyImage": "sha256:18879b4713d0bfb177dbb7b76f2b681cc15b654b9ded2c1d85a6f94a66bdb4c1"
+      }
+    }
+  ],
+  "fault": {
+    "passed": true,
+    "hotspot": {
+      "concurrent": 50,
+      "statuses": {
+        "200": 10,
+        "400": 40
+      },
+      "reservedOrders": 10,
+      "availableStock": 0
+    },
+    "replay": {
+      "paymentRequests": 50,
+      "paymentEntries": 1,
+      "refundRequests": 50,
+      "refundEntries": 1,
+      "restoredStock": 10,
+      "foreignRequestVisible": false
+    },
+    "lock": {
+      "waitMs": 5019,
+      "status": 503,
+      "code": "DATABASE_BUSY",
+      "originalRequestRetrySucceeded": true
+    },
+    "authentication": {
+      "concurrent": 50,
+      "statuses": {
+        "401": 10,
+        "429": 40
+      },
+      "oomKilled": false,
+      "healthyAfter": true
+    }
+  },
+  "migration": {
+    "checks": {
+      "existingBusinessFields": true,
+      "accountsAndSessions": true,
+      "legacyBytes": true,
+      "historicalPolicies": true,
+      "repeatedOpen": true,
+      "backupRestore": true,
+      "integrity": true
+    },
+    "inputUnchanged": true,
+    "sourceFileSha256": "b795c45c99d4d558c899ab554d17a2d5714d1bde4e8c9efff64cb56661591bc7"
+  },
+  "validatedCodeCommit": "9bd7ce477dc7c49ac14dd2a13a2daff6a909568a"
+}

@@ -1,0 +1,18 @@
+{
+  "traditional": {
+    "startTime": "2026-10-18T07:15:12.293Z",
+    "duration": 72752.866,
+    "expected": 7,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "extended": {
+    "startTime": "2026-10-18T07:14:20.215Z",
+    "duration": 39639.892,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

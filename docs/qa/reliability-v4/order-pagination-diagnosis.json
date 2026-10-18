@@ -1,0 +1,40 @@
+{
+  "isolatedContainer": "shopmate-reliability-large-final-20261018-api-1",
+  "sourceAccess": "Read-only SQLite connection; no source database or container files were changed",
+  "dataset": {
+    "orders": 10000,
+    "distinctCreatedAt": 1
+  },
+  "query": "SELECT data FROM biz_orders WHERE user_id=? ORDER BY created_at DESC,key DESC LIMIT 20 OFFSET 0",
+  "actualSourceReadOnly": {
+    "samples": 5,
+    "meanMs": 27.508771599999996,
+    "plan": [
+      "SEARCH biz_orders USING INDEX biz_orders_owner_date (user_id=?)",
+      "USE TEMP B-TREE FOR LAST TERM OF ORDER BY"
+    ]
+  },
+  "sameDataInMemoryComparison": {
+    "samplesEach": 10,
+    "oldIndexes": {
+      "meanMs": 25.000637899999994,
+      "minMs": 18.89395300000001,
+      "maxMs": 36.811120000000074,
+      "plan": [
+        "SEARCH biz_orders USING INDEX biz_orders_owner_date (user_id=?)",
+        "USE TEMP B-TREE FOR LAST TERM OF ORDER BY"
+      ]
+    },
+    "completeIndex": {
+      "definition": "CREATE INDEX biz_orders_owner_page ON biz_orders(user_id,created_at DESC,key DESC)",
+      "meanMs": 0.046554699999956026,
+      "minMs": 0.031120999999984633,
+      "maxMs": 0.11266200000000026,
+      "plan": [
+        "SEARCH biz_orders USING INDEX biz_orders_owner_page (user_id=?)"
+      ]
+    }
+  },
+  "verification": "Storage regression simulates old indexes, reopens the file, and verifies owner/status/global/owner-plus-status query plans contain no temporary ordering and retain all business and legacy JSON records",
+  "boundary": "SQL microbenchmark on an in-memory copy; full HTTP mixed-load acceptance must be rerun against the final rebuilt image"
+}

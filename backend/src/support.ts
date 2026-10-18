@@ -2,6 +2,7 @@ import type { ShopApi } from "../../shared/domain/api";
 import type { Message } from "../../shared/domain/types";
 import { aiConfig } from "./ai-provider";
 import { enqueueSupportRun } from "./ai-support";
+import { availableStock } from "./commerce-rules";
 import { cancelSupportWork, ensureSupportSchema } from "./ai-schema";
 import { context } from "./repository";
 import {
@@ -115,7 +116,7 @@ export const supportApi: Pick<
           (p) => p.id === conversation.productId && p.active,
         );
         answer.text = product
-          ? `${product.name}：${product.description} 材质：${product.material}。当前可选规格：${product.skus.map((s) => `${s.name}，¥${(s.price / 100).toFixed(2)}，库存 ${s.stock}`).join("；")}。请在商品详情确认规格与最新价格。`
+          ? `${product.name}：${product.description} 材质：${product.material}。当前可选规格：${product.skus.map((s) => `${s.name}，¥${(s.price / 100).toFixed(2)}，可售库存 ${availableStock(db, product.id, s.id)}`).join("；")}。请在商品详情确认规格与最新价格。`
           : "该商品已下架，请查看其他商品或转人工。";
         if (product) answer.productIds = [product.id];
       } else {
@@ -129,7 +130,9 @@ export const supportApi: Pick<
           .filter(
             (p) =>
               p.active &&
-              p.skus.some((s) => s.stock > 0 && s.price <= budget) &&
+              p.skus.some(
+                (s) => availableStock(db, p.id, s.id) > 0 && s.price <= budget,
+              ) &&
               keywords.length > 0 &&
               [
                 p.name,
@@ -168,7 +171,7 @@ export const supportApi: Pick<
       conversation.messages.push({
         id: id("msg-"),
         role: "assistant",
-        text: "已转入演示人工服务队列。请在管理端客服工作台回复，此处会同步显示。",
+        text: "已转入演示人工服务队列。你可以继续补充问题，客服接入后的回复会在此同步显示。",
         createdAt: now(),
       });
     });

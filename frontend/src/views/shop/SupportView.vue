@@ -19,7 +19,7 @@ import {
   supportFailure,
   supportDegradation,
 } from "../../services/support";
-import type { SupportDetail } from "../../services/support";
+import type { SupportDetail, SupportProposal } from "../../services/support";
 import { dateTime, orderLabels, money } from "../../domain/types";
 import ProductCard from "../../components/shop/ProductCard.vue";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
@@ -32,12 +32,14 @@ const shop = useShop(),
   detail = ref<SupportDetail | null>(null),
   aiEnabled = ref<boolean | null>(null),
   detailError = ref(""),
+  proposalNow = ref(Date.now()),
   messagesEl = ref<HTMLElement>(),
   { busy, pending, error, notice, run } = useAction();
 let alive = true,
   epoch = 0,
   readSequence = 0,
-  timer: ReturnType<typeof setTimeout> | undefined;
+  timer: ReturnType<typeof setTimeout> | undefined,
+  proposalTimer: ReturnType<typeof setTimeout> | undefined;
 let draftVersions: Record<string, number> = {};
 const text = computed({
   get: () => drafts.value[activeId.value] ?? "",
@@ -88,6 +90,15 @@ const current = (target: ReturnType<typeof capture>) =>
   target.epoch === epoch &&
   target.actor === shop.userSession?.id &&
   target.id === activeId.value;
+async function runScoped(action: () => Promise<unknown>, success = "") {
+  const target = capture(),
+    completed = await run(action, success);
+  if (!current(target)) {
+    error.value = "";
+    notice.value = "";
+  }
+  return completed;
+}
 function stopPolling() {
   clearTimeout(timer);
   timer = undefined;
@@ -139,7 +150,7 @@ async function start(context?: { productId?: string; orderId?: string }) {
   }
   const target = capture();
   let created: string | undefined;
-  await run(async () => {
+  await runScoped(async () => {
     const id = context
       ? await api.createConversation(context)
       : await api.createConversation();
@@ -153,7 +164,7 @@ async function start(context?: { productId?: string; orderId?: string }) {
 async function transfer() {
   const target = capture();
   if (
-    await run(
+    await runScoped(
       () => api.transferConversation(target.id),
       "已提交转人工，请等待客服接入。",
     )
@@ -161,8 +172,19 @@ async function transfer() {
     if (current(target)) await refreshDetail();
 }
 async function proposalAction(id: string, confirm: boolean) {
+  const proposal = detail.value?.proposals.find((item) => item.id === id);
+  proposalNow.value = Date.now();
+  if (
+    !proposal ||
+    proposalStatus(proposal) !== "pending" ||
+    conversation.value?.status !== "bot"
+  ) {
+    error.value = "操作提案已失效，请重新咨询确认。";
+    notice.value = "";
+    return;
+  }
   const target = capture();
-  await run(
+  await runScoped(
     () =>
       commerceAction(
         confirm ? "confirmSupportProposal" : "cancelSupportProposal",
@@ -173,11 +195,35 @@ async function proposalAction(id: string, confirm: boolean) {
   if (current(target)) await refreshDetail();
 }
 async function retry() {
+  if (conversation.value?.status !== "bot" || aiEnabled.value !== true) return;
   const target = capture(),
     id = detail.value?.run?.id;
-  if (id && (await run(() => commerceAction("retrySupportRun", id))))
+  if (id && (await runScoped(() => commerceAction("retrySupportRun", id))))
     if (current(target)) await refreshDetail();
 }
+function proposalStatus(proposal: SupportProposal) {
+  return proposal.status === "pending" &&
+    new Date(proposal.expiresAt).getTime() <= proposalNow.value
+    ? "expired"
+    : proposal.status;
+}
+function scheduleProposalExpiry() {
+  clearTimeout(proposalTimer);
+  proposalTimer = undefined;
+  proposalNow.value = Date.now();
+  const nextExpiry = Math.min(
+    ...(detail.value?.proposals ?? [])
+      .filter((proposal) => proposal.status === "pending")
+      .map((proposal) => new Date(proposal.expiresAt).getTime())
+      .filter((expiresAt) => expiresAt > proposalNow.value),
+  );
+  if (Number.isFinite(nextExpiry))
+    proposalTimer = setTimeout(
+      scheduleProposalExpiry,
+      Math.min(nextExpiry - proposalNow.value + 1, 2_147_483_647),
+    );
+}
+watch(() => detail.value?.proposals, scheduleProposalExpiry);
 function proposalLines(details: Record<string, unknown>) {
   if (!Array.isArray(details.lines)) return [];
   const order = orders.value.find((o) => o.id === details.orderId);
@@ -232,6 +278,8 @@ watch(activeId, () => {
   readSequence++;
   detail.value = null;
   detailError.value = "";
+  error.value = "";
+  notice.value = "";
   void refreshDetail();
 });
 watch(
@@ -283,6 +331,7 @@ onUnmounted(() => {
   alive = false;
   epoch++;
   stopPolling();
+  clearTimeout(proposalTimer);
 });
 watch(
   () => conversation.value?.messages.length,
@@ -310,7 +359,7 @@ async function send(value?: string) {
   const target = capture(),
     sentDraft = text.value,
     draftVersion = draftVersions[target.id];
-  if (await run(() => api.sendMessage(target.id, content))) {
+  if (await runScoped(() => api.sendMessage(target.id, content))) {
     if (
       alive &&
       epoch === target.epoch &&
@@ -431,7 +480,9 @@ async function send(value?: string) {
                       ? "人工客服"
                       : m.source === "ai"
                         ? "AI 客服"
-                        : "规则客服"
+                        : m.source === "rule"
+                          ? "规则客服"
+                          : "客服提示"
                 }}</span>
                 <p>{{ m.text }}</p>
                 <details v-if="m.citations?.length" class="support-citations">
@@ -503,7 +554,13 @@ async function send(value?: string) {
             role="alert"
           >
             {{ supportFailure(detail.run.error) }}
-            <button :disabled="busy" @click="retry">重试本轮</button>
+            <button
+              v-if="conversation?.status === 'bot' && aiEnabled === true"
+              :disabled="busy"
+              @click="retry"
+            >
+              重试本轮
+            </button>
           </div>
           <div v-if="detail?.proposals.length" class="support-proposals">
             <article
@@ -580,13 +637,13 @@ async function send(value?: string) {
                     confirmed: "已执行",
                     cancelled: "已取消",
                     expired: "已失效，请重新咨询",
-                  }[proposal.status]
+                  }[proposalStatus(proposal)]
                 }}
                 · 有效至 {{ dateTime(proposal.expiresAt) }}
               </p>
               <template
                 v-if="
-                  proposal.status === 'pending' &&
+                  proposalStatus(proposal) === 'pending' &&
                   conversation?.status === 'bot'
                 "
               >

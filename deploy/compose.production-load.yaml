@@ -1,0 +1,16 @@
+# Do not combine with compose.acceptance.yaml: daily logging and backups stay enabled.
+# Use a NEW shopmate-reliability-* project, isolated port and independent BACKUP_PATH.
+services:
+  api:
+    image: shopmate-ai-api:${ACCEPTANCE_TAG:-production-load}
+    labels:
+      shopmate.acceptance: production-load
+    environment:
+      SHOPMATE_ENV: acceptance
+      LOG_REQUESTS: "true"
+      BACKUP_DIR: /app/backups
+      ALLOW_LEGACY_COMMANDS: "false"
+    volumes:
+      - ${BACKUP_PATH:?Set an independent absolute backup directory}:/app/backups
+  web:
+    image: shopmate-ai-web:${ACCEPTANCE_TAG:-production-load}

@@ -6,7 +6,7 @@ import { expirePendingOrders } from "./commerce";
 import { writeFileSync, rmSync } from "node:fs";
 import { ensureRuntimeSchema } from "./runtime";
 import { runDueJobs, ensureRecurringJobs } from "./jobs";
-import { backupDatabase, pruneDailyBackups } from "./maintenance";
+import { runAutomaticBackup } from "./automatic-backup";
 import { join } from "node:path";
 
 const databasePath = process.env.DATABASE_PATH ?? "data/shopmate.sqlite";
@@ -66,23 +66,19 @@ let backupInProgress: Promise<unknown> | undefined,
 const backupTimer = setInterval(() => {
   const day = new Date().toISOString().slice(0, 10);
   if (process.env.BACKUP_DIR && !backupInProgress && day !== lastBackupDay) {
-    backupInProgress = backupDatabase(
+    backupInProgress = runAutomaticBackup(
       sql,
       join(
         process.env.BACKUP_DIR,
         `shopmate-daily-${day}-${Date.now()}.sqlite`,
       ),
-      { reason: "daily" },
-    )
-      .then(() => {
+      () => {
         lastBackupDay = day;
-        pruneDailyBackups(process.env.BACKUP_DIR!, 7);
+      },
+    )
+      .catch(() => {
+        // The task already emitted a correlated, redacted failure event.
       })
-      .catch(() =>
-        console.error(
-          JSON.stringify({ level: "error", event: "backup_failed" }),
-        ),
-      )
       .finally(() => {
         backupInProgress = undefined;
       });

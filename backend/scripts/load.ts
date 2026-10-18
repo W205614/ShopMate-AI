@@ -2,6 +2,8 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { BoundedRequestTimeline, analyzeBackupWindows } from "./load-observation";
+import { observeProductionLoad } from "./production-load-observer";
 const base = process.env.LOAD_BASE_URL ?? "",
   duration = Number(process.env.LOAD_SECONDS ?? "600"),
   concurrency = 50;
@@ -18,6 +20,11 @@ const headers = {
   "X-ShopMate-Request": "1",
 };
 const digestContainer = process.env.LOAD_CONTAINER;
+const observeBackups = process.env.LOAD_OBSERVE_BACKUPS === "1";
+if (observeBackups && !digestContainer?.startsWith("shopmate-reliability-"))
+  throw new Error("An isolated production-load container is required");
+const observer = observeBackups ? await observeProductionLoad(digestContainer!, base) : undefined;
+const timeline = observeBackups ? new BoundedRequestTimeline() : undefined;
 let serverSource: unknown;
 if (digestContainer?.startsWith("shopmate-reliability-")) {
   const result = await promisify(execFile)("docker", [
@@ -76,13 +83,16 @@ const histogram = new Uint32Array(60001),
   start = Date.now();
 const resourceSamples: { at: string; stats: string }[] = [];
 const container = process.env.LOAD_CONTAINER;
+let resourceSampleRunning = false;
 const sample = () => {
-  if (container?.startsWith("shopmate-reliability-"))
+  if (container?.startsWith("shopmate-reliability-") && !resourceSampleRunning) {
+    resourceSampleRunning = true;
     execFile(
       "docker",
       ["stats", "--no-stream", "--format", "{{json .}}", container],
       { timeout: 10000 },
       (error, stdout) => {
+        resourceSampleRunning = false;
         if (!error)
           resourceSamples.push({
             at: new Date().toISOString(),
@@ -90,14 +100,17 @@ const sample = () => {
           });
       },
     );
+  }
 };
 sample();
-const resourceTimer = setInterval(sample, 30000);
+const resourceTimer = setInterval(sample, observeBackups ? 1000 : 30000);
 async function worker(index: number) {
   let iteration = 0;
   while (Date.now() < stop) {
     const begin = performance.now(),
+      beginAt = Date.now(),
       write = (iteration++ + index) % 10 === 0;
+    let status = 0;
     try {
       const route = write
         ? "/api/actions/updateCart"
@@ -120,6 +133,7 @@ async function worker(index: number) {
           : {}),
       });
       await response.arrayBuffer();
+      status = response.status;
       statusCounts[response.status] = (statusCounts[response.status] ?? 0) + 1;
       if (response.status === 429) rejected++;
       else if (!response.ok) {
@@ -139,6 +153,7 @@ async function worker(index: number) {
       statusCounts.network = (statusCounts.network ?? 0) + 1;
     }
     histogram[Math.min(60000, Math.ceil(performance.now() - begin))]!++;
+    timeline?.record(beginAt, beginAt + performance.now() - begin, status, write);
     requests++;
   }
 }
@@ -156,6 +171,7 @@ const reportTimer = setInterval(
   60000,
 );
 await Promise.all(Array.from({ length: concurrency }, (_, i) => worker(i)));
+const loadEndedAt = Date.now();
 clearInterval(reportTimer);
 clearInterval(resourceTimer);
 function percentile(p: number) {
@@ -170,9 +186,11 @@ function percentile(p: number) {
 const report = {
   dataset: process.env.LOAD_HISTORY ?? "0",
   concurrency,
-  elapsedSeconds: (Date.now() - start) / 1000,
+  startedAt: new Date(start).toISOString(),
+  endedAt: new Date(loadEndedAt).toISOString(),
+  elapsedSeconds: (loadEndedAt - start) / 1000,
   requests,
-  requestsPerSecond: requests / ((Date.now() - start) / 1000),
+  requestsPerSecond: requests / ((loadEndedAt - start) / 1000),
   errors,
   rejected,
   statusCounts,
@@ -198,8 +216,14 @@ const report = {
       )
     : undefined,
 };
+const observation = observer ? await observer.finish() : undefined;
+const backupWindows = observation && timeline ? analyzeBackupWindows(observation.events, timeline, {
+  loadStartedAt: start, loadEndedAt, clockPaddingMs: observation.clockPaddingMs,
+}) : undefined;
+const completeReport = { ...report, ...(observation ? { observation, backupWindows } : {}) };
 const output = process.env.LOAD_REPORT ?? ".delivery/load.json";
 mkdirSync(dirname(output), { recursive: true });
-writeFileSync(output, JSON.stringify(report, null, 2));
-console.log(JSON.stringify(report));
-if (errors || report.p95Ms > 2000) process.exitCode = 1;
+writeFileSync(output, JSON.stringify(completeReport, null, 2));
+console.log(JSON.stringify(completeReport));
+if (errors || report.p95Ms > 2000 || (observeBackups &&
+  (rejected || !backupWindows?.passed || observation!.failures.length))) process.exitCode = 1;

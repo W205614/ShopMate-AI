@@ -98,6 +98,15 @@ async function png(page: Page, size = 0, mimeType = "image/png") {
   original.copy(bytes);
   return { name: `valid.${mimeType.split("/")[1]}`, mimeType, buffer: bytes };
 }
+async function editNamedProduct(page: Page, name: string) {
+  await page.getByPlaceholder("搜索商品名称").fill(name);
+  const rows = page.locator(".el-table__body-wrapper tbody tr"),
+    row = rows.filter({ hasText: name });
+  await expect(rows).toHaveCount(1);
+  await expect(row).toHaveCount(1);
+  await row.getByRole("button", { name: "编辑", exact: true }).click();
+}
+
 test.beforeEach(async ({ page }) => {
   test.skip(!!process.env.PLAYWRIGHT_BASE_URL, "目录写入仅使用隔离夹具");
   await page.request.post("/api/auth/login", {
@@ -109,8 +118,7 @@ test("图片读取和解码失败保留草稿并能重试，保存失败不丢�
   page,
 }) => {
   await page.goto("/admin/products");
-  await page.getByPlaceholder("搜索商品名称").fill("静听 无线头戴耳机");
-  await page.getByRole("button", { name: "编辑", exact: true }).click();
+  await editNamedProduct(page, "静听 无线头戴耳机");
   const dialog = page.getByRole("dialog", { name: "编辑商品" });
   await dialog.getByLabel("商品名称", { exact: true }).fill("保留编辑草稿");
   const upload = page.getByLabel("上传商品图片", { exact: true });
@@ -259,8 +267,7 @@ test("合法 1.6 MiB 商品图片可保存刷新，售价按元输入且保持�
   page,
 }) => {
   await page.goto("/admin/products");
-  await page.getByPlaceholder("搜索商品名称").fill("静听 无线头戴耳机");
-  await page.getByRole("button", { name: "编辑", exact: true }).click();
+  await editNamedProduct(page, "静听 无线头戴耳机");
   const dialog = page.getByRole("dialog", { name: "编辑商品" });
   await page
     .getByLabel("上传商品图片", { exact: true })
@@ -272,7 +279,7 @@ test("合法 1.6 MiB 商品图片可保存刷新，售价按元输入且保持�
   await dialog.getByRole("button", { name: "保存商品", exact: true }).click();
   expect((await response).ok()).toBe(true);
   await expect(dialog).not.toBeVisible();
-  await page.getByRole("button", { name: "编辑", exact: true }).click();
+  await editNamedProduct(page, "静听 无线头戴耳机");
   await dialog.getByLabel("售价（元）", { exact: true }).first().fill("99.90");
   await dialog.getByRole("button", { name: "保存商品", exact: true }).click();
   await expect(dialog).not.toBeVisible();

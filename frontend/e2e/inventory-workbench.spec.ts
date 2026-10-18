@@ -250,7 +250,10 @@ test("库存提交成功后同步中断仍确认成功，恢复不重复补货",
     page.getByRole("alert").filter({ hasText: "操作已完成" }),
   ).toBeVisible();
   blocked = false;
-  await page.getByRole("button", { name: "重新连接", exact: true }).click();
+  // Polling may finish recovery before a manual reconnect button can be clicked.
+  await expect(
+    page.getByRole("alert").filter({ hasText: "操作已完成" }),
+  ).toHaveCount(0);
   await expect(
     page
       .locator(".el-table__body-wrapper tbody tr")

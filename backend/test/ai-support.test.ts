@@ -39,6 +39,95 @@ afterEach(() => {
 });
 
 describe("AI support task and confirmation invariants", () => {
+  it("corrects an invalid final shape within the existing provider-call budget", async () => {
+    const run: any = await queued("帮我申请退款");
+    const caller = vi
+      .fn()
+      .mockResolvedValueOnce({
+        role: "assistant",
+        content: JSON.stringify({ answer: "请提供订单", orderId: null }),
+      })
+      .mockResolvedValueOnce({
+        role: "assistant",
+        content: JSON.stringify({
+          answer: "请提供订单号、退款原因和商品数量。",
+          citations: [],
+          productIds: [],
+        }),
+      });
+    await processSupportRun(sql, run.id, caller);
+    expect(caller).toHaveBeenCalledTimes(2);
+    expect(
+      sql
+        .prepare("SELECT status,calls FROM support_runs WHERE id=?")
+        .get(run.id),
+    ).toEqual({ status: "completed", calls: 2 });
+    expect(
+      sql
+        .prepare("SELECT count(*) AS n FROM support_proposals WHERE run_id=?")
+        .get(run.id)?.n,
+    ).toBe(0);
+  });
+
+  it("rejects repeated invalid output without exceeding four calls or saving it", async () => {
+    const run: any = await queued();
+    const caller = vi.fn(async () => ({
+      role: "assistant" as const,
+      content: '{"answer":"unchecked","orderId":null}',
+    }));
+    await processSupportRun(sql, run.id, caller);
+    expect(caller).toHaveBeenCalledTimes(4);
+    expect(
+      sql
+        .prepare("SELECT status,error,calls FROM support_runs WHERE id=?")
+        .get(run.id),
+    ).toEqual({ status: "failed", error: "AI_INVALID_RESPONSE", calls: 4 });
+    expect(
+      readDatabase(sql)
+        .conversations.find((c) => c.id === run.conversation_id)!
+        .messages.some((m) => m.text === "unchecked"),
+    ).toBe(false);
+  });
+
+  it("grounds context cards in a fresh server lookup even when the final answer needs no tool call", async () => {
+    const chatId = await asUser(() =>
+      supportApi.createConversation({ productId: "p01" }),
+    );
+    await asUser(() =>
+      supportApi.sendMessage(chatId, "这个商品的价格是多少？"),
+    );
+    const run = sql
+      .prepare("SELECT id FROM support_runs WHERE conversation_id=?")
+      .get(chatId)!;
+    const product = readDatabase(sql).products.find((p) => p.id === "p01")!;
+    const caller = vi.fn(async (messages: unknown[]) => {
+      const source = messages.find(
+        (m) => (m as { name?: string }).name === "server_context",
+      ) as { role: string; content: string };
+      expect(source.role).toBe("user");
+      expect(source.content).toContain(product.name);
+      expect(source.content).toContain(String(product.skus[0]!.price));
+      expect(source.content).not.toMatch(/phone|password|address/);
+      return {
+        role: "assistant" as const,
+        content: JSON.stringify({
+          answer: "请核对下方实时商品卡片。",
+          productIds: ["p01"],
+          citations: [],
+        }),
+      };
+    });
+    await processSupportRun(sql, String(run.id), caller);
+    expect(
+      sql.prepare("SELECT status FROM support_runs WHERE id=?").get(run.id)
+        ?.status,
+    ).toBe("completed");
+    expect(
+      readDatabase(sql)
+        .conversations.find((c) => c.id === chatId)!
+        .messages.at(-1)?.productIds,
+    ).toEqual(["p01"]);
+  });
   it("allows ordinary cart writes while a model request is awaiting its provider", async () => {
     const run: any = await queued();
     let release!: () => void;
@@ -242,6 +331,9 @@ describe("AI support task and confirmation invariants", () => {
     await expect(
       asUser(() => supportCommands.confirmSupportProposal(p.id), "u2"),
     ).rejects.toMatchObject({ status: 404 });
+    sql
+      .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+      .run(run.id);
     await asUser(() => supportCommands.confirmSupportProposal(p.id));
     await asUser(() => supportCommands.confirmSupportProposal(p.id));
     expect(
@@ -270,6 +362,9 @@ describe("AI support task and confirmation invariants", () => {
     const db = readDatabase(sql);
     db.products.find((p) => p.id === "p01")!.skus[0]!.price++;
     writeDatabase(sql, db);
+    sql
+      .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+      .run(run.id);
     await expect(
       asUser(() => supportCommands.confirmSupportProposal(p.id)),
     ).rejects.toMatchObject({ status: 409 });
@@ -304,6 +399,9 @@ describe("AI support task and confirmation invariants", () => {
           orderId: order.id,
         }),
       );
+      sql
+        .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+        .run(run.id);
       await asUser(() => supportCommands.confirmSupportProposal(p.id));
       expect(
         readDatabase(sql).orders.find((o) => o.id === order.id)?.status,
@@ -316,6 +414,9 @@ describe("AI support task and confirmation invariants", () => {
         !readDatabase(sql).afterSales.some((a) => a.orderId === o.id),
     );
     if (paid) {
+      sql
+        .prepare("UPDATE support_runs SET status='running' WHERE id=?")
+        .run(run.id);
       const args = {
         kind: "requestAfterSale" as const,
         orderId: paid.id,
@@ -324,6 +425,9 @@ describe("AI support task and confirmation invariants", () => {
         lines: [{ orderItemId: paid.items[0]!.id, quantity: 1 }],
       };
       const p = asUser(() => createSupportProposal(sql, run, args));
+      sql
+        .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+        .run(run.id);
       await asUser(() => supportCommands.confirmSupportProposal(p.id));
       expect(
         readDatabase(sql).afterSales.some(

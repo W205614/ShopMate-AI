@@ -15,6 +15,8 @@ import {
 } from "../src/ai-support";
 import { ensureSupportSchema } from "../src/ai-schema";
 import { ensureRuntimeSchema } from "../src/runtime";
+import { createApp } from "../src/app";
+import { createAccount } from "../src/auth";
 
 type Run = Parameters<typeof createSupportProposal>[1];
 let sql: DatabaseSync;
@@ -115,6 +117,169 @@ afterEach(() => {
 });
 
 describe("independent AI support confirmation review", () => {
+  it("rejects early confirmation without business writes and permits the same request after the answer completes", async () => {
+    const target = await order(),
+      run = await running();
+    const proposal = asUser(() =>
+      createSupportProposal(sql, run, { kind: "cancelOrder", orderId: target }),
+    );
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const processing = processSupportRun(sql, run.id, async () => {
+      await gate;
+      return {
+        role: "assistant",
+        content: JSON.stringify({
+          answer: "请核对取消订单卡片，再点击确认。",
+          citations: [],
+        }),
+      };
+    });
+    const before = readDatabase(sql),
+      requestId = crypto.randomUUID();
+    try {
+      await expect(confirm(proposal.id, requestId)).rejects.toMatchObject({
+        status: 409,
+        code: "PROPOSAL_NOT_READY",
+      });
+      expect(readDatabase(sql)).toEqual(before);
+      expect(
+        sql
+          .prepare("SELECT status,result FROM support_proposals WHERE id=?")
+          .get(proposal.id),
+      ).toEqual({ status: "pending", result: null });
+      expect(
+        sql
+          .prepare(
+            "SELECT count(*) AS n FROM command_results WHERE request_id=?",
+          )
+          .get(requestId)?.n,
+      ).toBe(0);
+    } finally {
+      release();
+      await processing;
+    }
+    expect(
+      sql.prepare("SELECT status FROM support_runs WHERE id=?").get(run.id)
+        ?.status,
+    ).toBe("completed");
+    await confirm(proposal.id, requestId);
+    expect(readDatabase(sql).orders.find((o) => o.id === target)?.status).toBe(
+      "cancelled",
+    );
+    expect(
+      sql
+        .prepare("SELECT status FROM support_proposals WHERE id=?")
+        .get(proposal.id)?.status,
+    ).toBe("confirmed");
+  });
+
+  it("hides pending cards in the authenticated detail endpoint until completion while retaining cancelled and confirmed history", async () => {
+    const account = await createAccount(sql, {
+      username: "proposal_visibility",
+      name: "提案可见性",
+      password: "VisibilityTest123!",
+    });
+    const app = await createApp(sql, { origins: ["http://localhost"] }),
+      server = app.listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => server.on("listening", resolve));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    try {
+      const login = await fetch(base + "/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-ShopMate-Request": "1",
+        },
+        body: JSON.stringify({
+          username: "proposal_visibility",
+          password: "VisibilityTest123!",
+          role: "user",
+        }),
+      });
+      expect(login.status).toBe(200);
+      const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
+      const run = await running(account.id),
+        input = {
+          kind: "addCart" as const,
+          productId: "p01",
+          skuId: "p01-s1",
+          quantity: 1,
+        };
+      const cancelled = asUser(
+        () => createSupportProposal(sql, run, input),
+        account.id,
+      );
+      await asUser(
+        () => supportCommands.cancelSupportProposal(cancelled.id),
+        account.id,
+      );
+      const pending = asUser(
+        () => createSupportProposal(sql, run, input),
+        account.id,
+      );
+      const detail = async () => {
+        const response = await fetch(
+          base + `/api/support/conversations/${run.conversation_id}`,
+          { headers: { Cookie: cookie } },
+        );
+        expect(response.status).toBe(200);
+        return (await response.json()) as {
+          proposals: { id: string; status: string }[];
+        };
+      };
+      expect((await detail()).proposals).toEqual([
+        expect.objectContaining({ id: cancelled.id, status: "cancelled" }),
+      ]);
+      await processSupportRun(sql, run.id, async () => ({
+        role: "assistant",
+        content: JSON.stringify({
+          answer: "请核对加购卡片后确认。",
+          citations: [],
+        }),
+      }));
+      expect((await detail()).proposals).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: pending.id, status: "pending" }),
+          expect.objectContaining({ id: cancelled.id, status: "cancelled" }),
+        ]),
+      );
+      await confirm(pending.id, undefined, account.id);
+      await command(
+        "sendMessage",
+        [run.conversation_id, "继续咨询"],
+        () => supportApi.sendMessage(run.conversation_id, "继续咨询"),
+        undefined,
+        account.id,
+      );
+      const nextRun = sql
+        .prepare(
+          "SELECT * FROM support_runs WHERE conversation_id=? AND status='queued'",
+        )
+        .get(run.conversation_id) as Run;
+      sql
+        .prepare("UPDATE support_runs SET status='running' WHERE id=?")
+        .run(nextRun.id);
+      const hidden = asUser(
+        () => createSupportProposal(sql, nextRun, { ...input, quantity: 2 }),
+        account.id,
+      );
+      const history = (await detail()).proposals;
+      expect(history).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: pending.id, status: "confirmed" }),
+          expect.objectContaining({ id: cancelled.id, status: "cancelled" }),
+        ]),
+      );
+      expect(history.some((p) => p.id === hidden.id)).toBe(false);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it("cancels a newly created reserved order exactly once through the command scope and preserves other orders", async () => {
     const target = await order(2),
       other = await order(1, "u2"),
@@ -128,6 +293,9 @@ describe("independent AI support confirmation review", () => {
     expect(readDatabase(sql).orders.find((o) => o.id === target)?.status).toBe(
       "pending",
     );
+    sql
+      .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+      .run(run.id);
     const requestId = crypto.randomUUID();
     const first = await confirm(proposal.id, requestId);
     expect(await confirm(proposal.id, requestId)).toEqual(first);
@@ -184,6 +352,9 @@ describe("independent AI support confirmation review", () => {
     await expect(confirm(proposal.id, undefined, "u2")).rejects.toMatchObject({
       status: 404,
     });
+    sql
+      .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+      .run(run.id);
     await confirm(proposal.id);
     await confirm(proposal.id);
     const after = readDatabase(sql),
@@ -218,6 +389,9 @@ describe("independent AI support confirmation review", () => {
         lines: [{ orderItemId: paid.items[0]!.id, quantity: 1 }],
       }),
     );
+    sql
+      .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+      .run(run.id);
     const before = readDatabase(sql),
       requestId = crypto.randomUUID();
     sql.exec(
@@ -270,6 +444,9 @@ describe("independent AI support confirmation review", () => {
           lines,
         ),
     );
+    sql
+      .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+      .run(run.id);
     await expect(confirm(proposal.id)).rejects.toMatchObject({
       status: 409,
       code: "PROPOSAL_STALE",
@@ -426,6 +603,9 @@ describe("independent AI support confirmation review", () => {
         .prepare("SELECT status FROM support_proposals WHERE id=?")
         .get(next.id)?.status,
     ).toBe("pending");
+    sql
+      .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+      .run(run.id);
     await confirm(next.id);
     expect(
       sql

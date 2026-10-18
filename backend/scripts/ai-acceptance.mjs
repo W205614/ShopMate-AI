@@ -283,7 +283,9 @@ try {
     return normal(d);
   });
   await test("07 文本知识引用", async () => {
-    const d = await ask("云杉测试保养布用多少度水？能使用漂白剂吗？");
+    const d = await ask(
+      "仅核对已发布的合成验收文档：云杉测试保养布建议水温和漂白剂禁忌怎么写？不作为真实商品承诺。",
+    );
     assert(
       d.answer.text.includes("30") && d.answer.citations?.length,
       "Missing TXT grounding",
@@ -313,7 +315,9 @@ try {
     return normal(d);
   });
   await test("10 文字PDF引用", async () => {
-    const d = await ask("远山测试杯用几度温水清洁？可以机洗吗？");
+    const d = await ask(
+      "仅核对已发布的合成验收文档：远山测试杯的清洁温度和机洗禁忌是什么？请注明页码，不作为真实商品承诺。",
+    );
     assert(
       d.answer.text.includes("35") &&
         /不|禁止/.test(d.answer.text) &&
@@ -324,7 +328,7 @@ try {
   });
   await test("11 扫描图片识别引用", async () => {
     const d = await ask(
-      "晨星测试杯容量和质保期是多少？能机洗吗？包装破损是否丢弃？",
+      "仅核对已发布的合成验收文档：晨星测试杯的容量、合成质保期限、机洗禁忌和包装破损处理规则是什么？不作为真实商品承诺。",
     );
     assert(
       ["420", "17"].every((s) => d.answer.text.includes(s)) &&

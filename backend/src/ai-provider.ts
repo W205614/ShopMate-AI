@@ -149,7 +149,13 @@ export async function chat(
     {
       model: config.model,
       messages,
-      ...(tools?.length ? { tools, tool_choice: "auto" } : {}),
+      ...(tools?.length
+        ? {
+            tools,
+            tool_choice: "auto",
+            response_format: { type: "json_object" },
+          }
+        : {}),
       thinking: { type: "disabled" },
       temperature: 0.2,
       max_tokens: 4096,

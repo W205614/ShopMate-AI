@@ -16,7 +16,7 @@ function configure() {
   vi.stubEnv("RERANKER_URL", "https://reranker.invalid/v1/rerank");
 }
 describe("AI provider protocol and failure boundaries", () => {
-  it("uses flash non-thinking requests, returns only safe token usage, never forwards raw usage fields", async () => {
+  it("requires JSON output for tool-enabled support but keeps vision transcription in text mode", async () => {
     configure();
     const fetcher = vi
       .fn()
@@ -24,16 +24,67 @@ describe("AI provider protocol and failure boundaries", () => {
         new Response(
           JSON.stringify({
             choices: [
-              { message: { role: "assistant", content: "好", tool_calls: [] } },
+              {
+                message: {
+                  role: "assistant",
+                  content: '{"answer":"请补充订单"}',
+                },
+              },
             ],
-            usage: {
-              prompt_tokens: 42,
-              total_tokens: 44,
-              internal_secret: "ignored",
-            },
           }),
         ),
       );
+    vi.stubGlobal("fetch", fetcher);
+    await chat(
+      [{ role: "system", content: "Return JSON" }],
+      [
+        {
+          type: "function",
+          function: {
+            name: "lookup",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ],
+    );
+    expect(JSON.parse(fetcher.mock.calls[0]![1].body).response_format).toEqual({
+      type: "json_object",
+    });
+    fetcher.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: "合成容量420毫升，禁止机洗",
+              },
+            },
+          ],
+        }),
+      ),
+    );
+    await vision(Buffer.from("synthetic-image"), "image/png");
+    expect(JSON.parse(fetcher.mock.calls[1]![1].body)).not.toHaveProperty(
+      "response_format",
+    );
+  });
+  it("uses flash non-thinking requests, returns only safe token usage, never forwards raw usage fields", async () => {
+    configure();
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            { message: { role: "assistant", content: "好", tool_calls: [] } },
+          ],
+          usage: {
+            prompt_tokens: 42,
+            total_tokens: 44,
+            internal_secret: "ignored",
+          },
+        }),
+      ),
+    );
     vi.stubGlobal("fetch", fetcher);
     const response = await chat([{ role: "user", content: "你好" }]);
     const [url, request] = fetcher.mock.calls[0]!;
@@ -115,49 +166,45 @@ describe("AI provider protocol and failure boundaries", () => {
     configure();
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({
-              choices: [
-                {
-                  message: {
-                    role: "assistant",
-                    content: null,
-                    tool_calls: [
-                      {
-                        id: "a",
-                        type: "function",
-                        function: { name: "query", arguments: { x: 1 } },
-                      },
-                    ],
-                  },
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  role: "assistant",
+                  content: null,
+                  tool_calls: [
+                    {
+                      id: "a",
+                      type: "function",
+                      function: { name: "query", arguments: { x: 1 } },
+                    },
+                  ],
                 },
-              ],
-            }),
-          ),
+              },
+            ],
+          }),
         ),
+      ),
     );
     await expect(chat([])).rejects.toMatchObject({
       code: "PROVIDER_INVALID_TOOLS",
     });
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({
-              choices: [
-                {
-                  message: { role: "assistant", content: "partial" },
-                  finish_reason: "length",
-                },
-              ],
-            }),
-          ),
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: { role: "assistant", content: "partial" },
+                finish_reason: "length",
+              },
+            ],
+          }),
         ),
+      ),
     );
     await expect(chat([])).rejects.toMatchObject({
       code: "PROVIDER_INVALID_CHAT",

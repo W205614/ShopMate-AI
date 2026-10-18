@@ -31,6 +31,29 @@ export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   return `scrypt$${salt}$${(await digest(password, salt)).toString("hex")}`;
 }
+export async function commandFingerprint(
+  actorId: string,
+  method: string,
+  requestId: string,
+  args: unknown[],
+) {
+  const content = JSON.stringify(args);
+  const password = (args[0] as { password?: unknown } | undefined)?.password;
+  if (
+    method === "saveStaff" &&
+    typeof password === "string" &&
+    password.length
+  ) {
+    // A fast hash of password-bearing arguments would bypass account scrypt on backup theft.
+    // Bind the public salt to the idempotency namespace so concurrent retries agree.
+    const salt = createHash("sha256")
+      .update(JSON.stringify([actorId, method, requestId]))
+      .digest("hex")
+      .slice(0, 32);
+    return `scrypt-command-v1$${salt}$${(await digest(content, salt)).toString("hex")}`;
+  }
+  return createHash("sha256").update(content).digest("hex");
+}
 export async function checkPassword(password: string, encoded: string) {
   const [, salt, hash] = encoded.split("$");
   if (!salt || !hash || !/^[a-f0-9]{128}$/.test(hash)) return false;

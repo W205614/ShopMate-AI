@@ -10,6 +10,7 @@ import {
   Account,
   HttpError,
   checkPassword,
+  commandFingerprint,
   clearSession,
   createAccount,
   findSession,
@@ -21,7 +22,7 @@ import { context, admin, transact } from "./repository";
 import { commerceApi } from "./commerce";
 import { catalogApi } from "./catalog";
 import { supportApi } from "./support";
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { ensureRuntimeSchema, audit } from "./runtime";
 import { demand, methodPermission } from "./permissions";
 import { operationsApi } from "./operations";
@@ -441,9 +442,10 @@ export async function createApp(
       )
         throw new HttpError(400, "新地址请填写配送省份");
     }
-    const fingerprint = createHash("sha256")
-      .update(JSON.stringify(args))
-      .digest("hex");
+    // Password-bearing command fingerprints use the bounded password queue before any transaction.
+    const fingerprint = requestId
+      ? await commandFingerprint(session.id, method, requestId, args)
+      : "";
     if (requestId) {
       const prior = sql
         .prepare(

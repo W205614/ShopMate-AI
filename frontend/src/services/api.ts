@@ -102,14 +102,48 @@ async function action<T>(
     )
       throw new Error("登录身份已变化，请重新核对后操作");
   };
-  const fingerprint = Array.from(
-    new Uint8Array(
-      await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(JSON.stringify([role, actorId, method, args])),
-      ),
-    ),
-    (byte) => byte.toString(16).padStart(2, "0"),
+  const encoder = new TextEncoder();
+  let fingerprintBytes = await crypto.subtle.digest(
+    "SHA-256",
+    encoder.encode(JSON.stringify([role, actorId, method, args])),
+  );
+  assertIdentity();
+  const staffPassword = (args[0] as { password?: unknown } | undefined)
+    ?.password;
+  if (
+    method === "saveStaff" &&
+    typeof staffPassword === "string" &&
+    staffPassword.length
+  ) {
+    // A persisted fast digest would allow inexpensive offline password guesses.
+    // Keep the intermediate SHA in memory and persist only the slow derivation.
+    const key = await crypto.subtle.importKey(
+      "raw",
+      fingerprintBytes,
+      "PBKDF2",
+      false,
+      ["deriveBits"],
+    );
+    fingerprintBytes = await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        hash: "SHA-256",
+        iterations: 600_000,
+        salt: encoder.encode(
+          JSON.stringify([
+            "shopmate:pending-command:v2",
+            role,
+            actorId,
+            method,
+          ]),
+        ),
+      },
+      key,
+      256,
+    );
+  }
+  const fingerprint = Array.from(new Uint8Array(fingerprintBytes), (byte) =>
+    byte.toString(16).padStart(2, "0"),
   ).join("");
   assertIdentity();
   const storageKey = commandStorageKey;

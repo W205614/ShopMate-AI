@@ -106,6 +106,67 @@ it("persists only a digest and request identity when a sensitive command has an 
   );
 });
 
+it("persists a real slow staff-password fingerprint rather than an offline fast verifier", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(json(snapshot()))
+    .mockRejectedValue(new TypeError("lost"));
+  vi.stubGlobal("fetch", fetch);
+  const repository = await import("./repository"),
+    { commerceAction } = await import("./api");
+  await repository.refreshState("admin");
+  const input = { username: "private-name", password: "private-password" },
+    encoder = new TextEncoder(),
+    fast = await crypto.subtle.digest(
+      "SHA-256",
+      encoder.encode(
+        JSON.stringify(["admin", administrator.id, "saveStaff", [input]]),
+      ),
+    ),
+    hex = (bytes: ArrayBuffer) =>
+      Array.from(new Uint8Array(bytes), (byte) =>
+        byte.toString(16).padStart(2, "0"),
+      ).join(""),
+    derivation = vi.spyOn(crypto.subtle, "deriveBits");
+  await expect(commerceAction("saveStaff", input)).rejects.toMatchObject({
+    outcome: "unknown",
+  });
+  const raw = sessionStorage.getItem("shopmate:pending-commands")!,
+    [pending] = JSON.parse(raw);
+  expect(pending.fingerprint).not.toBe(hex(fast));
+  expect(raw).not.toContain(hex(fast));
+  expect(raw).not.toContain(input.password);
+  expect(derivation).toHaveBeenCalledTimes(1);
+  const parameters = derivation.mock.calls[0]![0] as Pbkdf2Params;
+  expect(parameters).toMatchObject({
+    name: "PBKDF2",
+    hash: "SHA-256",
+    iterations: 600_000,
+  });
+  expect(derivation.mock.calls[0]![2]).toBe(256);
+  const key = await crypto.subtle.importKey("raw", fast, "PBKDF2", false, [
+      "deriveBits",
+    ]),
+    expected = await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        hash: "SHA-256",
+        iterations: 600_000,
+        salt: encoder.encode(
+          JSON.stringify([
+            "shopmate:pending-command:v2",
+            "admin",
+            administrator.id,
+            "saveStaff",
+          ]),
+        ),
+      },
+      key,
+      256,
+    );
+  expect(pending.fingerprint).toBe(hex(expected));
+});
+
 it("resolves a lost response before retrying and never sends the completed command twice", async () => {
   const fetch = vi
     .fn()

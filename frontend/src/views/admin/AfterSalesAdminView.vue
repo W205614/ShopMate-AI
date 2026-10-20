@@ -67,9 +67,6 @@ const allowedActions = computed(() => ({
   receive: !!state.value?.canReceive && permitted("receive"),
   refund: !!state.value?.canRefund && permitted("refund"),
 }));
-const canProcess = computed(() =>
-  Object.values(allowedActions.value).some(Boolean),
-);
 const assignment = computed(() => {
   if (state.value?.canApprove && !permitted("approve"))
     return "当前申请待客服审核，请由客服或店主批准或拒绝。";
@@ -348,7 +345,6 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
             :disabled="
               busy ||
               confirming ||
-              !canProcess ||
               ['refunded', 'rejected', 'cancelled'].includes(selected.status)
             "
             placeholder="填写审核或收货情况；拒绝时必填" /></el-form-item></el-form

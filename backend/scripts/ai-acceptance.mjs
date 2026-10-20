@@ -1,3 +1,4 @@
+import { readHttpSnapshot } from "../../shared/testing/http-snapshot.mjs";
 /** Paid synthetic acceptance against a deliberately isolated deployment only. */
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -46,7 +47,7 @@ const action = async (method, args, jar = cookies) =>
   (await call(`/api/actions/${method}`, { args, requestId: randomUUID() }, jar))
     .result;
 const state = async (jar = cookies) =>
-  (await call("/api/state", undefined, jar)).db;
+  (await readHttpSnapshot((path) => call(path, undefined, jar))).db;
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const assert = (ok, msg) => {
   if (!ok) throw Error(msg);

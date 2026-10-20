@@ -3,7 +3,7 @@ import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { createApp } from "../src/app";
 import { createSeed } from "../../shared/domain/seed";
 
-it("legacy and paginated reads isolate new member records and hide warehouse data from both customers", async () => {
+it("bootstrap and paginated reads isolate new member records and hide warehouse data from both customers", async () => {
   const sql = openDatabase(":memory:");
   const app = await createApp(sql, { origins: ["http://localhost"] });
   const server = app.listen(0, "127.0.0.1");
@@ -100,23 +100,9 @@ it("legacy and paginated reads isolate new member records and hide warehouse dat
     writeDatabase(sql, db);
     for (const user of [undefined, ...users]) {
       const headers = user ? { Cookie: user.cookie } : undefined;
-      const legacy = await (
-        await fetch(base + "/api/state?role=user", { headers })
-      ).json();
-      expect(
-        legacy.db.notifications.map((row: { userId: string }) => row.userId),
-      ).toEqual(user ? [user.id] : []);
-      expect(
-        legacy.db.pointsEntries.map((row: { userId: string }) => row.userId),
-      ).toEqual(user ? [user.id] : []);
-      for (const collection of [
-        "suppliers",
-        "purchaseOrders",
-        "returnInspections",
-        "auditEntries",
-        "shippingRules",
-      ])
-        expect(legacy.db[collection]).toEqual([]);
+      const bootstrap = await (await fetch(base + "/api/bootstrap", { headers })).json();
+      for (const collection of ["notifications", "pointsEntries", "suppliers", "purchaseOrders", "returnInspections", "auditEntries", "shippingRules"])
+        expect(bootstrap.db[collection]).toEqual([]);
       if (user) {
         for (const collection of ["notifications", "pointsEntries"]) {
           const modern = await (

@@ -181,7 +181,7 @@ describe("operating commands and scoped reads", () => {
           headers: { Cookie: worker },
         })
       ).status,
-    ).toBe(403);
+    ).toBe(410);
     const dashboard = await (
       await fetch(base + "/api/admin/dashboard", {
         headers: { Cookie: worker },
@@ -280,10 +280,9 @@ describe("operating commands and scoped reads", () => {
       },
     ];
     writeDatabase(sql, db);
-    const legacy = await (await fetch(base + "/api/state")).json();
-    expect(legacy.db.notifications).toEqual([]);
-    expect(legacy.db.pointsEntries).toEqual([]);
-    expect(legacy.db.suppliers).toEqual([]);
+    const retired = await fetch(base + "/api/state?role=invalid");
+    expect(retired.status).toBe(410);
+    expect(await retired.json()).toMatchObject({ code: "LEGACY_STATE_DISABLED" });
     const bootstrap = await fetch(base + "/api/bootstrap");
     expect(bootstrap.headers.get("X-Request-ID")).toBeTruthy();
     const state = await bootstrap.json();

@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
 import {
@@ -79,7 +80,7 @@ test("结算新增非默认地址后自动选中，报价和订单使用新地�
   await submit.click();
   await expect(page).toHaveURL(/\/orders\/[^/]+\/pay$/);
   const orderId = page.url().split("/").at(-2)!;
-  const state = await (await page.request.get("/api/state")).json();
+  const state = await readSnapshot(page.request, "user");
   expect(
     state.db.orders.find((order: { id: string }) => order.id === orderId)
       .address.name,

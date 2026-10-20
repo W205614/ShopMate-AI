@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import type { Page } from "@playwright/test";
 import { test, expect, TEST_ADMIN_PASSWORD } from "./fixtures";
 const headers = { "X-ShopMate-Request": "1" };
@@ -10,7 +11,7 @@ async function action(page: Page, ...args: unknown[]) {
   return (await response.json()).result;
 }
 async function state(page: Page) {
-  return (await (await page.request.get("/api/state?role=admin")).json()).db;
+  return (await readSnapshot(page.request, "admin")).db;
 }
 test.beforeEach(async ({ page }) => {
   test.skip(!!process.env.PLAYWRIGHT_BASE_URL, "库存工作台仅使用隔离夹具");

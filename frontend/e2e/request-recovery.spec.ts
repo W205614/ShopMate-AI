@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import {
   test,
   expect,
@@ -91,7 +92,7 @@ test("写入后响应丢失显示结果未知，不自动重发", async ({ page 
     data: { role: "user", username: "lin", password: TEST_USER_PASSWORD },
   });
   await page.goto("/products/p01");
-  const before = (await (await page.request.get("/api/state")).json()).db.carts
+  const before = (await readSnapshot(page.request, "user")).db.carts
     .filter(
       (c: { userId: string; skuId: string }) =>
         c.userId === "u1" && c.skuId === "p01-s1",
@@ -110,7 +111,7 @@ test("写入后响应丢失显示结果未知，不自动重发", async ({ page 
   await page.waitForResponse((r) => r.url().includes("/api/bootstrap?") && r.ok());
   expect(writes).toBe(1);
   const after = (
-    await (await page.request.get("/api/state")).json()
+    await readSnapshot(page.request, "user")
   ).db.carts.find(
     (c: { userId: string; skuId: string }) =>
       c.userId === "u1" && c.skuId === "p01-s1",

@@ -4,8 +4,17 @@ import { marketingApi, publicReviews } from "./marketing";
 import type { ErrorRequestHandler } from "express";
 import type { DatabaseSync } from "node:sqlite";
 import { ZodError } from "zod";
-import type { Database, Role, Session } from "../../shared/domain/types";
-import { readDatabase, transaction, writeDatabase } from "./database";
+import {
+  readDatabase,
+  transaction,
+  writeDatabase,
+  queryRecord,
+} from "./database";
+import type {
+  Order,
+  OrderRequest,
+  CheckoutQuote,
+} from "../../shared/domain/types";
 import {
   Account,
   HttpError,
@@ -24,11 +33,11 @@ import { catalogApi } from "./catalog";
 import { supportApi } from "./support";
 import { registerSupportRoutes, supportCommands } from "./ai-support";
 import { ensureKnowledgeSchema, registerKnowledgeRoutes } from "./ai-knowledge";
-import { randomUUID } from "node:crypto";
 import { ensureRuntimeSchema, audit } from "./runtime";
 import { demand, methodPermission } from "./permissions";
 import { operationsApi } from "./operations";
 import { registerReadRoutes } from "./read-routes";
+import { createRequestObserver, registerDiagnostics } from "./diagnostics";
 import {
   loginSchema,
   methods,
@@ -36,55 +45,6 @@ import {
   registerSchema,
   roleSchema,
 } from "./validation";
-
-export function visibleDatabase(
-  db: Database,
-  role: Role,
-  sessions: { user: Session | null; admin: Session | null },
-): Database {
-  const counts = new Map<string, number>();
-  for (const claim of db.couponClaims)
-    counts.set(claim.couponId, (counts.get(claim.couponId) ?? 0) + 1);
-  const projected = {
-    ...db,
-    coupons: db.coupons.map((coupon) => ({
-      ...coupon,
-      claimedCount: counts.get(coupon.id) ?? 0,
-    })),
-  };
-  if (role === "admin" && sessions.admin) return projected;
-  const uid = sessions.user?.id;
-  return {
-    ...projected,
-    couponClaims: db.couponClaims.filter((c) => c.userId === uid),
-    reviews: db.reviews.filter((r) => r.userId === uid),
-    checkoutQuotes: db.checkoutQuotes.filter((q) => q.userId === uid),
-    orderRequests: [],
-    inventoryRequests: [],
-    users: db.users.filter((u) => u.id === uid),
-    carts: db.carts.filter((c) => c.userId === uid),
-    addresses: db.addresses.filter((a) => a.userId === uid),
-    orders: db.orders.filter((o) => o.userId === uid),
-    afterSales: db.afterSales.filter((a) => a.userId === uid),
-    conversations: db.conversations.filter((c) => c.userId === uid),
-    favorites: uid ? { [uid]: db.favorites[uid] ?? [] } : {},
-    inventory: [],
-    ledger: [],
-    shippingRules: [],
-    suppliers: [],
-    purchaseOrders: [],
-    returnInspections: [],
-    auditEntries: [],
-    notifications: (db.notifications ?? []).filter(
-      (n) => !!uid && n.userId === uid,
-    ),
-    pointsEntries: (db.pointsEntries ?? []).filter(
-      (n) => !!uid && n.userId === uid,
-    ),
-    promotions: (db.promotions ?? []).filter((p) => p.active),
-    faqs: db.faqs.filter((f) => f.active),
-  };
-}
 
 export async function createApp(
   sql: DatabaseSync,
@@ -110,45 +70,8 @@ export async function createApp(
     throw new Error("AFTER_SALE_DAYS must be an integer between 1 and 365");
   const app = express();
   if (config.trustProxy) app.set("trust proxy", 1);
-  let activeRequests = 0;
-  app.use((req, res, next) => {
-    const incoming = req.get("X-Request-ID");
-    const requestId =
-      incoming && /^[a-zA-Z0-9_-]{1,128}$/.test(incoming)
-        ? incoming
-        : randomUUID();
-    res.locals.requestId = requestId;
-    res.setHeader("X-Request-ID", requestId);
-    if (activeRequests >= 64)
-      return void res.status(429).json({
-        message: "服务繁忙，请稍后重试",
-        code: "OVERLOADED",
-        requestId,
-      });
-    activeRequests++;
-    const start = performance.now();
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      activeRequests--;
-      if (config.logRequests)
-        console.log(
-          JSON.stringify({
-            level: "info",
-            event: "http",
-            requestId,
-            method: req.method,
-            path: req.path,
-            status: res.statusCode,
-            durationMs: Math.round(performance.now() - start),
-          }),
-        );
-    };
-    res.once("finish", finish);
-    res.once("close", finish);
-    next();
-  });
+  const requests = createRequestObserver(config.logRequests);
+  app.use(requests.middleware);
   const secure = config.secureCookies ?? false;
   const ttl = config.sessionTtl ?? 8 * 60 * 60 * 1000;
   const dummyHash = await hashPassword("unusable-dummy-password");
@@ -175,13 +98,14 @@ export async function createApp(
     if (largeImage && !findSession(sql, req, "admin"))
       return next(new HttpError(401, "请先登录管理账号"));
     return express.json({
-      limit: req.path.startsWith("/api/support/documents") && req.method === "POST"
-        ? "15mb"
-        : largeImage
-        ? "8mb"
-        : req.path.startsWith("/api/auth/")
-          ? "4kb"
-          : "128kb",
+      limit:
+        req.path.startsWith("/api/support/documents") && req.method === "POST"
+          ? "15mb"
+          : largeImage
+            ? "8mb"
+            : req.path.startsWith("/api/auth/")
+              ? "4kb"
+              : "128kb",
     })(req, res, next);
   });
   app.get("/api/live", (_req, res) => res.json({ status: "ok" }));
@@ -191,28 +115,16 @@ export async function createApp(
     sql.prepare("SELECT version,revision FROM storage_meta WHERE id=1").get();
     res.json({ status: "ok" });
   });
-  app.get("/api/state", (req, res) => {
-    const role = roleSchema.parse(req.query.role ?? "user");
-    const sessions = {
-      user: findSession(sql, req, "user"),
-      admin: findSession(sql, req, "admin"),
-    };
-    if (
-      role === "admin" &&
-      sessions.admin?.staffRole &&
-      sessions.admin.staffRole !== "owner"
-    )
-      throw new HttpError(403, "员工请使用分领域工作台接口");
-    res.setHeader("Deprecation", "true");
-    // An anonymous admin visit must never receive management data.
-    res.json({
-      db: visibleDatabase(readDatabase(sql), role, sessions),
-      sessions,
+  app.get("/api/state", (_req, res) => {
+    res.status(410).json({
+      code: "LEGACY_STATE_DISABLED",
+      message: "全量状态接口已退出，请使用分领域查询接口",
     });
   });
   registerReadRoutes(app, sql);
   registerSupportRoutes(app, sql);
   registerKnowledgeRoutes(app, sql);
+  registerDiagnostics(app, sql, requests);
   app.get("/api/products/:id/reviews", (req, res) => {
     const productId = String(req.params.id);
     const from = `FROM biz_reviews r JOIN order_items i ON i.id=json_extract(r.data,'$.orderItemId') JOIN biz_orders o ON o.key=r.order_id WHERE r.product_id=? AND i.product_id=r.product_id AND o.user_id=r.user_id AND coalesce(json_extract(r.data,'$.hidden'),0)=0 AND coalesce(json_extract(r.data,'$.deleted'),0)=0 AND i.refunded_quantity<i.quantity`;
@@ -252,21 +164,25 @@ export async function createApp(
     if (!session) throw new HttpError(401, "登录已失效，请重新登录");
     const requestId = z.string().min(1).max(128).parse(req.params.requestId);
     const quoteId = z.string().min(1).max(128).parse(req.query.quoteId);
-    const db = readDatabase(sql);
-    const binding = db.orderRequests.find(
-      (r) => r.userId === session.id && r.requestId === requestId,
+    const binding = queryRecord<OrderRequest>(
+      sql,
+      "orderRequests",
+      JSON.stringify([session.id, requestId]),
     );
+    const quote = binding
+      ? undefined
+      : queryRecord<CheckoutQuote>(sql, "checkoutQuotes", quoteId);
     const candidate = binding
       ? binding.quoteId === quoteId
         ? binding.orderId
         : undefined
-      : db.checkoutQuotes.find(
-          (q) => q.userId === session.id && q.id === quoteId,
-        )?.orderId;
-    const order = db.orders.find(
-      (o) => o.userId === session.id && o.id === candidate,
-    );
-    res.json({ orderId: order?.id ?? null });
+      : quote?.userId === session.id
+        ? quote.orderId
+        : undefined;
+    const order = candidate
+      ? queryRecord<Order>(sql, "orders", candidate)
+      : undefined;
+    res.json({ orderId: order?.userId === session.id ? order.id : null });
   });
   app.post("/api/auth/profile", (req, res) => {
     const session = findSession(sql, req, "user");
@@ -498,6 +414,9 @@ export async function createApp(
     const requestId = res.locals.requestId as string;
     const databaseBusy =
       error.code === "ERR_SQLITE_ERROR" && /locked|busy/i.test(error.message);
+    if (databaseBusy) requests.counters.databaseBusy++;
+    if (error instanceof HttpError && error.status === 429)
+      res.set("Retry-After", "1");
     if (res.locals.actorId && res.locals.action && !databaseBusy)
       try {
         audit(

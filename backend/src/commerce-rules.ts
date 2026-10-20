@@ -71,7 +71,7 @@ export function releaseCoupon(db: Database, order: Order) {
     delete claim.orderId;
   }
 }
-export function expireOrders(db: Database, at = now()) {
+export function expireOrders(db: Database, at = now(), cleanup = true) {
   let changed = false;
   for (const order of db.orders) {
     if (
@@ -92,6 +92,7 @@ export function expireOrders(db: Database, at = now()) {
       changed = true;
     }
   }
+  if (!cleanup) return changed;
   const quotes = db.checkoutQuotes.filter((q) => q.orderId || q.expiresAt > at);
   const requests = db.orderRequests.filter(
     (r) => Date.parse(r.createdAt) + 86400000 > Date.parse(at),

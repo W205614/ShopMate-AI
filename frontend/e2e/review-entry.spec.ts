@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import type { Page } from "@playwright/test";
 import {
   test,
@@ -68,7 +69,7 @@ test("售后中停止评价并保留草稿，撤销后恢复；整行退款无�
   await expect(
     page.getByRole("button", { name: "发布评价", exact: true }),
   ).toHaveCount(0);
-  let db = (await (await page.request.get("/api/state")).json()).db;
+  let db = (await readSnapshot(page.request, "user")).db;
   await action(page, "cancelAfterSale", db.afterSales[0].id);
   await expect(page.getByLabel("评价内容", { exact: true })).toHaveValue(
     "这是尚未提交的使用体验草稿",
@@ -81,7 +82,7 @@ test("售后中停止评价并保留草稿，撤销后恢复；整行退款无�
     headers,
     data: { role: "admin", username: "admin", password: TEST_ADMIN_PASSWORD },
   });
-  db = (await (await page.request.get("/api/state")).json()).db;
+  db = (await readSnapshot(page.request, "user")).db;
   const saleId = db.afterSales.find(
     (a: { status: string }) => a.status === "requested",
   ).id;

@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import type { Page } from "@playwright/test";
 import {
   test,
@@ -27,7 +28,7 @@ async function createChat(page: Page, productId = "p01") {
   return (await response.json()).result as string;
 }
 async function chatRecord(page: Page, id: string) {
-  const state = await (await page.request.get("/api/state?role=user")).json();
+  const state = await readSnapshot(page.request, "user");
   return state.db.conversations.find((c: { id: string }) => c.id === id);
 }
 test.beforeEach(async () => {

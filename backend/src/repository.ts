@@ -15,6 +15,7 @@ import {
 import { HttpError } from "./auth";
 import { audit, enqueue } from "./runtime";
 import type { DatabaseReadScope } from "./storage";
+import { releaseSnapshot } from "./storage";
 
 export const context = new AsyncLocalStorage<{
   sql: DatabaseSync;
@@ -78,7 +79,9 @@ export function commandReadScope(
   };
   if (typeof first === "string") {
     if (command.method === "confirmSupportProposal") {
-      const proposal = sql.prepare("SELECT args FROM support_proposals WHERE id=? AND user_id=?").get(first, user?.id ?? "");
+      const proposal = sql
+        .prepare("SELECT args FROM support_proposals WHERE id=? AND user_id=?")
+        .get(first, user?.id ?? "");
       if (proposal) add(JSON.parse(String(proposal.args)).orderId);
     }
     if (
@@ -156,7 +159,36 @@ export function commandReadScope(
       }
     }
   }
-  return { pendingOnly: true, orderIds: [...ids] };
+  const domains: NonNullable<DatabaseReadScope["domains"]> = {};
+  if (user) {
+    for (const name of ["carts", "addresses", "notifications"] as const)
+      domains[name] = { userId: user.id };
+    domains.favorites = { keys: [user.id] };
+    // Successful quotes are durable replay evidence, not a collection to scan on every checkout.
+    const input =
+      first && typeof first === "object"
+        ? (first as { quoteId?: unknown; requestId?: unknown })
+        : {};
+    domains.checkoutQuotes = {
+      userId: user.id,
+      keys: typeof input.quoteId === "string" ? [input.quoteId] : [],
+    };
+    domains.orderRequests = {
+      userId: user.id,
+      keys:
+        typeof input.requestId === "string"
+          ? [JSON.stringify([user.id, input.requestId])]
+          : [],
+    };
+  }
+  if (
+    ["payOrder", "processAfterSale", "confirmOrder"].includes(command.method)
+  ) {
+    domains.ledger = { appendOnly: "prepend" };
+    domains.inventory = { appendOnly: "prepend" };
+    domains.pointsEntries = { appendOnly: "append" };
+  }
+  return { pendingOnly: true, orderIds: [...ids], domains };
 }
 export async function transact<T>(
   change: (db: Database) => T,
@@ -191,101 +223,105 @@ export async function transact<T>(
     const orderIds = scope?.orderIds ?? [];
     const previous = readDatabase(sql, scope);
     const db = reset ? initialDatabase() : previous;
-    if (reset) {
-      // Business reset never deletes registered accounts or their valid sessions.
-      db.users = previous.users;
-      db.revision = previous.revision;
-    }
-    const result = change(db);
-    if (result && typeof (result as { then?: unknown }).then === "function")
-      throw new Error("数据库事务中禁止异步操作");
-    db.revision++;
-    writeDatabase(sql, db);
-    if (command && actor) {
-      sql
-        .prepare("INSERT INTO command_results VALUES (?,?,?,?,?,?)")
-        .run(
-          actor.id,
-          command.method,
-          command.requestId,
-          command.fingerprint,
-          JSON.stringify(result ?? null),
-          now(),
-        );
-      if (store.admin)
-        audit(
-          sql,
-          actor.id,
-          command.method,
-          command.requestId,
-          "completed",
-          (result as { id?: string; movementId?: string } | undefined)?.id ??
-            (result as { movementId?: string } | undefined)?.movementId ??
-            (typeof command.args[0] === "string"
-              ? command.args[0]
-              : (command.args[0] as { id?: string } | undefined)?.id) ??
-            "global",
-        );
-      let recipient = store.user?.id,
-        orderId: string | undefined;
-      const orderMethods = [
-        "createOrder",
-        "payOrder",
-        "cancelOrder",
-        "confirmOrder",
-        "shipOrder",
-        "requestAfterSale",
-        "processAfterSale",
-        "submitReturn",
-      ];
-      if (orderMethods.includes(command.method)) {
-        orderId =
-          command.method === "createOrder" ? String(result) : orderIds[0];
-        const order = db.orders.find((o) => o.id === orderId);
-        if (order) {
-          recipient = order.userId;
-          orderId = order.id;
+    try {
+      if (reset) {
+        // Business reset never deletes registered accounts or their valid sessions.
+        db.users = previous.users;
+        db.revision = previous.revision;
+      }
+      const result = change(db);
+      if (result && typeof (result as { then?: unknown }).then === "function")
+        throw new Error("数据库事务中禁止异步操作");
+      db.revision++;
+      writeDatabase(sql, db);
+      if (command && actor) {
+        sql
+          .prepare("INSERT INTO command_results VALUES (?,?,?,?,?,?)")
+          .run(
+            actor.id,
+            command.method,
+            command.requestId,
+            command.fingerprint,
+            JSON.stringify(result ?? null),
+            now(),
+          );
+        if (store.admin)
+          audit(
+            sql,
+            actor.id,
+            command.method,
+            command.requestId,
+            "completed",
+            (result as { id?: string; movementId?: string } | undefined)?.id ??
+              (result as { movementId?: string } | undefined)?.movementId ??
+              (typeof command.args[0] === "string"
+                ? command.args[0]
+                : (command.args[0] as { id?: string } | undefined)?.id) ??
+              "global",
+          );
+        let recipient = store.user?.id,
+          orderId: string | undefined;
+        const orderMethods = [
+          "createOrder",
+          "payOrder",
+          "cancelOrder",
+          "confirmOrder",
+          "shipOrder",
+          "requestAfterSale",
+          "processAfterSale",
+          "submitReturn",
+        ];
+        if (orderMethods.includes(command.method)) {
+          orderId =
+            command.method === "createOrder" ? String(result) : orderIds[0];
+          const order = db.orders.find((o) => o.id === orderId);
+          if (order) {
+            recipient = order.userId;
+            orderId = order.id;
+          }
+          if (recipient)
+            enqueue(
+              sql,
+              "notification",
+              {
+                userId: recipient,
+                orderId,
+                text: (
+                  {
+                    createOrder: "订单已创建，库存保留30分钟",
+                    payOrder: "订单付款成功",
+                    cancelOrder: "订单已取消",
+                    confirmOrder: "订单已确认收货",
+                    shipOrder: "订单已发货",
+                    requestAfterSale: "售后申请已受理",
+                    processAfterSale: "售后处理进度已更新",
+                    submitReturn: "退货信息已提交",
+                  } as Record<string, string>
+                )[command.method],
+              },
+              `notification:${actor.id}:${command.method}:${command.requestId}`,
+            );
         }
-        if (recipient)
-          enqueue(
-            sql,
-            "notification",
-            {
-              userId: recipient,
-              orderId,
-              text: (
-                {
-                  createOrder: "订单已创建，库存保留30分钟",
-                  payOrder: "订单付款成功",
-                  cancelOrder: "订单已取消",
-                  confirmOrder: "订单已确认收货",
-                  shipOrder: "订单已发货",
-                  requestAfterSale: "售后申请已受理",
-                  processAfterSale: "售后处理进度已更新",
-                  submitReturn: "退货信息已提交",
-                } as Record<string, string>
-              )[command.method],
-            },
-            `notification:${actor.id}:${command.method}:${command.requestId}`,
+        if (command.method === "replyConversation") {
+          const conversation = db.conversations.find(
+            (c) => c.id === command.args[0],
           );
+          if (conversation)
+            enqueue(
+              sql,
+              "notification",
+              {
+                userId: conversation.userId,
+                text: "客服已回复，请前往咨询会话查看",
+              },
+              `notification:${actor.id}:${command.method}:${command.requestId}`,
+            );
+        }
       }
-      if (command.method === "replyConversation") {
-        const conversation = db.conversations.find(
-          (c) => c.id === command.args[0],
-        );
-        if (conversation)
-          enqueue(
-            sql,
-            "notification",
-            {
-              userId: conversation.userId,
-              text: "客服已回复，请前往咨询会话查看",
-            },
-            `notification:${actor.id}:${command.method}:${command.requestId}`,
-          );
-      }
+      return result;
+    } finally {
+      releaseSnapshot(previous);
     }
-    return result;
   });
 }
 export function ownedOrder(db: Database, orderId: string): Order {

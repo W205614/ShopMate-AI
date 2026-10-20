@@ -10,6 +10,7 @@ RUN mkdir -p /app/data /app/backups && chown node:node /app/data /app/backups
 USER node
 ENV HOST=0.0.0.0 PORT=3001 DATABASE_PATH=/app/data/shopmate.sqlite
 ARG VCS_REF=local
+ENV VCS_REF=$VCS_REF
 LABEL org.opencontainers.image.source="https://github.com/W205614/ShopMate-AI" \
       org.opencontainers.image.revision=$VCS_REF
 HEALTHCHECK --interval=15s --timeout=3s --start-period=15s --retries=3 CMD node -e "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

@@ -19,8 +19,12 @@ const exists = (path: string) =>
 export async function runAutomaticBackup(
   source: string,
   destination: string,
-  onBackupCreated: () => void = () => {},
-  options: { timeoutMs?: number } = {},
+  onBackupCreated: (createdAt: string) => void = () => {},
+  options: {
+    timeoutMs?: number;
+    replicaDirectory?: string;
+    onReplicaCreated?: (copiedAt: string, snapshotAt: string) => void;
+  } = {},
 ) {
   if (running) throw new Error("BACKUP_ALREADY_RUNNING");
   running = true;
@@ -56,7 +60,14 @@ export async function runAutomaticBackup(
     );
     const child = fork(
       fileURLToPath(new URL("./backup-worker.ts", import.meta.url)),
-      [resolve(source), path, backupId],
+      [
+        resolve(source),
+        path,
+        backupId,
+        ...(options.replicaDirectory
+          ? [resolve(options.replicaDirectory)]
+          : []),
+      ],
       {
         execArgv: [
           "--import",
@@ -87,19 +98,37 @@ export async function runAutomaticBackup(
           return;
         }
         const message = raw as Record<string, unknown>;
-        if (message.type === "created" && !created) {
+        if (
+          message.type === "created" &&
+          !created &&
+          typeof message.createdAt === "string" &&
+          Number.isFinite(Date.parse(message.createdAt))
+        ) {
           created = true;
           try {
-            onBackupCreated();
+            onBackupCreated(message.createdAt);
           } catch {
             fail("BACKUP_WORKER_CALLBACK");
           }
         } else if (
           message.type === "phase" &&
-          message.phase === "retention" &&
+          (message.phase === "retention" || message.phase === "replica") &&
           created
         ) {
-          phase = "retention";
+          phase = message.phase;
+        } else if (
+          message.type === "replicated" &&
+          phase === "replica" &&
+          typeof message.copiedAt === "string" &&
+          Number.isFinite(Date.parse(message.copiedAt)) &&
+          typeof message.snapshotAt === "string" &&
+          Number.isFinite(Date.parse(message.snapshotAt))
+        ) {
+          try {
+            options.onReplicaCreated?.(message.copiedAt, message.snapshotAt);
+          } catch {
+            fail("BACKUP_WORKER_CALLBACK");
+          }
         } else if (
           message.type === "completed" &&
           created &&
@@ -112,8 +141,14 @@ export async function runAutomaticBackup(
             snapshotRevision: Number(message.snapshotRevision),
           };
         } else if (message.type === "failed") {
-          phase = message.phase === "retention" ? "retention" : "backup";
-          failure = "BACKUP_WORKER_FAILED";
+          phase =
+            message.phase === "retention" || message.phase === "replica"
+              ? message.phase
+              : "backup";
+          failure =
+            phase === "replica"
+              ? "BACKUP_REPLICA_FAILED"
+              : "BACKUP_WORKER_FAILED";
         } else fail("BACKUP_WORKER_PROTOCOL");
       });
       child.once("error", () => fail("BACKUP_WORKER_START_FAILED"));

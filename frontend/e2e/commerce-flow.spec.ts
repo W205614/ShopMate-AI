@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import type { Page } from "@playwright/test";
 import type { Database } from "../../shared/domain/types";
 import {
@@ -17,7 +18,7 @@ async function action(page: Page, method: string, ...args: unknown[]) {
   return (await post(page, `/api/actions/${method}`, { args })).result;
 }
 async function state(page: Page): Promise<Database> {
-  return (await (await page.request.get("/api/state")).json()).db;
+  return (await readSnapshot(page.request, "user")).db;
 }
 async function login(page: Page, admin = false) {
   await post(page, "/api/auth/login", {

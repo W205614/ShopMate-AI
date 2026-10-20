@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import type { Page } from "@playwright/test";
 import {
   test,
@@ -25,7 +26,7 @@ async function setup(page: Page, quantity = 5) {
       },
     });
   }
-  const db = (await (await page.request.get("/api/state")).json()).db;
+  const db = (await readSnapshot(page.request, "admin")).db;
   const ids = db.carts
     .filter((c: { userId: string }) => c.userId === "u1")
     .map((c: { id: string }) => c.id);

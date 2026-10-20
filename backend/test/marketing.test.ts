@@ -1,3 +1,4 @@
+import { readSnapshot } from "./http-snapshot";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Server } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
@@ -24,11 +25,7 @@ async function post(path: string, body: unknown, cookie = "") {
   });
 }
 async function snapshot(cookie = "", role = "user") {
-  return (
-    await fetch(`${base}/api/state?role=${role}`, {
-      headers: { Cookie: cookie },
-    })
-  ).json();
+  return readSnapshot(base, cookie, role);
 }
 beforeEach(async () => {
   sql = openDatabase(":memory:");
@@ -265,7 +262,7 @@ describe("profile and marketing boundaries", () => {
     expect(
       (await post("/api/auth/profile", { name: "  新昵称  " }, first)).status,
     ).toBe(200);
-    expect((await snapshot(second)).sessions.user.name).toBe("新昵称");
+    expect((await snapshot(second)).sessions.user!.name).toBe("新昵称");
     expect((await snapshot(second)).db.users[0].name).toBe("新昵称");
     expect(
       (
@@ -288,7 +285,7 @@ describe("profile and marketing boundaries", () => {
     ).toBe(200);
     expect((await snapshot(first)).sessions.user).toBeNull();
     expect((await snapshot(second)).sessions.user).toBeNull();
-    expect((await snapshot(admin, "admin")).sessions.admin.role).toBe("admin");
+    expect((await snapshot(admin, "admin")).sessions.admin!.role).toBe("admin");
     expect(
       (
         await post("/api/auth/login", {

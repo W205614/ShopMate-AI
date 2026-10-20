@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import { test, expect } from "./fixtures";
 import type { Database } from "../../shared/domain/types";
 
@@ -5,9 +6,7 @@ test("部署后的公开目录可浏览筛选且不修改业务数据", async ({
   page,
   request,
 }, testInfo) => {
-  const response = await request.get("/api/state?role=user");
-  expect(response.ok()).toBe(true);
-  const { db } = (await response.json()) as { db: Database };
+  const { db } = await readSnapshot(request);
   const active = db.products.filter((p) => p.active);
   const category = [...db.categories]
     .sort((a, b) => a.sort - b.sort)
@@ -74,7 +73,7 @@ test("部署后的公开目录可浏览筛选且不修改业务数据", async ({
       });
     }
   }
-  const after = (await (await request.get("/api/state?role=user")).json()) as {
+  const after = (await readSnapshot(request, "user")) as {
     db: Database;
   };
   expect(after.db.revision).toBe(db.revision);

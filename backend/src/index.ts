@@ -7,13 +7,22 @@ import { writeFileSync, rmSync } from "node:fs";
 import { ensureRuntimeSchema } from "./runtime";
 import { runDueJobs, ensureRecurringJobs } from "./jobs";
 import { runAutomaticBackup, cancelAutomaticBackup } from "./automatic-backup";
-import { join } from "node:path";
+import { resolve } from "node:path";
 import { startSupportWorker } from "./ai-support";
 import { startKnowledgeWorker } from "./ai-knowledge";
+import {
+  ensureBackupState,
+  automaticBackupDue,
+  recordBackupSuccess,
+  recordBackupFailure,
+  recordBackupReplica,
+  setBackupRunning,
+} from "./backup-state";
 
 const databasePath = process.env.DATABASE_PATH ?? "data/shopmate.sqlite";
 const sql = openDatabase(databasePath);
 ensureRuntimeSchema(sql);
+ensureBackupState(sql);
 ensureRecurringJobs(sql);
 writeFileSync(
   databasePath + ".running",
@@ -65,25 +74,42 @@ const server = app.listen(
 server.requestTimeout = 15000;
 server.headersTimeout = 10000;
 server.keepAliveTimeout = 5000;
-let backupInProgress: Promise<unknown> | undefined,
-  lastBackupDay = "";
+let backupInProgress: Promise<unknown> | undefined;
 const backupTimer = setInterval(() => {
   const day = new Date().toISOString().slice(0, 10);
-  if (process.env.BACKUP_DIR && !backupInProgress && day !== lastBackupDay) {
+  if (process.env.BACKUP_DIR && !backupInProgress && automaticBackupDue(sql)) {
+    const destination = resolve(
+      process.env.BACKUP_DIR,
+      `shopmate-daily-${day}-${Date.now()}.sqlite`,
+    );
+    setBackupRunning(sql, true);
     backupInProgress = runAutomaticBackup(
       databasePath,
-      join(
-        process.env.BACKUP_DIR,
-        `shopmate-daily-${day}-${Date.now()}.sqlite`,
-      ),
-      () => {
-        lastBackupDay = day;
+      destination,
+      (createdAt) => {
+        recordBackupSuccess(sql, destination, createdAt);
+      },
+      {
+        replicaDirectory: process.env.BACKUP_REPLICA_DIR,
+        onReplicaCreated: (copiedAt, snapshotAt) =>
+          recordBackupReplica(sql, copiedAt, snapshotAt),
       },
     )
-      .catch(() => {
+      .catch((error) => {
         // The task already emitted a correlated, redacted failure event.
+        try {
+          recordBackupFailure(sql, error);
+        } catch {
+          console.error(
+            JSON.stringify({
+              event: "backup_status_failed",
+              code: "BACKUP_STATUS_WRITE_FAILED",
+            }),
+          );
+        }
       })
       .finally(() => {
+        setBackupRunning(sql, false);
         backupInProgress = undefined;
       });
   }

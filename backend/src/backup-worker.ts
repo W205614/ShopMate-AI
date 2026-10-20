@@ -1,11 +1,16 @@
 import { DatabaseSync } from "node:sqlite";
 import { statSync } from "node:fs";
 import { dirname } from "node:path";
-import { backupDatabase, pruneDailyBackups } from "./maintenance";
+import {
+  backupDatabase,
+  pruneDailyBackups,
+  copyBackupPair,
+} from "./maintenance";
 
-const [source, destination, temporaryId] = process.argv.slice(2);
+const [source, destination, temporaryId, replicaDirectory] =
+  process.argv.slice(2);
 let reader: DatabaseSync | undefined,
-  phase: "backup" | "retention" = "backup";
+  phase: "backup" | "retention" | "replica" = "backup";
 const releaseSnapshot = () => {
   if (reader?.isTransaction) reader.exec("ROLLBACK");
   reader?.close();
@@ -21,16 +26,26 @@ try {
   const snapshot = reader
     .prepare("SELECT revision FROM storage_meta WHERE id=1")
     .get() as { revision: number };
-  await backupDatabase(reader, destination, {
+  const manifest = await backupDatabase(reader, destination, {
     reason: "daily",
     temporaryId,
     // Release WAL retention before hashing, integrity checks and retention scans.
     afterCopy: releaseSnapshot,
   });
-  process.send?.({ type: "created" });
+  process.send?.({ type: "created", createdAt: manifest.createdAt });
   phase = "retention";
   process.send?.({ type: "phase", phase });
   pruneDailyBackups(dirname(destination), 7);
+  if (replicaDirectory) {
+    phase = "replica";
+    process.send?.({ type: "phase", phase });
+    const replica = copyBackupPair(destination, replicaDirectory);
+    process.send?.({
+      type: "replicated",
+      copiedAt: replica.verifiedAt,
+      snapshotAt: replica.snapshotAt,
+    });
+  }
   process.send?.({
     type: "completed",
     bytes: statSync(destination).size,

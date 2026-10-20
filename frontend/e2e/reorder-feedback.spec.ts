@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import { test, expect, TEST_USER_PASSWORD } from "./fixtures";
 test("列表和详情再次购买报告新增项数与件数，与购物车一致且不下单付款", async ({
   page,
@@ -17,7 +18,7 @@ test("列表和详情再次购买报告新增项数与件数，与购物车一�
     return (await response.json()).result;
   };
   const state = async () =>
-    (await (await page.request.get("/api/state")).json()).db;
+    (await readSnapshot(page.request, "user")).db;
   const before = await state();
   const ids = before.carts.map((c: { id: string }) => c.id);
   if (ids.length) await action("batchCart", { action: "remove", ids });

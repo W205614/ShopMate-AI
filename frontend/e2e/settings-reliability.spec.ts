@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import { test, expect, TEST_ADMIN_PASSWORD } from "./fixtures";
 import type { Route } from "@playwright/test";
 
@@ -17,7 +18,7 @@ test("设置草稿跨轮询保留，冲突不会覆盖远端，公告可清空�
   const name = page.locator(".admin-settings-form input").nth(0);
   const notice = page.locator(".admin-settings-form textarea");
   const original = (
-    await (await page.request.get("/api/state?role=admin")).json()
+    await readSnapshot(page.request, "admin")
   ).db.settings;
   await name.fill("本地尚未保存的草稿");
   // Wait for two real polling responses rather than a fixed delay.
@@ -90,7 +91,7 @@ test("409 后加载最新值必须等待服务端读取，期间保留草稿", a
   });
   await page.goto("/admin/settings");
   const baseline = (
-    await (await page.request.get("/api/state?role=admin")).json()
+    await readSnapshot(page.request, "admin")
   ).db.settings;
   const held: Route[] = [];
   await page.route("**/api/bootstrap?role=admin", (route) => {

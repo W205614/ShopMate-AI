@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import type { Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import {
@@ -23,7 +24,7 @@ async function action(page: Page, method: string, ...args: unknown[]) {
   return (await response.json()).result;
 }
 async function state(page: Page): Promise<Database> {
-  return (await (await page.request.get("/api/state?role=admin")).json()).db;
+  return (await readSnapshot(page.request, "admin")).db;
 }
 function fixture(change: (db: Database) => void) {
   const sql = openDatabase(resolve("../backend/.e2e/shopmate.sqlite"));

@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import type { Page } from "@playwright/test";
@@ -33,9 +34,7 @@ test("双独立身份真实界面完成用券购买、故障恢复、分批退�
   for (const page of [admin, user])
     page.on("pageerror", (error) => errors.push(error.message));
   const read = async (page: Page, role = "admin"): Promise<Database> => {
-    const response = await page.request.get(`/api/state?role=${role}`);
-    expect(response.ok()).toBe(true);
-    return (await response.json()).db;
+    return (await readSnapshot(page.request, role)).db;
   };
   const screenshot = async (page: Page, name: string) => {
     expect(
@@ -82,12 +81,10 @@ test("双独立身份真实界面完成用券购买、故障恢复、分批退�
     await user.getByRole("button", { name: "注册并登录", exact: true }).click();
     await expect(user).toHaveURL(/\/$/);
     expect(
-      (await (await user.request.get("/api/state?role=user")).json()).sessions
-        .admin,
+      (await readSnapshot(user.request, "user")).sessions.admin,
     ).toBeNull();
     expect(
-      (await (await admin.request.get("/api/state?role=admin")).json()).sessions
-        .user,
+      (await readSnapshot(admin.request, "admin")).sessions.user,
     ).toBeNull();
 
     await admin.goto("/admin/products");
@@ -252,8 +249,10 @@ test("双独立身份真实界面完成用券购买、故障恢复、分批退�
     ).not.toBeFocused();
     await screenshot(user, "checkout-coupon-phone");
     let creates = 0;
+    let checkoutRequest: { quoteId: string; requestId: string };
     await user.route("**/api/actions/createOrder", async (route) => {
       creates++;
+      checkoutRequest = route.request().postDataJSON().args[0];
       expect((await route.fetch()).ok()).toBe(true);
       await route.abort("failed");
     });
@@ -493,9 +492,10 @@ test("双独立身份真实界面完成用券购买、故障恢复、分批退�
     expect(refunds.map((l) => l.amount).sort((a, b) => a - b)).toEqual([
       9667, 9667, 9668,
     ]);
-    expect(
-      final.orderRequests.filter((r) => r.orderId === orderId),
-    ).toHaveLength(1);
+    const recovered = await user.request.get(
+      `/api/order-requests/${checkoutRequest!.requestId}?quoteId=${checkoutRequest!.quoteId}`,
+    );
+    expect(await recovered.json()).toEqual({ orderId });
     expect(
       final.orders.filter((o) =>
         o.items.some((i) => i.productId === product.id),

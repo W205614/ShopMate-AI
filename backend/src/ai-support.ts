@@ -26,6 +26,7 @@ import { aiConfig, chat } from "./ai-provider";
 import { retrieveKnowledge, sourcesStillValid } from "./ai-knowledge";
 import { cancelSupportWork, ensureSupportSchema } from "./ai-schema";
 import { audit, enqueue } from "./runtime";
+import { releaseSnapshot, type DatabaseReadScope } from "./storage";
 
 type Source = {
   id: string;
@@ -108,12 +109,20 @@ const getConversation = (sql: DatabaseSync, chatId: string, uid: string) => {
   if (!c || c.userId !== uid) throw new HttpError(404, "会话不存在");
   return c;
 };
-function scopedDb(sql: DatabaseSync, orderId?: string) {
-  return readDatabase(sql, {
-    pendingOnly: true,
-    orderIds: orderId ? [orderId] : [],
-  });
+/** Callback must finish synchronously: no lazy snapshot survives external awaits. */
+function withScopedDb<T>(
+  sql: DatabaseSync,
+  work: (db: Database) => T,
+  scope: DatabaseReadScope = {},
+): T {
+  const db = readDatabase(sql, { pendingOnly: true, orderIds: [], ...scope });
+  try {
+    return work(db);
+  } finally {
+    releaseSnapshot(db);
+  }
 }
+
 function executeChange(db: Database, input: ProposalInput) {
   if (input.kind === "addCart")
     addCartChange(db, input.productId, input.skuId, input.quantity);
@@ -160,72 +169,89 @@ export function createSupportProposal(
       .prepare("SELECT status FROM support_runs WHERE id=?")
       .get(run.id);
     requireThat(state?.status === "running", "任务已取消");
-    const db = scopedDb(sql, "orderId" in input ? input.orderId : undefined);
-    const snapshot = proposalSnapshot(db, run.user_id, input);
-    // Validate with exactly the same rules as an eventual confirmed operation, without saving.
-    const simulated = structuredClone(db);
-    executeChange(simulated, input);
-    let summary: string, details: Record<string, unknown>;
-    if (input.kind === "addCart") {
-      const product = db.products.find((p) => p.id === input.productId)!;
-      const sku = product.skus.find((s) => s.id === input.skuId)!;
-      summary = `加入购物车：${product.name} · ${sku.name} × ${input.quantity}`;
-      details = {
-        ...input,
-        productName: product.name,
-        skuName: sku.name,
-        price: sku.price,
-        stock: availableStock(db, product.id, sku.id),
-      };
-    } else if (input.kind === "cancelOrder") {
-      summary = `取消待付款订单 ${input.orderId}，释放库存预占与优惠券`;
-      details = {
-        ...input,
-        status: db.orders.find((o) => o.id === input.orderId)?.status,
-      };
-    } else {
-      const sale = simulated.afterSales.find(
-        (a) => !db.afterSales.some((old) => old.id === a.id),
-      )!;
-      summary = `提交订单 ${input.orderId} 的售后申请，申请金额 ¥${(sale.refundAmount / 100).toFixed(2)}，须人工审核`;
-      details = {
-        ...input,
-        refundAmount: sale.refundAmount,
-        requiresReturn: sale.requiresReturn,
-      };
-    }
-    // The identical proposal within a recovered run keeps its original ID and expiry.
-    const prior = sql
-      .prepare(
-        "SELECT id,summary,details FROM support_proposals WHERE run_id=? AND args=? AND status='pending' AND expires_at>?",
-      )
-      .get(run.id, JSON.stringify(input), Date.now());
-    if (prior)
-      return {
-        id: String(prior.id),
-        summary: String(prior.summary),
-        details: JSON.parse(String(prior.details)),
-        requiresConfirmation: true,
-      };
-    const proposalId = id("proposal-");
-    sql
-      .prepare(
-        "INSERT INTO support_proposals(id,run_id,user_id,conversation_id,kind,args,snapshot,summary,details,status,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?)",
-      )
-      .run(
-        proposalId,
-        run.id,
-        run.user_id,
-        run.conversation_id,
-        input.kind,
-        JSON.stringify(input),
-        snapshot,
-        summary,
-        JSON.stringify(details),
-        Date.now() + 600000,
-        Date.now(),
-      );
-    return { id: proposalId, summary, details, requiresConfirmation: true };
+    return withScopedDb(
+      sql,
+      (db) => {
+        const snapshot = proposalSnapshot(db, run.user_id, input);
+        // Validate with exactly the same rules as an eventual confirmed operation, without saving.
+        const simulated = structuredClone({
+          products: db.products,
+          orders: db.orders,
+          afterSales: db.afterSales,
+          carts: db.carts,
+          couponClaims: db.couponClaims,
+        }) as Database;
+        executeChange(simulated, input);
+        let summary: string, details: Record<string, unknown>;
+        if (input.kind === "addCart") {
+          const product = db.products.find((p) => p.id === input.productId)!;
+          const sku = product.skus.find((s) => s.id === input.skuId)!;
+          summary = `加入购物车：${product.name} · ${sku.name} × ${input.quantity}`;
+          details = {
+            ...input,
+            productName: product.name,
+            skuName: sku.name,
+            price: sku.price,
+            stock: availableStock(db, product.id, sku.id),
+          };
+        } else if (input.kind === "cancelOrder") {
+          summary = `取消待付款订单 ${input.orderId}，释放库存预占与优惠券`;
+          details = {
+            ...input,
+            status: db.orders.find((o) => o.id === input.orderId)?.status,
+          };
+        } else {
+          const sale = simulated.afterSales.find(
+            (a) => !db.afterSales.some((old) => old.id === a.id),
+          )!;
+          summary = `提交订单 ${input.orderId} 的售后申请，申请金额 ¥${(sale.refundAmount / 100).toFixed(2)}，须人工审核`;
+          details = {
+            ...input,
+            refundAmount: sale.refundAmount,
+            requiresReturn: sale.requiresReturn,
+          };
+        }
+        // The identical proposal within a recovered run keeps its original ID and expiry.
+        const prior = sql
+          .prepare(
+            "SELECT id,summary,details FROM support_proposals WHERE run_id=? AND args=? AND status='pending' AND expires_at>?",
+          )
+          .get(run.id, JSON.stringify(input), Date.now());
+        if (prior)
+          return {
+            id: String(prior.id),
+            summary: String(prior.summary),
+            details: JSON.parse(String(prior.details)),
+            requiresConfirmation: true,
+          };
+        const proposalId = id("proposal-");
+        sql
+          .prepare(
+            "INSERT INTO support_proposals(id,run_id,user_id,conversation_id,kind,args,snapshot,summary,details,status,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?)",
+          )
+          .run(
+            proposalId,
+            run.id,
+            run.user_id,
+            run.conversation_id,
+            input.kind,
+            JSON.stringify(input),
+            snapshot,
+            summary,
+            JSON.stringify(details),
+            Date.now() + 600000,
+            Date.now(),
+          );
+        return { id: proposalId, summary, details, requiresConfirmation: true };
+      },
+      {
+        orderIds: "orderId" in input ? [input.orderId] : [],
+        domains: {
+          carts: { userId: run.user_id },
+          couponClaims: { userId: run.user_id },
+        },
+      },
+    );
   });
 }
 
@@ -447,16 +473,17 @@ export function registerSupportRoutes(app: Express, sql: DatabaseSync) {
         ...details.map((p) => p.orderId),
       ].filter((value): value is string => !!value),
     );
-    const db = scopedDb(sql);
-    const products = db.products
-      .filter((p) => p.active && productIds.has(p.id))
-      .map((p) => ({
-        ...p,
-        skus: p.skus.map((s) => ({
-          ...s,
-          stock: availableStock(db, p.id, s.id),
+    const products = withScopedDb(sql, (db) =>
+      db.products
+        .filter((p) => p.active && productIds.has(p.id))
+        .map((p) => ({
+          ...p,
+          skus: p.skus.map((s) => ({
+            ...s,
+            stock: availableStock(db, p.id, s.id),
+          })),
         })),
-      }));
+    );
     const orders = [...orderIds]
       .map((orderId) => queryRecord<Order>(sql, "orders", orderId))
       .filter((o): o is Order => !!o && o.userId === session.id);
@@ -708,69 +735,70 @@ export async function executeSupportTool(
       afterSales: publicAfterSales(sql, run.user_id, o.id),
     };
   }
-  const db = scopedDb(sql);
-  if (name === "product_details") {
-    const { productId } = z
-      .object({ productId: identifier })
-      .strict()
-      .parse(raw);
-    const p = publicProduct(db, productId);
-    evidence.products.add(p.id);
-    return p;
-  }
-  if (name === "search_products") {
-    const { query, maxPrice } = z
-      .object({
-        query: z.string().trim().min(1).max(500),
-        maxPrice: z.number().int().nonnegative().optional(),
-      })
-      .strict()
-      .parse(raw);
-    const terms = [
-      ...new Set(
-        query
-          .replace(/推荐|商品|一些|帮我|想买|有没有|家居好物/g, "")
-          .match(/[\p{Script=Han}]|[\p{L}\p{N}]+/gu) ?? [],
-      ),
-    ];
-    return db.products
-      .filter(
-        (p) =>
-          p.active &&
-          p.skus.some(
-            (s) =>
-              availableStock(db, p.id, s.id) > 0 &&
-              (maxPrice === undefined || s.price <= maxPrice),
-          ),
-      )
-      .map((p) => ({
-        p,
-        score: terms.reduce(
-          (n, t) =>
-            n +
-            ([
-              p.name,
-              p.subtitle,
-              p.description,
-              p.material,
-              db.categories.find((c) => c.id === p.categoryId)?.name ?? "",
-            ]
-              .join(" ")
-              .includes(t)
-              ? 1
-              : 0),
-          0,
+  return withScopedDb(sql, (db) => {
+    if (name === "product_details") {
+      const { productId } = z
+        .object({ productId: identifier })
+        .strict()
+        .parse(raw);
+      const p = publicProduct(db, productId);
+      evidence.products.add(p.id);
+      return p;
+    }
+    if (name === "search_products") {
+      const { query, maxPrice } = z
+        .object({
+          query: z.string().trim().min(1).max(500),
+          maxPrice: z.number().int().nonnegative().optional(),
+        })
+        .strict()
+        .parse(raw);
+      const terms = [
+        ...new Set(
+          query
+            .replace(/推荐|商品|一些|帮我|想买|有没有|家居好物/g, "")
+            .match(/[\p{Script=Han}]|[\p{L}\p{N}]+/gu) ?? [],
         ),
-      }))
-      .filter((x) => !terms.length || x.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-      .map(({ p }) => {
-        evidence.products.add(p.id);
-        return publicProduct(db, p.id);
-      });
-  }
-  throw new HttpError(400, "工具不在允许列表");
+      ];
+      return db.products
+        .filter(
+          (p) =>
+            p.active &&
+            p.skus.some(
+              (s) =>
+                availableStock(db, p.id, s.id) > 0 &&
+                (maxPrice === undefined || s.price <= maxPrice),
+            ),
+        )
+        .map((p) => ({
+          p,
+          score: terms.reduce(
+            (n, t) =>
+              n +
+              ([
+                p.name,
+                p.subtitle,
+                p.description,
+                p.material,
+                db.categories.find((c) => c.id === p.categoryId)?.name ?? "",
+              ]
+                .join(" ")
+                .includes(t)
+                ? 1
+                : 0),
+            0,
+          ),
+        }))
+        .filter((x) => !terms.length || x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map(({ p }) => {
+          evidence.products.add(p.id);
+          return publicProduct(db, p.id);
+        });
+    }
+    throw new HttpError(400, "工具不在允许列表");
+  });
 }
 
 const finalSchema = z
@@ -832,7 +860,9 @@ export async function processSupportRun(
     const verifiedContext: Record<string, unknown> = {};
     if (c.productId) {
       try {
-        verifiedContext.product = publicProduct(scopedDb(sql), c.productId);
+        verifiedContext.product = withScopedDb(sql, (db) =>
+          publicProduct(db, c.productId!),
+        );
         evidence.products.add(c.productId);
       } catch {
         verifiedContext.productUnavailable = true;
@@ -1026,27 +1056,39 @@ export async function processSupportRun(
           .prepare("SELECT status FROM support_runs WHERE id=?")
           .get(run.id);
         if (status?.status !== "running") return;
-        const db = scopedDb(sql),
-          conversation = db.conversations.find(
-            (c) => c.id === run.conversation_id && c.userId === run.user_id,
-          );
-        if (!conversation || conversation.status !== "bot") {
-          cancelSupportWork(sql, run.conversation_id);
-          return;
-        }
-        if (!conversation.messages.some((m) => m.id === answer.id))
-          conversation.messages.push(answer);
-        db.revision++;
-        writeDatabase(sql, db);
-        sql
-          .prepare(
-            "UPDATE support_runs SET status='completed',phase='completed',degraded=?,output=? WHERE id=?",
-          )
-          .run(
-            JSON.stringify([...new Set(evidence.degraded)]),
-            JSON.stringify(answer),
-            run.id,
-          );
+        return withScopedDb(
+          sql,
+          (db) => {
+            const conversation = db.conversations.find(
+              (c) => c.id === run.conversation_id && c.userId === run.user_id,
+            );
+            if (!conversation || conversation.status !== "bot") {
+              cancelSupportWork(sql, run.conversation_id);
+              return;
+            }
+            if (!conversation.messages.some((m) => m.id === answer.id))
+              conversation.messages.push(answer);
+            db.revision++;
+            writeDatabase(sql, db);
+            sql
+              .prepare(
+                "UPDATE support_runs SET status='completed',phase='completed',degraded=?,output=? WHERE id=?",
+              )
+              .run(
+                JSON.stringify([...new Set(evidence.degraded)]),
+                JSON.stringify(answer),
+                run.id,
+              );
+          },
+          {
+            domains: {
+              conversations: {
+                keys: [run.conversation_id],
+                userId: run.user_id,
+              },
+            },
+          },
+        );
       });
       console.info(
         JSON.stringify({
@@ -1086,23 +1128,32 @@ export async function processSupportRun(
           "UPDATE support_proposals SET status='cancelled' WHERE run_id=? AND status='pending'",
         )
         .run(runId);
-      const db = scopedDb(sql),
-        c = db.conversations.find(
-          (c) => c.id === run.conversation_id && c.userId === run.user_id,
-        );
-      if (c?.status === "bot") {
-        const fallbackId = `fallback-${runId}-${run.attempts}`;
-        if (!c.messages.some((m) => m.id === fallbackId))
-          c.messages.push({
-            id: fallbackId,
-            role: "assistant",
-            source: "rule",
-            text: "AI 客服暂时无法完成本轮回答。你的消息已保留，可以重试或转人工；商品和订单请以详情页为准。",
-            createdAt: now(),
-          });
-        db.revision++;
-        writeDatabase(sql, db);
-      }
+      withScopedDb(
+        sql,
+        (db) => {
+          const c = db.conversations.find(
+            (c) => c.id === run.conversation_id && c.userId === run.user_id,
+          );
+          if (c?.status === "bot") {
+            const fallbackId = `fallback-${runId}-${run.attempts}`;
+            if (!c.messages.some((m) => m.id === fallbackId))
+              c.messages.push({
+                id: fallbackId,
+                role: "assistant",
+                source: "rule",
+                text: "AI 客服暂时无法完成本轮回答。你的消息已保留，可以重试或转人工；商品和订单请以详情页为准。",
+                createdAt: now(),
+              });
+            db.revision++;
+            writeDatabase(sql, db);
+          }
+        },
+        {
+          domains: {
+            conversations: { keys: [run.conversation_id], userId: run.user_id },
+          },
+        },
+      );
     });
     console.info(
       JSON.stringify({

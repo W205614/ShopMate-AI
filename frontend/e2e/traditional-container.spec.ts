@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import { randomUUID } from "node:crypto";
 import { test, expect, TEST_ADMIN_PASSWORD } from "./fixtures";
 import type {
@@ -26,7 +27,7 @@ test("真实服务端完成领券、报价下单、收货评价和分批退货�
     return (await response.json()).result as T;
   }
   async function state(role = "user"): Promise<Database> {
-    return (await (await request.get(`/api/state?role=${role}`)).json()).db;
+    return (await readSnapshot(request, role)).db;
   }
   const username = "accept_" + randomUUID().replaceAll("-", "").slice(0, 16);
   const registered = await request.post("/api/auth/register", {
@@ -39,7 +40,7 @@ test("真实服务端完成领券、报价下单、收货评价和分批退货�
     data: { username: "admin", role: "admin", password: TEST_ADMIN_PASSWORD },
   });
   expect(admin.ok()).toBe(true);
-  const before = await state();
+  const before = await state("admin");
   const product = before.products.find(
     (p) => p.active && p.skus.some((s) => s.stock >= 2),
   )!;

@@ -26,8 +26,9 @@
 | `POST /api/auth/profile` | 更新本人昵称并同步账号/业务资料 |
 | `POST /api/auth/password` | 校验原密码、更新哈希并撤销该用户全部会话 |
 | `POST /api/auth/logout` | 撤销指定角色当前会话并清除 Cookie |
-| `GET /api/state?role=user` | 返回公共目录及当前用户私有数据 |
-| `GET /api/state?role=admin` | 仅有效管理员可获得管理数据 |
+| `GET /api/bootstrap?role=user` | 返回公共目录初始化和当前用户身份、有限私有上下文 |
+| `GET /api/bootstrap?role=admin` | 按有效员工身份初始化管理上下文；业务列表另用分页接口 |
+| `GET /api/state` | 固定 410，旧全量接口已退出 |
 | `POST /api/actions/:method` | 允许列表、角色校验、参数校验、归属校验后执行操作 |
 | `GET /api/health` | API 与 SQLite 连接健康检查 |
 

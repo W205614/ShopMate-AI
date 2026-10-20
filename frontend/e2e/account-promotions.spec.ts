@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import type { Page } from "@playwright/test";
 import {
   test,
@@ -161,9 +162,7 @@ test("后台创建满减券、用户领取、订单占用与取消释放、领�
   ).toBeDisabled();
   await customer.goto("/account?section=coupons");
   await expect(customer.locator(".commerce-coupon")).toContainText("可使用");
-  const state = await (
-    await customer.request.get("/api/state?role=user")
-  ).json();
+  const state = await readSnapshot(customer.request);
   const claimId = state.db.couponClaims[0].id;
   const quoteResponse = await customer.request.post(
     "/api/actions/quoteCheckout",

@@ -1,3 +1,4 @@
+import { readSnapshot } from "./http-snapshot";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Server } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
@@ -24,11 +25,7 @@ async function post(path: string, body: unknown, cookie = "", extra = {}) {
 const cookieOf = (response: Response) =>
   response.headers.get("set-cookie")!.split(";")[0]!;
 async function state(cookie = "", role = "user") {
-  return (
-    await fetch(`${base}/api/state?role=${role}`, {
-      headers: { Cookie: cookie },
-    })
-  ).json();
+  return readSnapshot(base, cookie, role);
 }
 beforeEach(async () => {
   sql = openDatabase(":memory:");
@@ -121,7 +118,7 @@ describe("real authentication over HTTP", () => {
     const account = sql.prepare("SELECT * FROM accounts").get()!;
     expect(account.password_hash).toMatch(/^scrypt\$/);
     expect(account.password_hash).not.toContain(input.password);
-    expect((await state(cookie)).sessions.user.id).toBe(body.id);
+    expect((await state(cookie)).sessions.user!.id).toBe(body.id);
     expect((await state(cookie)).db.addresses).toEqual([]);
     expect(
       (await post("/api/auth/register", { ...input, username: "ALICE" }))
@@ -288,7 +285,7 @@ describe("real authentication over HTTP", () => {
       }),
     );
     const both = `${user}; ${admin}`;
-    expect((await state(both, "admin")).sessions.admin.role).toBe("admin");
+    expect((await state(both, "admin")).sessions.admin!.role).toBe("admin");
     expect(
       (await post("/api/actions/resetDemo", { args: [] }, both)).status,
     ).toBe(200);

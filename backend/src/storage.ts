@@ -9,6 +9,7 @@ type Snapshot = {
   original: Map<string, Map<string, StoredRow>>;
   raw: Map<string, StoredRow[]>;
   scope?: DatabaseReadScope;
+  release?: () => void;
 };
 const snapshots = new WeakMap<Database, Snapshot>();
 const readers = new WeakMap<DatabaseSync, Set<WeakRef<Snapshot>>>();
@@ -57,6 +58,28 @@ export function createStorageSchema(sql: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS biz_orders_time_page ON biz_orders(created_at DESC,key DESC);
     CREATE INDEX IF NOT EXISTS biz_orders_owner_status_page ON biz_orders(user_id,status,created_at DESC,key DESC);
   `);
+  for (const domain of [
+    "checkoutQuotes",
+    "orderRequests",
+    "inventoryRequests",
+  ]) {
+    const table = tableFor(domain);
+    if (
+      sql
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")
+        .get(table)
+    )
+      ensureCleanupIndex(sql, domain);
+  }
+}
+
+function ensureCleanupIndex(sql: DatabaseSync, domain: string) {
+  const table = tableFor(domain);
+  sql.exec(
+    domain === "checkoutQuotes"
+      ? `CREATE INDEX IF NOT EXISTS ${table}_cleanup ON ${table}(json_extract(data,'$.expiresAt')) WHERE order_id IS NULL`
+      : `CREATE INDEX IF NOT EXISTS ${table}_cleanup ON ${table}(created_at)`,
+  );
 }
 
 function ensureDomain(sql: DatabaseSync, name: string, kind: string) {
@@ -88,6 +111,8 @@ function ensureDomain(sql: DatabaseSync, name: string, kind: string) {
     sql.exec(
       `CREATE UNIQUE INDEX IF NOT EXISTS ${table}_request ON ${table}(json_extract(data,'$.${name === "orderRequests" ? "userId" : "adminId"}'),json_extract(data,'$.requestId'));`,
     );
+  if (["checkoutQuotes", "orderRequests", "inventoryRequests"].includes(name))
+    ensureCleanupIndex(sql, name);
   sql
     .prepare("INSERT OR IGNORE INTO storage_domains VALUES (?,?)")
     .run(name, kind);
@@ -207,6 +232,18 @@ export interface DatabaseReadScope {
   userId?: string;
   orderIds?: string[];
   pendingOnly?: boolean;
+  /** Domains are complete only inside these selectors. Omitted rows are never deleted. */
+  domains?: Partial<
+    Record<
+      keyof Database,
+      {
+        userId?: string;
+        keys?: string[];
+        appendOnly?: "prepend" | "append";
+        expiredBefore?: string;
+      }
+    >
+  >;
 }
 function orderScope(scope: DatabaseReadScope) {
   const clauses = ["status='pending'"],
@@ -222,6 +259,37 @@ function orderScope(scope: DatabaseReadScope) {
   return { where: clauses.join(" OR "), args };
 }
 function readRows(sql: DatabaseSync, name: string, scope?: DatabaseReadScope) {
+  const domain = scope?.domains?.[name as keyof Database];
+  if (domain) {
+    const clauses: string[] = [],
+      args: SQLInputValue[] = [];
+    if (domain.appendOnly) return [];
+    if (domain.userId !== undefined) {
+      clauses.push("user_id=?");
+      args.push(domain.userId);
+    }
+    if (domain.keys) {
+      clauses.push(
+        domain.keys.length
+          ? `key IN (${domain.keys.map(() => "?").join(",")})`
+          : "0",
+      );
+      args.push(...domain.keys);
+    }
+    if (domain.expiredBefore) {
+      clauses.push(
+        name === "checkoutQuotes"
+          ? "order_id IS NULL AND json_extract(data,'$.expiresAt')<=?"
+          : "created_at<=?",
+      );
+      args.push(domain.expiredBefore);
+    }
+    return sql
+      .prepare(
+        `SELECT key,position,data FROM ${tableFor(name)} WHERE ${clauses.join(" AND ") || "1"} ORDER BY position`,
+      )
+      .all(...args) as StoredRow[];
+  }
   const subset =
     scope && (name === "orders" || name === "afterSales")
       ? orderScope(scope)
@@ -261,6 +329,31 @@ export function preserveBeforeClose(sql: DatabaseSync) {
     .all() as { name: string }[])
     preserveReaders(sql, name);
 }
+
+/** Single-record insert for durable deliveries; caller owns the enclosing transaction. */
+export function insertStoredRecord<T extends { id: string }>(
+  sql: DatabaseSync,
+  domain: keyof Database,
+  record: T,
+  atFront = false,
+) {
+  if (!sql.isTransaction) throw new Error("RECORD_INSERT_REQUIRES_TRANSACTION");
+  ensureDomain(sql, domain, "array");
+  const table = tableFor(domain);
+  if (sql.prepare(`SELECT 1 FROM ${table} WHERE key=?`).get(record.id))
+    return false;
+  preserveReaders(sql, domain);
+  const position = sql
+    .prepare(
+      `SELECT coalesce(${atFront ? "min" : "max"}(position),${atFront ? 1 : -1}) ${atFront ? "-" : "+"} 1 AS n FROM ${table}`,
+    )
+    .get()!.n as number;
+  sql
+    .prepare(`INSERT INTO ${table}(key,position,data) VALUES(?,?,?)`)
+    .run(record.id, position, JSON.stringify(record));
+  sql.prepare("UPDATE storage_meta SET revision=revision+1 WHERE id=1").run();
+  return true;
+}
 export function loadStoredDatabase(
   sql: DatabaseSync,
   scope?: DatabaseReadScope,
@@ -277,7 +370,9 @@ export function loadStoredDatabase(
   };
   snapshots.set(db, state);
   if (!readers.has(sql)) readers.set(sql, new Set());
-  readers.get(sql)!.add(new WeakRef(state));
+  const reference = new WeakRef(state);
+  readers.get(sql)!.add(reference);
+  state.release = () => readers.get(sql)?.delete(reference);
   for (const { name, kind } of sql
     .prepare("SELECT name,kind FROM storage_domains")
     .all() as { name: string; kind: string }[]) {
@@ -310,6 +405,11 @@ export function loadStoredDatabase(
     });
   }
   return db;
+}
+
+/** End a transient snapshot's lifetime; it must not be used for future lazy reads. */
+export function releaseSnapshot(db: Database) {
+  snapshots.get(db)?.release?.();
 }
 
 export function saveStoredDatabase(sql: DatabaseSync, db: Database) {
@@ -362,7 +462,46 @@ export function saveStoredDatabase(sql: DatabaseSync, db: Database) {
             .all() as StoredRow[]
         ).map((r) => [r.key, r]),
       );
+    const domainScope = snapshot?.scope?.domains?.[name as keyof Database];
+    const partial =
+      !!domainScope ||
+      (!!snapshot?.scope && ["orders", "afterSales"].includes(name));
     const rows = rowsFor(name, kind, value, old);
+    if (partial) {
+      // Never let a new row in a partial snapshot overwrite an excluded record.
+      let before = Number(
+          sql
+            .prepare(`SELECT position FROM ${table} ORDER BY position LIMIT 1`)
+            .get()?.position ?? 0,
+        ),
+        after = Number(
+          sql
+            .prepare(
+              `SELECT position FROM ${table} ORDER BY position DESC LIMIT 1`,
+            )
+            .get()?.position ?? -1,
+        );
+      const fresh = [...rows.values()].filter((row) => !old.has(row.key));
+      const prepend =
+        domainScope?.appendOnly === "prepend" ||
+        ["orders", "afterSales"].includes(name) ||
+        (fresh.length > 0 &&
+          [...rows.keys()].indexOf(fresh[0]!.key) === 0 &&
+          old.size > 0);
+      if (prepend) before -= fresh.length;
+      for (const row of rows.values()) {
+        const item = JSON.parse(row.data);
+        if (
+          domainScope?.userId !== undefined &&
+          item.userId !== domainScope.userId
+        )
+          throw new Error("SCOPED_OWNER_MISMATCH");
+        if (old.has(row.key)) continue;
+        if (sql.prepare(`SELECT 1 FROM ${table} WHERE key=?`).get(row.key))
+          throw new Error("SCOPED_RECORD_COLLISION");
+        row.position = prepend ? before++ : ++after;
+      }
+    }
     const changed =
       rows.size !== old.size ||
       [...rows].some(

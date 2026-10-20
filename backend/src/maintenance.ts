@@ -12,6 +12,8 @@ import {
   openSync,
   readSync,
   closeSync,
+  realpathSync,
+  constants,
 } from "node:fs";
 import { resolve, dirname, basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -211,6 +213,67 @@ export function inspectBackup(path: string): BackupManifest {
     if (JSON.stringify(manifest[key]) !== JSON.stringify(details[key]))
       throw new Error(`备份摘要不匹配: ${key}`);
   return manifest;
+}
+
+export interface BackupRecoveryPoint {
+  format: 1;
+  kind: "filesystem-copy";
+  // A mounted directory cannot prove which physical host stores the bytes.
+  offhostVerified: false;
+  verifiedAt: string;
+  snapshotAt: string;
+  sha256: string;
+  revision: number;
+}
+
+/** Reverify at the receiving filesystem before recording a usable recovery point. */
+export function verifyBackupReplica(path: string): BackupRecoveryPoint {
+  const manifest = inspectBackup(path);
+  return {
+    format: 1,
+    kind: "filesystem-copy",
+    offhostVerified: false,
+    verifiedAt: new Date().toISOString(),
+    snapshotAt: manifest.createdAt,
+    sha256: manifest.sha256,
+    revision: manifest.revision,
+  };
+}
+
+/** Never overwrite a destination or prune replica/manual/upgrade evidence. */
+export function copyBackupPair(source: string, destinationDirectory: string) {
+  const from = realpathSync(resolve(source));
+  inspectBackup(from);
+  const directory = resolve(destinationDirectory);
+  mkdirSync(directory, { recursive: true });
+  if (realpathSync(directory) === realpathSync(dirname(from)))
+    throw new Error("BACKUP_REPLICA_SAME_DIRECTORY");
+  const destination = join(directory, basename(from)),
+    recordPath = destination + ".recovery-point.json";
+  // Includes a previous incomplete pair: operators must inspect it, never overwrite it.
+  if (backupFiles(destination).some(existsSync) || existsSync(recordPath))
+    throw new Error("BACKUP_REPLICA_TARGET_EXISTS");
+  const owned: string[] = [];
+  try {
+    for (const [origin, target] of [
+      [from, destination],
+      [manifestPath(from), manifestPath(destination)],
+    ]) {
+      copyFileSync(origin, target, constants.COPYFILE_EXCL);
+      owned.push(target);
+    }
+    const point = verifyBackupReplica(destination);
+    writeFileSync(recordPath, JSON.stringify(point, null, 2), {
+      flag: "wx",
+      mode: 0o600,
+    });
+    return { path: destination, ...point };
+  } catch (error) {
+    // Delete only files exclusively created by this copy attempt.
+    for (const target of owned.reverse())
+      if (existsSync(target)) unlinkSync(target);
+    throw error;
+  }
 }
 
 /** SQLite's online backup API includes a consistent WAL snapshot while requests continue. */
@@ -426,6 +489,10 @@ if (
       }
     } else if (command === "inspect" && file)
       console.log(JSON.stringify(inspectBackup(file), null, 2));
+    else if (command === "replicate" && file && target)
+      console.log(JSON.stringify(copyBackupPair(file, target), null, 2));
+    else if (command === "verify-replica" && file)
+      console.log(JSON.stringify(verifyBackupReplica(file), null, 2));
     else if (command === "restore" && file && target)
       console.log(
         JSON.stringify(
@@ -436,7 +503,7 @@ if (
       );
     else
       throw new Error(
-        `用法: ${basename(process.argv[1])} backup [目标.sqlite] [--reason=manual|daily|preupgrade] | inspect 备份.sqlite | restore 备份.sqlite 目标.sqlite`,
+        `用法: ${basename(process.argv[1])} backup [目标.sqlite] [--reason=manual|daily|preupgrade] | inspect 备份.sqlite | replicate 备份.sqlite 目标目录 | verify-replica 目标备份.sqlite | restore 备份.sqlite 目标.sqlite`,
       );
     record("completed");
   } catch (error) {

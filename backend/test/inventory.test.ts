@@ -293,7 +293,7 @@ it("库存 HTTP 兼容五参数、校验扩展参数并隔离管理员请求记�
       ).toBe(400);
     for (const cookie of ["", userCookie, `${adminCookie}; ${userCookie}`]) {
       const visible = await (
-        await fetch(base + "/api/state?role=user", {
+        await fetch(base + "/api/bootstrap", {
           headers: { Cookie: cookie },
         })
       ).json();

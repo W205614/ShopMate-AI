@@ -49,7 +49,7 @@ it("does not pretend a malformed successful write response is a successful resul
   await expect(
     repository.request("/api/actions/saveSettings", { args: [] }),
   ).rejects.toMatchObject({ outcome: "unknown" });
-  await expect(repository.request("/api/state")).rejects.toMatchObject({
+  await expect(repository.request("/api/bootstrap")).rejects.toMatchObject({
     outcome: "read-failed",
   });
 });

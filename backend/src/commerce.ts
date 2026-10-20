@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Database, Order } from "../../shared/domain/types";
 import { readDatabase, writeDatabase, transaction } from "./database";
 import { ensureRuntimeSchema, enqueue } from "./runtime";
+import { releaseSnapshot } from "./storage";
 import {
   context,
   transact,
@@ -32,28 +33,41 @@ import {
 export function expirePendingOrders(sql: DatabaseSync) {
   ensureRuntimeSchema(sql);
   return transaction(sql, () => {
-    const db = readDatabase(sql, { pendingOnly: true });
-    const pendingIds = new Set(
-      db.orders.filter((o) => o.status === "pending").map((o) => o.id),
-    );
-    const changed = expireOrders(db);
-    if (changed) {
-      for (const order of db.orders)
-        if (pendingIds.has(order.id) && order.status === "cancelled")
-          enqueue(
-            sql,
-            "notification",
-            {
-              userId: order.userId,
-              orderId: order.id,
-              text: "订单付款超时，已关闭并释放库存预占",
-            },
-            `expiry:${order.id}`,
-          );
-      db.revision++;
-      writeDatabase(sql, db);
+    const at = new Date().toISOString();
+    const cutoff = new Date(Date.parse(at) - 86400000).toISOString();
+    const db = readDatabase(sql, {
+      pendingOnly: true,
+      domains: {
+        checkoutQuotes: { expiredBefore: at },
+        orderRequests: { expiredBefore: cutoff },
+        inventoryRequests: { expiredBefore: cutoff },
+      },
+    });
+    try {
+      const pendingIds = new Set(
+        db.orders.filter((o) => o.status === "pending").map((o) => o.id),
+      );
+      const changed = expireOrders(db);
+      if (changed) {
+        for (const order of db.orders)
+          if (pendingIds.has(order.id) && order.status === "cancelled")
+            enqueue(
+              sql,
+              "notification",
+              {
+                userId: order.userId,
+                orderId: order.id,
+                text: "订单付款超时，已关闭并释放库存预占",
+              },
+              `expiry:${order.id}`,
+            );
+        db.revision++;
+        writeDatabase(sql, db);
+      }
+      return changed;
+    } finally {
+      releaseSnapshot(db);
     }
-    return changed;
   });
 }
 const addEvent = (
@@ -233,7 +247,7 @@ export const commerceApi: Pick<
   async quoteCheckout(input) {
     return transact((db) => {
       const uid = userId();
-      expireOrders(db);
+      expireOrders(db, now(), false);
       const snapshot = checkoutSnapshot(db, uid, input),
         createdAt = now();
       const quote = {
@@ -277,7 +291,7 @@ export const commerceApi: Pick<
     return transact((db) => {
       const uid = userId(),
         at = now();
-      expireOrders(db, at);
+      expireOrders(db, at, false);
       requireThat(
         text(input.requestId, 128) && text(input.quoteId, 128),
         "报价或请求标识无效",

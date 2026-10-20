@@ -18,6 +18,7 @@ import { reconcile } from "./operations";
 import type { Promotion, PurchaseOrder } from "../../shared/domain/operations";
 import { queryMemberSummary, type PageOptions } from "./storage";
 import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
+import { releaseSnapshot } from "./storage";
 
 const meta = (sql: DatabaseSync) =>
   sql.prepare("SELECT version,revision FROM storage_meta WHERE id=1").get() as {
@@ -93,14 +94,18 @@ function projectedProducts(
   warehouse = false,
 ) {
   const db = readDatabase(sql, { pendingOnly: true });
-  return products.map((p) => ({
-    ...p,
-    skus: p.skus.map((s) => ({
-      ...s,
-      stock: warehouse ? s.stock : availableStock(db, p.id, s.id),
-      reserved: reservedStock(db, p.id, s.id),
-    })),
-  }));
+  try {
+    return products.map((p) => ({
+      ...p,
+      skus: p.skus.map((s) => ({
+        ...s,
+        stock: warehouse ? s.stock : availableStock(db, p.id, s.id),
+        reserved: reservedStock(db, p.id, s.id),
+      })),
+    }));
+  } finally {
+    releaseSnapshot(db);
+  }
 }
 /** Related review/claim context carries eligibility only when this employee cannot read orders. */
 function orderEligibility(order: Order): Order {

@@ -19,6 +19,12 @@ import {
   runAutomaticBackup,
   cancelAutomaticBackup,
 } from "../src/automatic-backup";
+import {
+  ensureBackupState,
+  recordBackupSuccess,
+  automaticBackupDue,
+  readBackupStatus,
+} from "../src/backup-state";
 
 let sql: DatabaseSync, directory: string, source: string, destination: string;
 let output: ReturnType<typeof vi.spyOn>, errors: ReturnType<typeof vi.spyOn>;
@@ -41,6 +47,25 @@ afterEach(() => {
 });
 
 describe("automatic backup worker", () => {
+  it("does not repeat a verified automatic backup after the API restarts", async () => {
+    ensureBackupState(sql);
+    await runAutomaticBackup(source, destination, (createdAt) =>
+      recordBackupSuccess(sql, destination, createdAt),
+    );
+    sql.close();
+    sql = openDatabase(source);
+    ensureBackupState(sql);
+    expect(automaticBackupDue(sql)).toBe(false);
+    expect(readBackupStatus(sql).lastSuccessAt).toBe(
+      inspectBackup(destination).createdAt,
+    );
+    expect(
+      readdirSync(join(directory, "backups")).filter((name) =>
+        name.endsWith(".sqlite"),
+      ),
+    ).toHaveLength(1);
+  });
+
   it("completes a fixed WAL snapshot during writes while the API thread keeps progressing and retains seven", async () => {
     sql.exec(
       "CREATE TABLE worker_probe(value INTEGER); INSERT INTO worker_probe VALUES(0); CREATE TABLE payload(id INTEGER PRIMARY KEY, data TEXT); BEGIN",
@@ -176,5 +201,39 @@ describe("automatic backup worker", () => {
       "BACKUP_TARGET_EXISTS",
     );
     expect(readFileSync(destination, "utf8")).toBe("existing-original");
+  });
+
+  it("verifies a replica in the child before reporting a recovery point", async () => {
+    const created = vi.fn(),
+      replicated = vi.fn();
+    await runAutomaticBackup(source, destination, created, {
+      replicaDirectory: join(directory, "replica"),
+      onReplicaCreated: replicated,
+    });
+    expect(created).toHaveBeenCalledWith(inspectBackup(destination).createdAt);
+    expect(replicated).toHaveBeenCalledOnce();
+    const copied = join(directory, "replica", "shopmate-daily-current.sqlite");
+    expect(inspectBackup(copied)).toEqual(inspectBackup(destination));
+    expect(
+      JSON.parse(readFileSync(copied + ".recovery-point.json", "utf8")),
+    ).toMatchObject({ kind: "filesystem-copy", offhostVerified: false });
+  });
+
+  it("preserves a verified local snapshot and reports replica failure without inventing a recovery point", async () => {
+    const created = vi.fn(),
+      replicated = vi.fn();
+    await expect(
+      runAutomaticBackup(source, destination, created, {
+        replicaDirectory: join(directory, "backups"),
+        onReplicaCreated: replicated,
+      }),
+    ).rejects.toThrow("BACKUP_REPLICA_FAILED");
+    expect(created).toHaveBeenCalledOnce();
+    expect(replicated).not.toHaveBeenCalled();
+    expect(inspectBackup(destination).reason).toBe("daily");
+    expect(logged(errors)[0]).toMatchObject({
+      phase: "replica",
+      code: "BACKUP_REPLICA_FAILED",
+    });
   });
 });

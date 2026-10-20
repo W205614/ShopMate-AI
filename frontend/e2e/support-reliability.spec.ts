@@ -1,3 +1,4 @@
+import { readSnapshot } from "./api-snapshot";
 import type { Page } from "@playwright/test";
 import { DatabaseSync } from "node:sqlite";
 import { resolve } from "node:path";
@@ -18,7 +19,7 @@ async function action(page: Page, method: string, ...args: unknown[]) {
   return (await response.json()).result;
 }
 async function state(page: Page) {
-  return (await (await page.request.get("/api/state?role=admin")).json()).db;
+  return (await readSnapshot(page.request, "admin")).db;
 }
 async function login(page: Page, username = "admin") {
   expect(

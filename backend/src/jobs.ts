@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
-import { readDatabase, writeDatabase, transaction } from "./database";
+import { transaction } from "./database";
+import { insertStoredRecord } from "./storage";
 import { expirePendingOrders } from "./commerce";
 import { ensureRuntimeSchema } from "./runtime";
 
@@ -72,11 +73,11 @@ export function runDueJobs(
               typeof payload.orderId !== "string")
           )
             throw new Error("INVALID_NOTIFICATION_PAYLOAD");
-          const db = readDatabase(sql),
-            id = `notification-${createHash("sha256").update(job.id).digest("hex")}`;
-          const notifications = (db.notifications ??= []);
-          if (!notifications.some((n) => n.id === id)) {
-            notifications.unshift({
+          const id = `notification-${createHash("sha256").update(job.id).digest("hex")}`;
+          insertStoredRecord(
+            sql,
+            "notifications",
+            {
               id,
               userId: payload.userId,
               ...(payload.orderId
@@ -85,10 +86,9 @@ export function runDueJobs(
               text: payload.text,
               read: false,
               createdAt: new Date(at).toISOString(),
-            });
-            db.revision++;
-            writeDatabase(sql, db);
-          }
+            },
+            true,
+          );
           sql
             .prepare(
               "UPDATE job_queue SET status='done',attempts=attempts+1,last_error=NULL WHERE id=?",

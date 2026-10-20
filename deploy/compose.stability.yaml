@@ -1,0 +1,37 @@
+# Add after compose.production-load.yaml in a NEW shopmate-reliability-* project.
+services:
+  api:
+    environment:
+      AI_ENABLED: "true"
+      LLM_BASE_URL: http://provider:3099
+      LLM_API_KEY: acceptance-only
+      EMBEDDING_BASE_URL: http://provider:3099
+      EMBEDDING_API_KEY: acceptance-only
+      RERANKER_ENABLED: "false"
+      BACKUP_REPLICA_DIR: /app/replica
+    volumes:
+      - ${REPLICA_PATH:?Set an independent acceptance replica directory}:/app/replica
+    depends_on:
+      provider:
+        condition: service_started
+  provider:
+    image: shopmate-ai-api:${ACCEPTANCE_TAG:-production-load}
+    command: [node, --import, tsx, scripts/stability-provider.ts]
+    environment:
+      SHOPMATE_ENV: acceptance
+      STABILITY_ALLOWED: "1"
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3099/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+    mem_limit: 128m
+    pids_limit: 32
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+        max-file: "2"

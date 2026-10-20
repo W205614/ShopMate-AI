@@ -7,6 +7,7 @@ import type { Review } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
 import { useAdminQuery, useAdminPagination } from "./useAdminList";
 import { reviewState, reviewLabels } from "../../../../shared/domain/reviews";
+import { canOpenAdminPath } from "../../router";
 import "../../styles/account-commerce.css";
 
 const shop = useShop(),
@@ -26,9 +27,18 @@ const dialog = computed({
   },
 });
 const state = (review: Review) => reviewState(shop.db.orders, review);
-const canModerate = (review: Review) =>
+const canManage = computed(
+  () => !!shop.adminSession?.permissions?.includes("support"),
+);
+const eligibleToModerate = (review: Review) =>
   ["visible", "hidden"].includes(state(review));
+const canModerate = (review: Review) =>
+  canManage.value && eligibleToModerate(review);
+const canViewOrders = computed(() =>
+  canOpenAdminPath("/admin/orders", shop.adminSession?.permissions ?? []),
+);
 const hasOrder = (review: Review) =>
+  canViewOrders.value &&
   shop.db.orders.some(
     (o) => o.id === review.orderId && o.userId === review.userId,
   );
@@ -71,6 +81,9 @@ const { page, rows, total } = useAdminPagination(filtered, filters);
     </div>
   </div>
   <section class="admin-panel">
+    <p v-if="!canManage" class="admin-note">
+      当前角色可查看评价；隐藏或恢复展示请由客服或店主处理。
+    </p>
     <div class="admin-toolbar">
       <el-input
         v-model="query"
@@ -108,7 +121,12 @@ const { page, rows, total } = useAdminPagination(filtered, filters);
               v-if="hasOrder(row)"
               :to="{ path: '/admin/orders', query: { detail: row.orderId } }"
               >{{ row.orderId }}</RouterLink
-            ><span v-else>{{ row.orderId }} · 关联订单不可用</span></small
+            ><span v-else
+              >{{ row.orderId }} ·
+              {{
+                canViewOrders ? "关联订单不可用" : "当前角色无订单查看权限"
+              }}</span
+            ></small
           ></template
         ></el-table-column
       >
@@ -150,7 +168,9 @@ const { page, rows, total } = useAdminPagination(filtered, filters);
             :disabled="busy"
             @click="moderate(row)"
             >{{ row.hidden ? "恢复展示" : "隐藏评价" }}</el-button
-          ><span v-else class="admin-note">不可恢复</span></template
+          ><span v-else-if="!eligibleToModerate(row)" class="admin-note"
+            >不可恢复</span
+          ></template
         ></el-table-column
       >
     </el-table>
@@ -173,7 +193,7 @@ const { page, rows, total } = useAdminPagination(filtered, filters);
         :to="{ path: '/admin/orders', query: { detail: selected.orderId } }"
         >查看订单 {{ selected.orderId }}</RouterLink
       >
-      <p v-if="!canModerate(selected)" class="admin-note">
+      <p v-if="!eligibleToModerate(selected)" class="admin-note">
         该评价仅保留历史，不参与公开展示和评分，不能恢复展示。
       </p></template
     >

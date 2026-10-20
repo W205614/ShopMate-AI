@@ -73,7 +73,7 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:18091
           E2E_ADMIN_PASSWORD: CIContainer123!
           E2E_MUTATIONS_ALLOWED: "1"
-        run: npm run test:e2e -- e2e/extension-feature.spec.ts e2e/operations-ui.spec.ts --output=test-results-operations
+        run: npm run test:e2e -- e2e/extension-feature.spec.ts e2e/operations-ui.spec.ts e2e/staff-role-flows.spec.ts --output=test-results-operations
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

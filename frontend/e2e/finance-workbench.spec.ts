@@ -184,6 +184,74 @@ test("新采购精确定位单次库存变动，历史SKU及缺失关联明确�
     page.getByRole("alert").filter({ hasText: "没有找到该流水" }),
   ).toBeVisible();
 });
+test("历史采购流水按角色显示关联入口，财务保留说明且店主可查库存", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  fixture((db) => {
+    db.ledger.unshift({
+      id: "legacy-finance-permissions",
+      type: "purchase",
+      amount: 321,
+      reference: "p01-s1",
+      note: "历史采购权限回归",
+      createdAt: new Date().toISOString(),
+    });
+  });
+  await action(page, "saveStaff", {
+    username: "finance_legacy",
+    name: "历史流水财务",
+    password: TEST_ADMIN_PASSWORD,
+    staffRole: "finance",
+    active: true,
+  });
+  const path = "/admin/finance?q=legacy-finance-permissions";
+  await page.goto(path);
+  await expect(
+    page.getByText("历史仅关联 SKU，无法定位单次变动", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "搜索该 SKU 相关记录", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/admin\/inventory\?/);
+  await expect(page).toHaveURL(/tab=records/);
+  await expect(page).toHaveURL(/q=p01-s1/);
+  await expect(
+    page.getByRole("heading", { name: "库存管理", exact: true }),
+  ).toBeVisible();
+
+  const context = await browser.newContext({ baseURL });
+  try {
+    const finance = await context.newPage();
+    const login = await finance.request.post("/api/auth/login", {
+      headers,
+      data: {
+        role: "admin",
+        username: "finance_legacy",
+        password: TEST_ADMIN_PASSWORD,
+      },
+    });
+    expect(login.ok(), await login.text()).toBe(true);
+    await finance.goto(path);
+    const row = finance.locator(".el-table__body-wrapper tbody tr");
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText("历史采购权限回归");
+    await expect(row).toContainText("历史仅关联 SKU，无法定位单次变动");
+    await expect(row).toContainText("当前角色无库存访问权限");
+    await expect(finance.locator('a[href^="/admin/inventory"]')).toHaveCount(0);
+    await row.getByRole("button", { name: "查看流水", exact: true }).click();
+    const dialog = finance.getByRole("dialog", {
+      name: "流水详情",
+      exact: true,
+    });
+    await expect(dialog).toContainText("历史仅关联 SKU，无法定位单次变动");
+    await expect(dialog).toContainText("当前角色无库存访问权限");
+    await expect(dialog.getByRole("link")).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
 test("同一订单多次部分退款查询守恒，详情跳转订单且金额不受分页影响", async ({
   page,
 }) => {

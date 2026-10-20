@@ -16,6 +16,7 @@ import {
 } from "../../domain/finance";
 import { localDate } from "./useAdmin";
 import { useAdminQuery, useAdminPagination } from "./useAdminList";
+import { canOpenAdminPath } from "../../router";
 const shop = useShop(),
   filters = useAdminQuery();
 const query = filters.field("q", { replace: true }),
@@ -93,8 +94,23 @@ const sums = computed(() => {
 const selected = computed(() =>
   shop.db.ledger.find((l) => l.id === selectedId.value),
 );
+function associationFor(entry: LedgerEntry) {
+  const result = ledgerAssociation(entry, shop.db);
+  if (
+    result.path &&
+    !canOpenAdminPath(result.path, shop.adminSession?.permissions ?? [])
+  )
+    return {
+      ...result,
+      path: "",
+      notice: [result.notice, "当前角色无库存访问权限，请由仓储或店主查看"]
+        .filter(Boolean)
+        .join("；"),
+    };
+  return result;
+}
 const association = computed(
-  () => selected.value && ledgerAssociation(selected.value, shop.db),
+  () => selected.value && associationFor(selected.value),
 );
 const table = ref<TableInstance>();
 function sortChanged({ order }: { order: string | null }) {
@@ -306,17 +322,17 @@ async function download() {
       <el-table-column label="关联编号" min-width="240"
         ><template #default="{ row }"
           >{{ row.reference }}
-          <div v-if="ledgerAssociation(row, shop.db).path">
+          <div v-if="associationFor(row).path">
             <RouterLink
               :to="{
-                path: ledgerAssociation(row, shop.db).path,
-                query: ledgerAssociation(row, shop.db).query,
+                path: associationFor(row).path,
+                query: associationFor(row).query,
               }"
-              >{{ ledgerAssociation(row, shop.db).label }}</RouterLink
+              >{{ associationFor(row).label }}</RouterLink
             >
           </div>
           <small class="admin-note">{{
-            ledgerAssociation(row, shop.db).notice
+            associationFor(row).notice
           }}</small></template
         ></el-table-column
       >

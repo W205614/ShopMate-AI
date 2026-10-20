@@ -53,6 +53,32 @@ const selectedOrder = computed(() =>
 const state = computed(() =>
   selected.value ? afterSaleState(selected.value, selectedOrder.value) : null,
 );
+const actionPermissions = {
+  approve: "support",
+  reject: "support",
+  receive: "warehouse",
+  refund: "finance",
+} as const;
+const permitted = (type: keyof typeof actionPermissions) =>
+  !!shop.adminSession?.permissions?.includes(actionPermissions[type]);
+const allowedActions = computed(() => ({
+  approve: !!state.value?.canApprove && permitted("approve"),
+  reject: !!state.value?.canReject && permitted("reject"),
+  receive: !!state.value?.canReceive && permitted("receive"),
+  refund: !!state.value?.canRefund && permitted("refund"),
+}));
+const canProcess = computed(() =>
+  Object.values(allowedActions.value).some(Boolean),
+);
+const assignment = computed(() => {
+  if (state.value?.canApprove && !permitted("approve"))
+    return "当前申请待客服审核，请由客服或店主批准或拒绝。";
+  if (state.value?.canReceive && !permitted("receive"))
+    return "当前退货待仓储确认收货，请由仓储或店主处理。";
+  if (state.value?.canRefund && !permitted("refund"))
+    return "当前申请待财务退款，请由财务或店主处理。";
+  return "";
+});
 function loadLatestNote() {
   note.value = baselineNote.value = selected.value?.note ?? "";
 }
@@ -88,15 +114,13 @@ function open(a: AfterSale) {
 }
 async function action(type: "approve" | "reject" | "receive" | "refund") {
   if (!selected.value || busy.value || confirming.value) return;
+  if (!permitted(type))
+    return void (await run(async () => {
+      throw new Error("当前员工没有此操作权限，请由对应角色处理");
+    }));
   const sale = selected.value,
     inputNote = note.value;
-  const allowed = {
-    approve: state.value?.canApprove,
-    reject: state.value?.canReject,
-    receive: state.value?.canReceive,
-    refund: state.value?.canRefund,
-  };
-  if (!allowed[type])
+  if (!allowedActions.value[type])
     return void (await run(async () => {
       throw new Error(state.value?.guidance ?? "申请状态不可处理");
     }));
@@ -131,10 +155,10 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
       return void (await run(async () => {
         throw new Error("申请已切换或状态已变化，请重新核对后操作");
       }));
-    const success = await run(
-      () => api.processAfterSale(sale.id, type, inputNote),
-      labels[type] + "成功",
-    );
+    const success = await run(() => {
+      if (!permitted(type)) throw new Error("当前员工没有此操作权限");
+      return api.processAfterSale(sale.id, type, inputNote);
+    }, labels[type] + "成功");
     if (
       success &&
       alive &&
@@ -324,10 +348,12 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
             :disabled="
               busy ||
               confirming ||
+              !canProcess ||
               ['refunded', 'rejected', 'cancelled'].includes(selected.status)
             "
             placeholder="填写审核或收货情况；拒绝时必填" /></el-form-item></el-form
       ><el-alert :title="state?.guidance" type="info" :closable="false" />
+      <p v-if="assignment" class="admin-note">{{ assignment }}</p>
       <ul class="admin-commerce-events" aria-label="售后进度">
         <li v-for="(event, index) in selected.events" :key="index">
           <time
@@ -352,7 +378,7 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
     <template #footer
       ><el-button :disabled="pending || confirming" @click="dialog = false"
         >关闭</el-button
-      ><template v-if="state?.canApprove"
+      ><template v-if="allowedActions.approve"
         ><el-button
           type="danger"
           :loading="pending"
@@ -367,14 +393,14 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
           >批准申请</el-button
         ></template
       ><el-button
-        v-if="state?.canReceive"
+        v-if="allowedActions.receive"
         type="primary"
         :loading="pending"
         :disabled="busy || confirming"
         @click="action('receive')"
         >确认收到退货</el-button
       ><el-button
-        v-if="state?.canRefund"
+        v-if="allowedActions.refund"
         type="primary"
         :loading="pending"
         :disabled="busy || confirming"

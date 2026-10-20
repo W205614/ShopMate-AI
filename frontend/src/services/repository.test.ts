@@ -5,9 +5,13 @@ import {
   getStorageIssue,
   request,
   getDatabase,
+  setRouteScope,
 } from "./repository";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setRouteScope("/", {});
+});
 it("takes identity from the server and ignores old browser sessions", async () => {
   sessionStorage.setItem(
     "shopmate-ai:session:admin",
@@ -15,16 +19,14 @@ it("takes identity from the server and ignores old browser sessions", async () =
   );
   vi.stubGlobal(
     "fetch",
-    vi
-      .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            db: getDatabase(),
-            sessions: { user: null, admin: null },
-          }),
-        ),
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          db: getDatabase(),
+          sessions: { user: null, admin: null },
+        }),
       ),
+    ),
   );
   await refreshState();
   expect(getSession("admin")).toBeNull();
@@ -56,3 +58,39 @@ it("uses same-origin credentials and CSRF request header for mutations", async (
     }),
   );
 });
+
+it.each([
+  "/admin/inventory",
+  "/admin/coupons",
+  "/admin/reviews",
+  "/admin/operations",
+])(
+  "retains verified identity without forbidden collection reads on %s",
+  async (path) => {
+    setRouteScope(
+      path,
+      path === "/admin/operations" ? { tab: "promotions" } : {},
+    );
+    const session = {
+      id: "restricted-finance",
+      name: "财务",
+      role: "admin",
+      permissions: ["finance"],
+    };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          db: getDatabase(),
+          sessions: { user: null, admin: session },
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetch);
+    await refreshState("admin");
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      "/api/bootstrap?role=admin",
+    ]);
+    expect(getSession("admin")).toEqual(session);
+    expect(getStorageIssue()).toBe("");
+  },
+);

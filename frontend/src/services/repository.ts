@@ -305,12 +305,24 @@ export async function refreshState(role: Role = scope) {
         if (role === "admin") {
           const session = value.sessions.admin;
           if (!session) return false;
+          // The inventory view of products requires warehouse access. Skip its
+          // read so a fresh page can retain bootstrap identity and route to 403.
+          if (
+            name === "products" &&
+            routePath === "/admin/inventory" &&
+            !session.permissions?.includes("warehouse")
+          )
+            return false;
           const grants: Record<string, string[]> = {
             orders: ["warehouse", "support", "finance"],
             afterSales: ["warehouse", "support", "finance"],
             inventory: ["warehouse"],
             ledger: ["finance"],
             conversations: ["support"],
+            coupons: ["marketing"],
+            couponClaims: ["marketing"],
+            reviews: ["marketing", "catalog", "support"],
+            promotions: ["marketing"],
             shippingRules: ["settings"],
             suppliers: ["warehouse"],
             purchaseOrders: ["warehouse"],

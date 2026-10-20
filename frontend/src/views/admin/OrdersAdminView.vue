@@ -12,6 +12,7 @@ import type { Order } from "../../domain/types";
 import { useAdminAction, localDate } from "./useAdmin";
 import { useAdminQuery, useAdminPagination } from "./useAdminList";
 import { eventLabel } from "../../components/shop/commerceLabels";
+import { canOpenAdminPath } from "../../router";
 import "../../styles/commerce-flow.css";
 const totalQuantity = (order: Order) =>
   order.items.reduce((total, item) => total + item.quantity, 0);
@@ -291,7 +292,11 @@ async function submit() {
         v-if="selected.status === 'paid' && !canShip(selected)"
         class="admin-note"
       >
-        有进行中的售后或无剩余商品，暂不可发货。
+        {{
+          shop.adminSession?.permissions?.includes("warehouse")
+            ? "有进行中的售后或无剩余商品，暂不可发货。"
+            : "当前角色可查看订单；发货请由仓储或店主处理。"
+        }}
       </p>
       <p class="admin-note">
         未退数量为购买数量减已退款数量；是否可发货由订单与售后状态决定。
@@ -349,7 +354,14 @@ async function submit() {
         :to="{ path: '/admin/after-sales', query: { orderId: selected.id } }"
         >查看该订单全部售后</RouterLink
       >
-      <p>
+      <p
+        v-if="
+          canOpenAdminPath(
+            '/admin/reviews',
+            shop.adminSession?.permissions ?? [],
+          )
+        "
+      >
         <RouterLink
           :to="{ path: '/admin/reviews', query: { orderId: selected.id } }"
           >查看该订单评价</RouterLink

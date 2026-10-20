@@ -1,0 +1,32 @@
+{
+  "sourceCommit": "cf712796693ad774480135dd660c69b2a980fe6d",
+  "simulations": [
+    {
+      "kind": "isolated_due_time_simulation",
+      "at": "2026-10-20T03:53:33.961Z",
+      "concurrency": 5,
+      "thinkTimeMs": 0,
+      "originalLastSuccessAt": "2026-10-20T03:51:20.727Z",
+      "simulatedLastSuccessAt": "2026-10-19T03:53:33.924Z",
+      "scope": "isolated acceptance database only; wall-clock and production scheduling unchanged"
+    },
+    {
+      "kind": "isolated_due_time_simulation",
+      "at": "2026-10-20T04:14:14.249Z",
+      "concurrency": 50,
+      "thinkTimeMs": 0,
+      "originalLastSuccessAt": "2026-10-20T03:54:20.754Z",
+      "simulatedLastSuccessAt": "2026-10-19T04:14:14.243Z",
+      "scope": "isolated acceptance database only; wall-clock and production scheduling unchanged"
+    },
+    {
+      "kind": "isolated_due_time_simulation",
+      "at": "2026-10-20T05:22:55.656Z",
+      "concurrency": 20,
+      "thinkTimeMs": 500,
+      "originalLastSuccessAt": "2026-10-20T04:14:22.585Z",
+      "simulatedLastSuccessAt": "2026-10-19T05:22:55.65Z",
+      "scope": "isolated acceptance database only; wall-clock and production scheduling unchanged"
+    }
+  ]
+}

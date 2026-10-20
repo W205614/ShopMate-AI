@@ -1,0 +1,19 @@
+{
+  "accepted": false,
+  "aborted": true,
+  "sourceCommit": "fee6b2c15927851047a2350470357c1b0b03a222",
+  "project": "shopmate-reliability-stability-v2-20261020",
+  "startedAt": "2026-10-20T03:05:13.504Z",
+  "observedThrough": "2026-10-20T03:35:15.609Z",
+  "reason": "Automatic backup timed out twice during the 50-client phase after an isolated schedule-due simulation; the full two-hour acceptance is incomplete.",
+  "normalHttp": {"requests":397537,"errors":0,"rejected":0,"p95Ms":356},
+  "completedPhases": [
+    {"concurrency":5,"seconds":600,"requests":147775,"writes":43098,"reads":104677,"errors":0,"rejected":0,"p95Ms":62,"p99Ms":93},
+    {"concurrency":20,"seconds":600,"requests":134351,"writes":39164,"reads":95187,"errors":0,"rejected":0,"p95Ms":197,"p99Ms":284},
+    {"concurrency":50,"seconds":600,"requests":115351,"writes":33610,"reads":81741,"errors":0,"rejected":0,"p95Ms":498,"p99Ms":679}
+  ],
+  "backupFailures": [
+    {"at":"2026-10-20T03:30:48.335Z","durationMs":122366,"phase":"backup","code":"BACKUP_TIMEOUT"},
+    {"at":"2026-10-20T03:33:48.683Z","durationMs":122523,"phase":"backup","code":"BACKUP_TIMEOUT"}
+  ]
+}

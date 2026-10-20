@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "event": "monitor_started",
+      "intervalMs": 60000,
+      "alertDelivery": "unconfigured",
+      "message": "告警未接通"
+    },
+    {
+      "event": "monitor_probe",
+      "maintenance": false,
+      "issues": [],
+      "latencyMs": 14
+    }
+  ],
+  "continuousSupervisionConfigured": false,
+  "webhookConfigured": false,
+  "exitCode": 0
+}

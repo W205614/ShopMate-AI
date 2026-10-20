@@ -1,0 +1,644 @@
+{
+  "schema": 1,
+  "project": "shopmate-reliability-stability-v3-20261020",
+  "generatedAt": "2026-10-20T05:57:05.305Z",
+  "acceptanceScope": "Formal soak and live invariants only; recovery and final-SHA CI remain separate gates.",
+  "accepted": true,
+  "failedGates": [],
+  "gates": [
+    {
+      "code": "SOURCE_COMMIT_PRESENT",
+      "passed": true
+    },
+    {
+      "code": "FAKE_PROVIDER_ISOLATION",
+      "passed": true
+    },
+    {
+      "code": "SOURCE_AND_IMAGE_MATCH_PROVIDER_GUARD",
+      "passed": true
+    },
+    {
+      "code": "RUNTIME_SOURCE_DIGEST_PRESENT",
+      "passed": true
+    },
+    {
+      "code": "RUNTIME_SOURCE_UNCHANGED",
+      "passed": true
+    },
+    {
+      "code": "PHASE_1_DURATION_VALID",
+      "passed": true
+    },
+    {
+      "code": "PHASE_1_HTTP_COUNTS_VALID",
+      "passed": true
+    },
+    {
+      "code": "PHASE_1_NO_ERRORS_OR_REJECTIONS",
+      "passed": true
+    },
+    {
+      "code": "PHASE_1_LATENCY_TARGETS",
+      "passed": true
+    },
+    {
+      "code": "PHASE_2_DURATION_VALID",
+      "passed": true
+    },
+    {
+      "code": "PHASE_2_HTTP_COUNTS_VALID",
+      "passed": true
+    },
+    {
+      "code": "PHASE_2_NO_ERRORS_OR_REJECTIONS",
+      "passed": true
+    },
+    {
+      "code": "PHASE_2_LATENCY_TARGETS",
+      "passed": true
+    },
+    {
+      "code": "PHASE_3_DURATION_VALID",
+      "passed": true
+    },
+    {
+      "code": "PHASE_3_HTTP_COUNTS_VALID",
+      "passed": true
+    },
+    {
+      "code": "PHASE_3_NO_ERRORS_OR_REJECTIONS",
+      "passed": true
+    },
+    {
+      "code": "PHASE_3_LATENCY_TARGETS",
+      "passed": true
+    },
+    {
+      "code": "PHASE_4_DURATION_VALID",
+      "passed": true
+    },
+    {
+      "code": "PHASE_4_HTTP_COUNTS_VALID",
+      "passed": true
+    },
+    {
+      "code": "PHASE_4_NO_ERRORS_OR_REJECTIONS",
+      "passed": true
+    },
+    {
+      "code": "PHASE_4_LATENCY_TARGETS",
+      "passed": true
+    },
+    {
+      "code": "FORMAL_FOUR_PHASE_SCHEDULE",
+      "passed": true
+    },
+    {
+      "code": "FULL_TWO_HOUR_DURATION",
+      "passed": true
+    },
+    {
+      "code": "HTTP_TOTAL_COUNTS_CONSISTENT",
+      "passed": true
+    },
+    {
+      "code": "NO_HTTP_OR_WORKFLOW_FAILURES",
+      "passed": true
+    },
+    {
+      "code": "TRANSACTION_LIFECYCLES_COMPLETED",
+      "passed": true
+    },
+    {
+      "code": "NORMAL_HTTP_ALL_SUCCESS",
+      "passed": true
+    },
+    {
+      "code": "RESOURCE_SAMPLES_PRESENT",
+      "passed": true
+    },
+    {
+      "code": "RESOURCE_SAMPLE_TIMESTAMPS_VALID",
+      "passed": true
+    },
+    {
+      "code": "API_MEMORY_WITHIN_CONFIGURED_LIMIT",
+      "passed": true
+    },
+    {
+      "code": "PERSISTENT_JOB_QUEUE_TARGETS",
+      "passed": true
+    },
+    {
+      "code": "AI_QUEUES_DRAINED",
+      "passed": true
+    },
+    {
+      "code": "AI_FAULT_MODE_COVERAGE",
+      "passed": true
+    },
+    {
+      "code": "CONTAINER_API_HEALTH_AND_NO_RESTART",
+      "passed": true
+    },
+    {
+      "code": "CONTAINER_WEB_HEALTH_AND_NO_RESTART",
+      "passed": true
+    },
+    {
+      "code": "CONTAINER_PROVIDER_HEALTH_AND_NO_RESTART",
+      "passed": true
+    },
+    {
+      "code": "BACKUP_WINDOW_1_COVERAGE_AND_P95_P99",
+      "passed": true
+    },
+    {
+      "code": "BACKUP_WINDOW_2_COVERAGE_AND_P95_P99",
+      "passed": true
+    },
+    {
+      "code": "BACKUP_WINDOW_3_COVERAGE_AND_P95_P99",
+      "passed": true
+    },
+    {
+      "code": "BACKUP_WINDOWS_PRESENT_COMPLETE_AND_NO_DROPS",
+      "passed": true
+    },
+    {
+      "code": "LOG_AND_BACKUP_OBSERVER_COMPLETE",
+      "passed": true
+    },
+    {
+      "code": "LIVE_VERIFIER_ALL_CHECKS_PASS",
+      "passed": true
+    },
+    {
+      "code": "LIVE_NEW_ORDERS_AND_REFUNDS_PRESENT",
+      "passed": true
+    },
+    {
+      "code": "LOAD_DRIVER_PASSED",
+      "passed": true
+    },
+    {
+      "code": "CANCEL_AND_REFUND_BRANCHES_OBSERVED",
+      "passed": true
+    }
+  ],
+  "warnings": [
+    "OBSERVED_MEMORY_HEADROOM_BELOW_20_PERCENT",
+    "ENDURANCE_MEMORY_INCREASE_OBSERVED_NOT_A_LEAK_DIAGNOSIS"
+  ],
+  "inputs": [
+    {
+      "name": "load.json",
+      "present": true,
+      "validJson": true,
+      "sha256": "0bb1a901a4d018ab6fc2941086103de822687cfa15c40ed0775414e489cd3331"
+    },
+    {
+      "name": "verify-live.json",
+      "present": true,
+      "validJson": true,
+      "sha256": "2a8a7478d4fe995c0108d783cf41314faaa9f9206807236043d4eb9efc1549e4"
+    },
+    {
+      "name": "runtime.json",
+      "present": true,
+      "validJson": true,
+      "sha256": "250570f7e590283327a761e85b9a2053239911bff839d90cb5b4a98ed8b9bafc"
+    },
+    {
+      "name": "provider-isolation.json",
+      "present": true,
+      "validJson": true,
+      "sha256": "dadd2d6cf7ada1edaf37d77eabc76a37e0e6a5dc2c983c9b70d756e1756ee12d"
+    },
+    {
+      "name": "runtime-final.json",
+      "present": true,
+      "validJson": true,
+      "sha256": "09d005f730777d5454bef33c98634ad115b547dcbe32990374acc750fa4d91e9"
+    },
+    {
+      "name": "transaction-branches.json",
+      "present": true,
+      "validJson": true,
+      "sha256": "32af844da9b50c505a4a0901f24535eed4418f58ba071a97ea3f4262a4fbf62a"
+    }
+  ],
+  "provenance": {
+    "sourceCommit": "cf712796693ad774480135dd660c69b2a980fe6d",
+    "image": "sha256:8c1874ae781d245943c6a1e03a18eb70b3a4f1a49919ca9c8fea060c3e051b2f",
+    "runtime": {
+      "sourceSha256": "d10193b6aca0eadc2944b5a6c2a9d87154d24eb344d9ee229769841c8a2120d7",
+      "files": 43,
+      "node": "v24.22.0",
+      "sqlite": "3.53.4"
+    },
+    "finalRuntime": {
+      "sourceSha256": "d10193b6aca0eadc2944b5a6c2a9d87154d24eb344d9ee229769841c8a2120d7",
+      "files": 43,
+      "node": "v24.22.0",
+      "sqlite": "3.53.4"
+    },
+    "provider": {
+      "sourceCommit": "cf712796693ad774480135dd660c69b2a980fe6d",
+      "image": "sha256:8c1874ae781d245943c6a1e03a18eb70b3a4f1a49919ca9c8fea060c3e051b2f",
+      "syntheticKeysVerified": true,
+      "llmIsFakeProvider": true,
+      "embeddingIsFakeProvider": true,
+      "rerankerDisabled": true
+    }
+  },
+  "period": {
+    "startedAt": "2026-10-20T03:51:53.796Z",
+    "endedAt": "2026-10-20T05:51:56.443Z"
+  },
+  "http": {
+    "measuredSeconds": 7202.647,
+    "requests": 620372,
+    "reads": 439486,
+    "writes": 180886,
+    "readPercent": 70.842,
+    "writePercent": 29.158,
+    "actualRequestsPerSecond": 86.131,
+    "actualWritesPerSecond": 25.114,
+    "completedTransactions": 17206,
+    "errors": 0,
+    "rejected429": 0,
+    "errorSampleCount": 0,
+    "workflowFailureSampleCount": 0,
+    "p95Ms": 290,
+    "p99Ms": 439,
+    "statusCounts": {
+      "200": 620372
+    }
+  },
+  "phases": [
+    {
+      "index": 1,
+      "concurrency": 5,
+      "configuredSeconds": 600,
+      "thinkTimeMs": 0,
+      "startedAt": "2026-10-20T03:51:55.613Z",
+      "endedAt": "2026-10-20T04:01:55.671Z",
+      "measuredSeconds": 600.058,
+      "requests": 153778,
+      "reads": 108931,
+      "writes": 44847,
+      "actualRequestsPerSecond": 256.272,
+      "actualWritesPerSecond": 74.738,
+      "errors": 0,
+      "rejected429": 0,
+      "p95Ms": 61,
+      "p99Ms": 93
+    },
+    {
+      "index": 2,
+      "concurrency": 20,
+      "configuredSeconds": 600,
+      "thinkTimeMs": 0,
+      "startedAt": "2026-10-20T04:01:55.672Z",
+      "endedAt": "2026-10-20T04:11:55.694Z",
+      "measuredSeconds": 600.022,
+      "requests": 133833,
+      "reads": 94814,
+      "writes": 39019,
+      "actualRequestsPerSecond": 223.047,
+      "actualWritesPerSecond": 65.029,
+      "errors": 0,
+      "rejected429": 0,
+      "p95Ms": 200,
+      "p99Ms": 274
+    },
+    {
+      "index": 3,
+      "concurrency": 50,
+      "configuredSeconds": 600,
+      "thinkTimeMs": 0,
+      "startedAt": "2026-10-20T04:11:55.694Z",
+      "endedAt": "2026-10-20T04:21:55.901Z",
+      "measuredSeconds": 600.207,
+      "requests": 125140,
+      "reads": 88672,
+      "writes": 36468,
+      "actualRequestsPerSecond": 208.495,
+      "actualWritesPerSecond": 60.759,
+      "errors": 0,
+      "rejected429": 0,
+      "p95Ms": 438,
+      "p99Ms": 586
+    },
+    {
+      "index": 4,
+      "concurrency": 20,
+      "configuredSeconds": 5400,
+      "thinkTimeMs": 500,
+      "startedAt": "2026-10-20T04:21:55.901Z",
+      "endedAt": "2026-10-20T05:51:56.442Z",
+      "measuredSeconds": 5400.541,
+      "requests": 207621,
+      "reads": 147069,
+      "writes": 60552,
+      "actualRequestsPerSecond": 38.444,
+      "actualWritesPerSecond": 11.212,
+      "errors": 0,
+      "rejected429": 0,
+      "p95Ms": 108,
+      "p99Ms": 149
+    }
+  ],
+  "resources": {
+    "sampleCount": 122,
+    "validMemorySamples": 122,
+    "maxSampledApiMemoryBytes": 528482304,
+    "maxSampledCpuPercent": 111.7,
+    "maxSampledPids": 36,
+    "lifetimeCgroupPeakMemoryBytes": 942723072,
+    "memoryLimitBytes": 1073741824,
+    "enduranceMemory": {
+      "firstThirtyMinutes": {
+        "count": 30,
+        "min": 398668595.2,
+        "max": 435263897.6,
+        "mean": 417329752.747,
+        "median": 416861388.8
+      },
+      "lastThirtyMinutes": {
+        "count": 30,
+        "min": 473641779.2,
+        "max": 528482304,
+        "mean": 509272391.68,
+        "median": 510184652.8
+      },
+      "medianChangeBytes": 93323264,
+      "medianChangePercent": 22.387
+    }
+  },
+  "jobs": {
+    "sampleCount": 123,
+    "maxPending": 14,
+    "maxOldestWaitingMs": 325,
+    "maxFailed": 0,
+    "finalPending": 1,
+    "finalOldestWaitingMs": 0,
+    "finalFailed": 0
+  },
+  "ai": {
+    "finalSupport": {
+      "queued": 0,
+      "running": 0,
+      "failed": 121
+    },
+    "finalDocuments": {
+      "queued": 0,
+      "extracting": 0,
+      "indexing": 0,
+      "failed": 1
+    },
+    "providerModes": {
+      "http429": 31,
+      "invalid_json": 31,
+      "timeout": 30,
+      "http503": 30
+    },
+    "drain": {
+      "drained": true,
+      "elapsedSeconds": 0.005,
+      "errorPresent": false,
+      "noPendingSupport": true,
+      "noPendingDocuments": true
+    },
+    "maxSampledSupportQueued": 0,
+    "maxSampledSupportRunning": 1,
+    "faultInjectionFailureCount": 0,
+    "supportFaultEnqueued": true,
+    "documentFaultOverlappedOrdinaryLoad": true,
+    "providerRecoveryTested": false
+  },
+  "containers": {
+    "api": {
+      "initialHealthy": true,
+      "finalHealthy": true,
+      "sameId": true,
+      "initialRestartCount": 0,
+      "finalRestartCount": 0,
+      "finalOomKilled": false,
+      "initialStartedAt": "2026-10-20T03:50:18.701Z",
+      "finalStartedAt": "2026-10-20T03:50:18.701Z",
+      "sameStartedAt": true,
+      "passed": true
+    },
+    "web": {
+      "initialHealthy": true,
+      "finalHealthy": true,
+      "sameId": true,
+      "initialRestartCount": 0,
+      "finalRestartCount": 0,
+      "finalOomKilled": false,
+      "initialStartedAt": "2026-10-20T03:50:24.428Z",
+      "finalStartedAt": "2026-10-20T03:50:24.428Z",
+      "sameStartedAt": true,
+      "passed": true
+    },
+    "provider": {
+      "initialHealthy": true,
+      "finalHealthy": true,
+      "sameId": true,
+      "initialRestartCount": 0,
+      "finalRestartCount": 0,
+      "finalOomKilled": false,
+      "initialStartedAt": "2026-10-20T03:50:18.505Z",
+      "finalStartedAt": "2026-10-20T03:50:18.505Z",
+      "sameStartedAt": true,
+      "passed": true
+    }
+  },
+  "backupWindows": {
+    "completeBackupsInLoad": 3,
+    "dropped": 0,
+    "windows": [
+      {
+        "index": 1,
+        "startedAt": "2026-10-20T03:54:20.430Z",
+        "durationMs": 13754,
+        "bytes": 71864320,
+        "entirelyWithinLoad": true,
+        "automaticHelperPassed": true,
+        "helperFailureCount": 0,
+        "overlap": {
+          "fullyWithinLoad": true,
+          "requests": 3512,
+          "writes": 1023,
+          "errors": 0,
+          "rejected429": 0,
+          "dropped": 0,
+          "p95Ms": 61.492919921875,
+          "p99Ms": 79.953369140625,
+          "maxMs": 133.854736328125,
+          "startedInWindow": 3507,
+          "finishedInWindow": 3506
+        },
+        "context": {
+          "fullyWithinLoad": true,
+          "requests": 3909,
+          "writes": 1140,
+          "errors": 0,
+          "rejected429": 0,
+          "dropped": 0,
+          "p95Ms": 60.34765625,
+          "p99Ms": 79.34765625,
+          "maxMs": 133.854736328125,
+          "startedInWindow": 3904,
+          "finishedInWindow": 3904
+        },
+        "manuallyGatedTargetsPassed": true
+      },
+      {
+        "index": 2,
+        "startedAt": "2026-10-20T04:14:21.362Z",
+        "durationMs": 41836,
+        "bytes": 241418240,
+        "entirelyWithinLoad": true,
+        "automaticHelperPassed": true,
+        "helperFailureCount": 0,
+        "overlap": {
+          "fullyWithinLoad": true,
+          "requests": 7163,
+          "writes": 2085,
+          "errors": 0,
+          "rejected429": 0,
+          "dropped": 0,
+          "p95Ms": 485.27978515625,
+          "p99Ms": 2345.218017578125,
+          "maxMs": 3768.902099609375,
+          "startedInWindow": 7114,
+          "finishedInWindow": 7113
+        },
+        "context": {
+          "fullyWithinLoad": true,
+          "requests": 7417,
+          "writes": 2160,
+          "errors": 0,
+          "rejected429": 0,
+          "dropped": 0,
+          "p95Ms": 486.99951171875,
+          "p99Ms": 2341.620849609375,
+          "maxMs": 3768.902099609375,
+          "startedInWindow": 7367,
+          "finishedInWindow": 7367
+        },
+        "manuallyGatedTargetsPassed": true
+      },
+      {
+        "index": 3,
+        "startedAt": "2026-10-20T05:23:22.401Z",
+        "durationMs": 62409,
+        "bytes": 375447552,
+        "entirelyWithinLoad": true,
+        "automaticHelperPassed": true,
+        "helperFailureCount": 0,
+        "overlap": {
+          "fullyWithinLoad": true,
+          "requests": 2351,
+          "writes": 683,
+          "errors": 0,
+          "rejected429": 0,
+          "dropped": 0,
+          "p95Ms": 129.04931640625,
+          "p99Ms": 214.96435546875,
+          "maxMs": 2015.72119140625,
+          "startedInWindow": 2346,
+          "finishedInWindow": 2351
+        },
+        "context": {
+          "fullyWithinLoad": true,
+          "requests": 2390,
+          "writes": 694,
+          "errors": 0,
+          "rejected429": 0,
+          "dropped": 0,
+          "p95Ms": 129.04931640625,
+          "p99Ms": 214.96435546875,
+          "maxMs": 2015.72119140625,
+          "startedInWindow": 2390,
+          "finishedInWindow": 2390
+        },
+        "manuallyGatedTargetsPassed": true
+      }
+    ]
+  },
+  "liveVerification": {
+    "verified": true,
+    "checks": {
+      "readOnlySnapshot": true,
+      "integrity": true,
+      "foreignKeys": true,
+      "historicalOrdersUnchanged": true,
+      "baselineCommandsPreserved": true,
+      "completedJobsPreserved": true,
+      "nonnegativeStocks": true,
+      "perSkuStockEqualsInventoryDeltas": true,
+      "reservationsWithinStock": true,
+      "validOrderItems": true,
+      "skuProjection": true,
+      "orderItemProjection": true,
+      "validMoney": true,
+      "paymentExactlyOnce": true,
+      "refundExactlyOnce": true,
+      "purchaseExactlyOnce": true,
+      "noOrphanLedger": true,
+      "noOrphanOwnership": true,
+      "financeBalance": true,
+      "commandHistoryRetained": true
+    },
+    "counts": {
+      "users": 51,
+      "products": 24,
+      "skus": 48,
+      "orders": 27292,
+      "history": 10000,
+      "orderItems": 27292,
+      "inventory": 17270,
+      "ledger": 27220,
+      "refunds": 8598,
+      "commandResults": 191128
+    },
+    "generatedOrdersExcludingSeed": 17242,
+    "amounts": {
+      "payment": "354017800",
+      "refund": "343060200",
+      "purchase": "0",
+      "net": "10957600"
+    },
+    "digests": {
+      "history": "72822cfc0eaf2c01bf867dc9d958b8b595223e8f647a223fb007ff3d2d19e15c",
+      "baselineCommands": "7068819685aa6f0caf261344661390b1448b15e5b2d92f9ae21be3d225cf40b6",
+      "completedJobs": "a66abb29779a2c268ae7a42d102cdade7ee8384a1f12cc42315dc864fd5b3966",
+      "orders": "2f791e3da822b06de5a1c4d5dc7e097d734a32405a003a034e4384794f60867d",
+      "inventory": "87ef7e4a856c14cd20f2c8c882024df320eea4ec2cc693554018599a119ad5be",
+      "ledger": "3d1e6043753f2b7375169b1fb72e873e5edf4b4079c5a5d6dc3e3a3d56e5fb18",
+      "finance": "36cadafe5b13e9ae42bd6f054434067891b67f24bf12a978039c135c56cd8425"
+    },
+    "postLoadGeneratedStatuses": {
+      "cancelled": 8611,
+      "paid": 24,
+      "pending": 9,
+      "refunded": 8598
+    },
+    "statusSnapshotScope": "Post-load read-only snapshot; automatic expiry may advance statuses after measurement."
+  },
+  "limitations": [
+    "70/20/10 describes loop steps; actual HTTP fractions include extra transaction detail reads.",
+    "Closed-loop capacity phases and 500ms endurance think time do not establish open-loop capacity or an SLA.",
+    "Writes include cart, quote and transaction mutations; writes per second are not checkout throughput.",
+    "Memory metrics cover the API container including child processes; other-container resource peaks are not measured. Queue metrics are periodic snapshots; lifetime cgroup peak may include startup and transient details may be missed.",
+    "First/last endurance memory windows are descriptive and confounded by dataset growth and caches; they do not establish a memory leak or its absence.",
+    "Expected AI failures are separate from ordinary HTTP failures; the deliberately failing provider does not test recovery to a healthy upstream.",
+    "Filesystem replica verification does not prove physical off-host disaster recovery.",
+    "This summary does not replace backup/replica/restored database verification, RTO measurement or final-SHA CI."
+  ]
+}

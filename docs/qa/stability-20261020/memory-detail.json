@@ -1,0 +1,28 @@
+{
+  "scope": "Post-load point-in-time classification; does not classify the earlier peak",
+  "cgroupBytes": {
+    "inactiveFile": 602112,
+    "dirty": 0,
+    "anonymous": 83148800,
+    "kernel": 16465920,
+    "activeFile": 378093568,
+    "file": 378695680,
+    "writeback": 0
+  },
+  "processKiB": {
+    "anonymousRss": 71108,
+    "swap": 0,
+    "rssHighWater": 285264,
+    "rss": 147840,
+    "fileRss": 76732
+  },
+  "threads": 12,
+  "events": {
+    "max": 0,
+    "oom_group_kill": 0,
+    "low": 0,
+    "high": 0,
+    "oom_kill": 0,
+    "oom": 0
+  }
+}

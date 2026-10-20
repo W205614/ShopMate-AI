@@ -1,0 +1,10 @@
+{
+  "allEqual": true,
+  "declaredSha256": "b0c7b1f0e4807f9ee18df147bbb359264424b852de0d6594662e639e40b34e72",
+  "hashes": {
+    "backups": "b0c7b1f0e4807f9ee18df147bbb359264424b852de0d6594662e639e40b34e72",
+    "restore": "b0c7b1f0e4807f9ee18df147bbb359264424b852de0d6594662e639e40b34e72",
+    "replica": "b0c7b1f0e4807f9ee18df147bbb359264424b852de0d6594662e639e40b34e72"
+  },
+  "offhostVerified": false
+}

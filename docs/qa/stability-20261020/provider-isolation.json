@@ -1,0 +1,9 @@
+{
+  "sourceCommit": "cf712796693ad774480135dd660c69b2a980fe6d",
+  "image": "sha256:8c1874ae781d245943c6a1e03a18eb70b3a4f1a49919ca9c8fea060c3e051b2f",
+  "llmBaseUrl": "http://provider:3099",
+  "embeddingBaseUrl": "http://provider:3099",
+  "rerankerEnabled": "false",
+  "syntheticKeysVerified": true,
+  "project": "shopmate-reliability-stability-v3-20261020"
+}

@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "image": "sha256:b2a5a01d95bd38fc8ab773bf932df8057b81de743f8ac86da43fa23053bb6ed1",
+  "sourceCommit": "fee6b2c15927851047a2350470357c1b0b03a222",
+  "sourceVolume": "shopmate-reliability-stability-v2-20261020_api_data",
+  "sourceMode": "stopped isolated API; volume mounted readonly; DatabaseSync readOnly query_only BEGIN SELECT revision",
+  "scope": "Serialized copy-only then independent integrity+revision; no full manifest inspector; idle source; no proof of loaded end-to-end backup SLA",
+  "measurements": [
+    {
+      "mode": "tmp-default",
+      "ratePages": 100,
+      "revision": 159130,
+      "pages": 70071,
+      "pageSize": 4096,
+      "logicalBytes": 287010816,
+      "mainFileBytes": 284741632,
+      "counts": {
+        "biz_orders": 21118,
+        "biz_ledger": 21042,
+        "command_results": 126114,
+        "job_queue": 48731
+      },
+      "copyMs": 834.788349,
+      "targetIntegrityAndRevisionMs": 2078.100793,
+      "combinedMs": 2912.889142,
+      "integrity": true,
+      "copyPages": 70071,
+      "targetBytes": 287010816
+    },
+    {
+      "mode": "bind-default",
+      "ratePages": 100,
+      "revision": 159130,
+      "pages": 70071,
+      "pageSize": 4096,
+      "logicalBytes": 287010816,
+      "mainFileBytes": 284741632,
+      "counts": {
+        "biz_orders": 21118,
+        "biz_ledger": 21042,
+        "command_results": 126114,
+        "job_queue": 48731
+      },
+      "copyMs": 79950.694383,
+      "targetIntegrityAndRevisionMs": 63902.38404199999,
+      "combinedMs": 143853.07842499999,
+      "integrity": true,
+      "copyPages": 70071,
+      "targetBytes": 287010816
+    },
+    {
+      "mode": "bind-large",
+      "ratePages": 10000,
+      "revision": 159130,
+      "pages": 70071,
+      "pageSize": 4096,
+      "logicalBytes": 287010816,
+      "mainFileBytes": 284741632,
+      "counts": {
+        "biz_orders": 21118,
+        "biz_ledger": 21042,
+        "command_results": 126114,
+        "job_queue": 48731
+      },
+      "copyMs": 77923.31878100001,
+      "targetIntegrityAndRevisionMs": 57836.39339,
+      "combinedMs": 135759.71217100002,
+      "integrity": true,
+      "copyPages": 70071,
+      "targetBytes": 287010816
+    }
+  ],
+  "preserved": "All existing daily, partial, profile files and profile containers retained"
+}

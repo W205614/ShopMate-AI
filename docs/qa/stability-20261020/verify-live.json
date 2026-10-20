@@ -1,0 +1,53 @@
+{
+  "verified": true,
+  "checks": {
+    "readOnlySnapshot": true,
+    "integrity": true,
+    "foreignKeys": true,
+    "historicalOrdersUnchanged": true,
+    "baselineCommandsPreserved": true,
+    "completedJobsPreserved": true,
+    "nonnegativeStocks": true,
+    "perSkuStockEqualsInventoryDeltas": true,
+    "reservationsWithinStock": true,
+    "validOrderItems": true,
+    "skuProjection": true,
+    "orderItemProjection": true,
+    "validMoney": true,
+    "paymentExactlyOnce": true,
+    "refundExactlyOnce": true,
+    "purchaseExactlyOnce": true,
+    "noOrphanLedger": true,
+    "noOrphanOwnership": true,
+    "financeBalance": true,
+    "commandHistoryRetained": true
+  },
+  "counts": {
+    "users": 51,
+    "products": 24,
+    "skus": 48,
+    "orders": 27292,
+    "history": 10000,
+    "orderItems": 27292,
+    "inventory": 17270,
+    "ledger": 27220,
+    "refunds": 8598,
+    "commandResults": 191128
+  },
+  "amounts": {
+    "payment": "354017800",
+    "refund": "343060200",
+    "purchase": "0",
+    "net": "10957600"
+  },
+  "reservations": "9",
+  "digests": {
+    "history": "72822cfc0eaf2c01bf867dc9d958b8b595223e8f647a223fb007ff3d2d19e15c",
+    "baselineCommands": "7068819685aa6f0caf261344661390b1448b15e5b2d92f9ae21be3d225cf40b6",
+    "completedJobs": "a66abb29779a2c268ae7a42d102cdade7ee8384a1f12cc42315dc864fd5b3966",
+    "orders": "2f791e3da822b06de5a1c4d5dc7e097d734a32405a003a034e4384794f60867d",
+    "inventory": "87ef7e4a856c14cd20f2c8c882024df320eea4ec2cc693554018599a119ad5be",
+    "ledger": "3d1e6043753f2b7375169b1fb72e873e5edf4b4079c5a5d6dc3e3a3d56e5fb18",
+    "finance": "36cadafe5b13e9ae42bd6f054434067891b67f24bf12a978039c135c56cd8425"
+  }
+}

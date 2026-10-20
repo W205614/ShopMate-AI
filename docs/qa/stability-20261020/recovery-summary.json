@@ -1,0 +1,67 @@
+{
+  "passed": true,
+  "scope": "offline new-path recovery and three read-only invariant/hash checks; not whole-host or service rebuild RTO",
+  "startedAt": "2026-10-20T05:53:00.32Z",
+  "verifiedAt": "2026-10-20T06:01:30.8021853Z",
+  "exerciseElapsedMs": 510482,
+  "restoreOnly": {
+    "restoreElapsedMs": 25228,
+    "exitCode": 0,
+    "scope": "offline new-path file restore and complete inspection; includes container startup; not whole-host service RTO"
+  },
+  "sha256": "b0c7b1f0e4807f9ee18df147bbb359264424b852de0d6594662e639e40b34e72",
+  "offhostVerified": false,
+  "copies": [
+    {
+      "report": "verify-backup.json",
+      "verified": true,
+      "checksPassed": 20,
+      "counts": {
+        "users": 51,
+        "products": 24,
+        "skus": 48,
+        "orders": 25468,
+        "history": 10000,
+        "orderItems": 25468,
+        "inventory": 15446,
+        "ledger": 25396,
+        "refunds": 7683,
+        "commandResults": 171916
+      }
+    },
+    {
+      "report": "verify-replica.json",
+      "verified": true,
+      "checksPassed": 20,
+      "counts": {
+        "users": 51,
+        "products": 24,
+        "skus": 48,
+        "orders": 25468,
+        "history": 10000,
+        "orderItems": 25468,
+        "inventory": 15446,
+        "ledger": 25396,
+        "refunds": 7683,
+        "commandResults": 171916
+      }
+    },
+    {
+      "report": "verify-restored.json",
+      "verified": true,
+      "checksPassed": 20,
+      "counts": {
+        "users": 51,
+        "products": 24,
+        "skus": 48,
+        "orders": 25468,
+        "history": 10000,
+        "orderItems": 25468,
+        "inventory": 15446,
+        "ledger": 25396,
+        "refunds": 7683,
+        "commandResults": 171916
+      }
+    }
+  ]
+}

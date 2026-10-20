@@ -1,0 +1,31 @@
+{
+  "kind": "hot-mounted-source-profiling-only-not-final-artifact-acceptance",
+  "sourceCommit": "cf712796693ad774480135dd660c69b2a980fe6d",
+  "sourceCodeUnchanged": true,
+  "sourceDatabaseUnchanged": true,
+  "priorBackupPairUnchanged": true,
+  "container": "shopmate-reliability-stability-v2-20261020-profile-full-114800",
+  "memoryLimitBytes": 1073741824,
+  "networkMode": "none",
+  "sourceVolumeReadOnly": true,
+  "hostSourceReadOnly": true,
+  "exitCode": 0,
+  "oomKilled": false,
+  "timeoutMs": 120000,
+  "childHeapMb": 192,
+  "pipelineWallMs": 45407.02501500001,
+  "phaseDurationsMs": {
+    "backup": 275,
+    "copy": 865,
+    "verify": 3465,
+    "publish": 7833,
+    "retention": 10395,
+    "replica": 22572
+  },
+  "sha256": "ebf69344fc8964322213f3d1a765330ad98bcaa9d4ba8d993a7605fda6c748c3",
+  "hashesEqual": true,
+  "bytes": 287010816,
+  "snapshotRevision": 159130,
+  "scope": "Frozen stopped v2 data; one copied prior valid47MB backup plus new287MB backup retained; full receiving replica validation; no load",
+  "verified": true
+}

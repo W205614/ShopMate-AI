@@ -1,0 +1,53 @@
+{
+  "passed": true,
+  "base": "http://127.0.0.1:18090",
+  "startedAt": "2026-10-20T03:08:39.622Z",
+  "completedAt": "2026-10-20T03:09:06.572Z",
+  "stages": {
+    "hotspot": {
+      "concurrent": 50,
+      "statuses": {
+        "200": 10,
+        "400": 40
+      },
+      "reservedOrders": 10,
+      "availableStock": 0
+    },
+    "replay": {
+      "paymentRequests": 50,
+      "paymentEntries": 1,
+      "refundRequests": 50,
+      "refundEntries": 1,
+      "restoredStock": 10,
+      "foreignRequestVisible": false
+    },
+    "crash": {
+      "lostResponseRecovered": true,
+      "replayOrderId": "SM0878841a7eac49ac80040d1c89f0af6e",
+      "committedResultSurvivesKill": true,
+      "uncommittedTransactionRolledBack": true,
+      "integrity": "ok"
+    },
+    "lock": {
+      "waitMs": 5017,
+      "status": 503,
+      "code": "DATABASE_BUSY",
+      "originalRequestRetrySucceeded": true
+    },
+    "authentication": {
+      "concurrent": 50,
+      "statuses": {
+        "401": 10,
+        "429": 40
+      },
+      "oomKilled": false,
+      "healthyAfter": true
+    },
+    "final": {
+      "reconciliationBalanced": true,
+      "containerId": "cfe62fd5711bf002924aa585547f5b0bfca49c1a9440d7c91c28c3b88242d040",
+      "imageId": "sha256:b2a5a01d95bd38fc8ab773bf932df8057b81de743f8ac86da43fa23053bb6ed1",
+      "initialImageId": "sha256:b2a5a01d95bd38fc8ab773bf932df8057b81de743f8ac86da43fa23053bb6ed1"
+    }
+  }
+}

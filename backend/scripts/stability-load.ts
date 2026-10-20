@@ -207,6 +207,8 @@ async function resourceSample() {
         errors: requestStats.errors,
         rejected: requestStats.rejected,
         p95Ms: pct(histogram, requestStats.requests, 0.95),
+        pendingJobs: diag.jobs.pending,
+        oldestJobMs: diag.jobs.oldestWaitingMs,
       }),
     );
   } catch {

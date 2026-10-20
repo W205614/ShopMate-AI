@@ -8,9 +8,11 @@ type Diagnostics = {
   jobs: { failed: number; oldestWaitingMs: number };
   backup: {
     enabled: boolean;
+    replicaConfigured: boolean;
     lastSuccessAt: string | null;
     lastFailureAt: string | null;
     lastErrorCode: string | null;
+    lastReplicaSnapshotAt: string | null;
   };
 };
 export type Probe = {
@@ -45,6 +47,19 @@ export function evaluateProbe(probe: Probe, now = Date.now()) {
       )
         issues.push("BACKUP_STALE");
       if (backup.lastErrorCode) issues.push("BACKUP_FAILED");
+    }
+    // Local success must never mask a missing or older receiving-side recovery point,
+    // including a process exit between the local-created and replica-created messages.
+    if (backup.replicaConfigured) {
+      const replica = backup.lastReplicaSnapshotAt
+        ? Date.parse(backup.lastReplicaSnapshotAt)
+        : NaN;
+      if (
+        !Number.isFinite(replica) ||
+        replica > now ||
+        now - replica > 23 * 3600000
+      )
+        issues.push("REPLICA_STALE");
     }
   }
   return issues.sort();

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,11 +25,27 @@ beforeEach(() => {
   writeFileSync(pair + ".manifest.json", "manifest existence probe");
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   sql.close();
   rmSync(directory, { recursive: true, force: true });
 });
 
 describe("durable backup scheduling", () => {
+  it("reports replica configuration separately from a prior verified replica marker", () => {
+    vi.stubEnv("BACKUP_REPLICA_DIR", "");
+    const createdAt = new Date().toISOString();
+    recordBackupReplica(sql, createdAt, createdAt);
+    expect(readBackupStatus(sql)).toMatchObject({
+      replicaConfigured: false,
+      lastReplicaSnapshotAt: createdAt,
+    });
+    vi.stubEnv("BACKUP_REPLICA_DIR", "not-returned-private-receiver");
+    expect(readBackupStatus(sql).replicaConfigured).toBe(true);
+    expect(JSON.stringify(readBackupStatus(sql))).not.toContain(
+      "not-returned-private-receiver",
+    );
+  });
+
   it("retains the verified snapshot marker across restarts and schedules before 23 hours", () => {
     const now = Date.now();
     expect(automaticBackupDue(sql, now)).toBe(true);

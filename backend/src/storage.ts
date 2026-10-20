@@ -358,6 +358,9 @@ export function loadStoredDatabase(
   sql: DatabaseSync,
   scope?: DatabaseReadScope,
 ): Database {
+  // Lazy reads and later writes must share the range captured at creation time.
+  // Do not retain caller-owned selectors or key arrays that can subsequently change.
+  const readScope = scope === undefined ? undefined : structuredClone(scope);
   const meta = sql
     .prepare("SELECT version,revision FROM storage_meta WHERE id=1")
     .get() as { version: number; revision: number };
@@ -366,7 +369,7 @@ export function loadStoredDatabase(
     loaded: new Map(),
     original: new Map(),
     raw: new Map(),
-    scope,
+    scope: readScope,
   };
   snapshots.set(db, state);
   if (!readers.has(sql)) readers.set(sql, new Set());
@@ -381,7 +384,7 @@ export function loadStoredDatabase(
       configurable: true,
       get() {
         if (!state.loaded.has(name)) {
-          const rows = state.raw.get(name) ?? readRows(sql, name, scope);
+          const rows = state.raw.get(name) ?? readRows(sql, name, readScope);
           state.raw.delete(name);
           state.original.set(name, new Map(rows.map((r) => [r.key, r])));
           state.loaded.set(

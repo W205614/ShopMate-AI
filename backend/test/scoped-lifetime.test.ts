@@ -11,6 +11,8 @@ import { commerceApi, expirePendingOrders } from "../src/commerce";
 import { createSeed } from "../../shared/domain/seed";
 import type { Database } from "../../shared/domain/types";
 import { ensureRuntimeSchema } from "../src/runtime";
+import { dashboard } from "../src/dashboard";
+import type { DatabaseReadScope } from "../src/storage";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -75,6 +77,67 @@ function deliver(sql: ReturnType<typeof openDatabase>) {
 }
 
 describe("scoped snapshot lifetime and position ordering", () => {
+  it("captures owner, keys and order IDs before caller-owned selectors are mutated", () => {
+    const { sql, seed } = fixture();
+    try {
+      seed.carts.push({ ...seed.carts[0]!, id: "foreign", userId: "u2" });
+      writeDatabase(sql, seed);
+      const scope: DatabaseReadScope = {
+        pendingOnly: true,
+        orderIds: [seed.orders[0]!.id],
+        domains: { carts: { userId: "u1", keys: ["mine"] } },
+      };
+      const db = readDatabase(sql, scope);
+      scope.orderIds![0] = seed.orders[1]!.id;
+      scope.domains!.carts!.userId = "u2";
+      scope.domains!.carts!.keys![0] = "foreign";
+      expect(db.carts.map((cart) => cart.id)).toEqual(["mine"]);
+      expect(db.orders.map((order) => order.id)).toEqual([seed.orders[0]!.id]);
+      db.carts[0]!.quantity = 2;
+      db.revision++;
+      writeDatabase(sql, db);
+      expect(
+        sql
+          .prepare(
+            "SELECT json_extract(data,'$.quantity') quantity FROM biz_carts WHERE key='mine'",
+          )
+          .get()!.quantity,
+      ).toBe(2);
+      expect(
+        sql
+          .prepare(
+            "SELECT json_extract(data,'$.quantity') quantity FROM biz_carts WHERE key='foreign'",
+          )
+          .get()!.quantity,
+      ).toBe(1);
+      releaseSnapshot(db);
+    } finally {
+      sql.close();
+    }
+  });
+
+  it("reads dashboard revision without registering an unread snapshot for notification preservation", () => {
+    const { sql } = fixture();
+    try {
+      const revision = sql
+        .prepare("SELECT revision FROM storage_meta WHERE id=1")
+        .get()!.revision;
+      const queries = observeNotificationReads(sql);
+      expect(
+        dashboard(sql, {
+          id: "owner",
+          role: "admin",
+          name: "owner",
+          staffRole: "owner",
+        }).revision,
+      ).toBe(revision);
+      deliver(sql);
+      expect(queries).toEqual([]);
+    } finally {
+      sql.close();
+    }
+  });
+
   it("prepends a new order when every existing historical order is excluded", () => {
     const { sql, seed } = fixture();
     try {

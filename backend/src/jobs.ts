@@ -32,7 +32,7 @@ export function runDueJobs(
 ) {
   ensureRecurringJobs(sql);
   const at = options.now ?? Date.now(),
-    limit = Math.min(20, Math.max(1, options.batchSize ?? 10));
+    limit = Math.min(20, Math.max(1, options.batchSize ?? 20));
   const due = sql
     .prepare(
       "SELECT * FROM job_queue WHERE status='pending' AND run_after<=? ORDER BY run_after,id LIMIT ?",

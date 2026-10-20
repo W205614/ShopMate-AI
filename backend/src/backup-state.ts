@@ -40,6 +40,7 @@ export function readBackupStatus(sql: DatabaseSync) {
   const current = state(sql);
   return {
     enabled: Boolean(process.env.BACKUP_DIR),
+    replicaConfigured: Boolean(process.env.BACKUP_REPLICA_DIR),
     running: running.has(sql),
     lastSuccessAt: current?.last_success_at ?? null,
     lastFailureAt: current?.last_failure_at ?? null,

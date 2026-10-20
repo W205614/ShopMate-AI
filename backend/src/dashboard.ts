@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Order, Product, Session } from "../../shared/domain/types";
-import { readDatabase, queryPage, queryRecord } from "./database";
+import { queryPage, queryRecord } from "./database";
 import { permits } from "./permissions";
 import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
 
@@ -44,7 +44,6 @@ export function dashboard(sql: DatabaseSync, session: Session) {
         };
       })
     : [];
-  const db = readDatabase(sql, { pendingOnly: true });
   const lowStock =
     permits(session, "warehouse") || permits(session, "catalog")
       ? (
@@ -120,6 +119,6 @@ export function dashboard(sql: DatabaseSync, session: Session) {
     recentOrders: canOrders
       ? queryPage<Order>(sql, "orders", { pageSize: 5, sort: "newest" }).items
       : [],
-    revision: db.revision,
+    revision: scalar("SELECT revision AS n FROM storage_meta WHERE id=1"),
   };
 }

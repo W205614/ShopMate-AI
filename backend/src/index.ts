@@ -35,7 +35,7 @@ const expiryTimer = setInterval(() => {
   } catch (error) {
     console.error("订单超时处理失败", error);
   }
-}, 1000);
+}, 250);
 expiryTimer.unref();
 if (!sql.prepare("SELECT id FROM accounts WHERE role='admin'").get()) {
   const username = process.env.ADMIN_USERNAME ?? "admin";

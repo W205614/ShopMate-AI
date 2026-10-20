@@ -2,6 +2,8 @@
 
 首次 Docker 部署见 [README](../README.md)。本页用于开发、排查和维护，命令以 PowerShell 为例。
 
+开始阅读源码前，先看 [项目结构与脚本索引](project-structure.md)；其他资料见 [文档导航](README.md)。
+
 ## 配置与访问
 
 根目录 `.env` 从 `.env.example` 复制，已有配置应保留。`ADMIN_PASSWORD` 必须设置，不能上传凭据。首次启动初始化管理员，后续重启不会覆盖已有账号或密码。
@@ -79,6 +81,8 @@ PDF 文字提取在本地执行，扫描页和图片识别仍需模型 API，文
 
 按改动范围选择必要检查，已通过且代码未变时不重复扩大测试。以下为各类检查入口，不要求每次全部执行：
 
+仅修改文档或移动文件时，在仓库根目录运行 `node scripts/check-docs.mjs` 检查本地链接；该检查也会在 CI 中执行。
+
 ```powershell
 npm --prefix backend run typecheck
 npm --prefix backend test
@@ -93,7 +97,7 @@ npm --prefix frontend run test:e2e
 
 浏览器测试自动启动隔离后端与 Vite，种子和测试账号仅写入 `backend/.e2e/`，运行前释放 3001/5173 端口。Windows 默认使用已安装的 Edge；Linux 需在 `frontend` 目录先执行 `npx playwright install --with-deps chromium`。
 
-外部容器写入验收必须使用独立项目、镜像标签、端口和数据卷，不能指向日常部署。完整命令、环境变量及边界见 [联合验收](joint-acceptance.md)。日常环境只做健康与公开目录等只读检查。
+外部容器写入验收必须使用独立项目、镜像标签、端口和数据卷，不能指向日常部署。完整命令、环境变量及边界见 [联合验收](archive/joint-acceptance.md)。日常环境只做健康与公开目录等只读检查。
 
 ## 数据保存与升级
 
@@ -105,8 +109,4 @@ Compose 项目名为 `shopmate-ai`，SQLite 文件位于 API 容器 `/app/data/s
 
 ## 源码与详细记录
 
-- `backend/src/`：认证、HTTP 接口、权限及业务事务；`backend/test/`：单元与 HTTP 测试。
-- `shared/domain/`：共享类型、API 契约与商品种子。
-- `frontend/src/views/`：商城和后台页面；`frontend/src/services/`：HTTP 客户端及状态缓存。
-- `frontend/e2e/`：浏览器测试；`deploy/`：Nginx 和隔离部署配置。
-- [当前业务与接口](commerce-v4.md)、[分类搜索规则](catalogue.md)、[逐功能交付记录](incremental-delivery.md)、[设计记录](design.md)、[界面复审](ui-review.md)。
+目录职责、源码入口和脚本用途统一维护在 [项目结构](project-structure.md)；当前业务、验收证据与历史交付记录统一从 [文档导航](README.md) 查找。

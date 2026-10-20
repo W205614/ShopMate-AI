@@ -4,10 +4,7 @@ frontend/test-results/
 frontend/test-results-container/
 frontend/test-results-operations/
 frontend/playwright-report/
-.taste-skill/inspect/
-.taste-skill/page-audit/
-.taste-skill/assets/
-.taste-skill/*.png
+.taste-skill/
 .env
 .env.*
 !.env.example

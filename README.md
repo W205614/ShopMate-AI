@@ -171,10 +171,12 @@ LLM_API_KEY=填写你的服务端APIKey
 
 </details>
 
-后台与手机截图来自此前隔离验收环境，金额、订单及收货资料均为测试数据，新部署不会自动生成这些交易。历史验证记录见 [联合验收报告](docs/joint-acceptance.md)，本轮改造结果见 [可靠性验收](docs/reliability-acceptance.md)。
+后台与手机截图来自此前隔离验收环境，金额、订单及收货资料均为测试数据，新部署不会自动生成这些交易。历史验证记录见 [联合验收报告](docs/archive/joint-acceptance.md)，本轮改造结果见 [可靠性验收](docs/reliability-acceptance.md)。
 
 ## 更多文档
 
+- [项目结构与源码入口](docs/project-structure.md)：目录职责、源码阅读顺序、脚本索引与本地文件保留规则。
+- [完整文档导航](docs/README.md)：按开发、业务、运维、验收和历史归档查找资料。
 - [开发与运维](docs/development.md)：本地运行、配置、测试、密码维护和数据保存。
 - [AI 客服与知识库](docs/ai-support.md)：模型配置、知识上传发布、确认操作、任务恢复及接口。
 - [当前业务规则与接口](docs/commerce-v4.md)：预占、运费、营销积分、采购质检、权限及请求恢复。
@@ -182,6 +184,6 @@ LLM_API_KEY=填写你的服务端APIKey
 - [稳定性加固与专项验收](docs/stability-hardening.md)：本次实现、交易混合负载、恢复验证及上线边界。
 - [运行监控](docs/monitoring.md)：受限诊断、每分钟探测、三次确认告警、维护静默和副本配置。
 - [日常默认配置验收](docs/default-config-acceptance.md)：开启请求日志与自动备份的负载、恢复证据及复跑方法。
-- [联合验收与体验报告](docs/joint-acceptance.md)：测试证据、已知限制和后续建议。
+- [联合验收与体验报告](docs/archive/joint-acceptance.md)：测试证据、已知限制和后续建议。
 - [素材来源与许可](docs/assets.md)：图片署名及使用要求；原创业务代码尚未指定开源许可证。
 - [AI 客服接入验收](docs/ai-acceptance.md)：真实接口、八种格式、确认操作及备份恢复证据与边界。

@@ -1,5 +1,7 @@
 # 双端联合验收与体验记录
 
+> 历史归档：保留该阶段的实现和验收记录，其中的能力、接口与测试数量不代表当前版本。当前入口见 [文档导航](../README.md)。
+
 日期：2026-10-17。范围为已确认的 15 项双端补全及通用列表约定收尾，不包含新增业务模块。单店、模拟支付/退款/物流、现有 FAQ 和人工客服规则保持不变，不接模型或 Agent。
 
 ## 逐项交付与复测
@@ -38,11 +40,11 @@ JSON 证据由测试直接导出，包含订单/商品标识、实际下单次�
 
 本次先复用了 `shopmate-joint-20261017` 旧测试卷，6 项注册相关用例被现有每小时注册限流阻止，公开目录通过；保留失败日志、截图和 trace，未放宽限流。换全新隔离项目后一次 7 项通过，没有修改业务代码或原断言；通过后未继续重复写入验收。
 
-可核验文件：[实际金额/库存 JSON](qa/business-invariants.json)、[平板商品草稿及金额错误](qa/images/admin-product-draft-tablet.png)、[平板财务](qa/images/finance-tablet.png)、[桌面概览](qa/images/dashboard-1440.png)。关键手机截图如下：
+可核验文件：[实际金额/库存 JSON](../qa/business-invariants.json)、[平板商品草稿及金额错误](../qa/images/admin-product-draft-tablet.png)、[平板财务](../qa/images/finance-tablet.png)、[桌面概览](../qa/images/dashboard-1440.png)。关键手机截图如下：
 
-![手机结算：长地址、满减及实付](qa/images/checkout-coupon-phone.png)
+![手机结算：长地址、满减及实付](../qa/images/checkout-coupon-phone.png)
 
-![手机全退款订单与历史进度](qa/images/refunded-order-390.png)
+![手机全退款订单与历史进度](../qa/images/refunded-order-390.png)
 
 ## 故障、并发与列表验证边界
 

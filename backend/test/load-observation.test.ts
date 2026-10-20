@@ -180,6 +180,18 @@ describe("bounded load and backup observation", () => {
     expect(contextResult.backups[0].contextWindow.stats.p95Ms).toBe(3500);
     expect(contextResult.passed).toBe(false);
   });
+  it("rejects backup tail latency even when its P95 passes", () => {
+    const t = healthy();
+    for (let i = 0; i < 97; i++) t.record(5000, 5010, 200, false);
+    t.record(2000, 8001, 200, true);
+    t.record(2001, 8002, 200, false);
+    const result = analyzeBackupWindows(events(), t, options);
+    expect(result.backups[0].overlapWindow.stats.p95Ms).toBeLessThan(2000);
+    expect(result.backups[0].overlapWindow.stats.p99Ms).toBe(6001);
+    expect(result.passed).toBe(false);
+    expect(result.failures).toContain("Backup backup-a: overlap window P99 exceeds 5000ms");
+    expect(result.failures).toContain("Backup backup-a: context window P99 exceeds 5000ms");
+  });
   it("requires full backup and context coverage inside load, plus a write in each measured window", () => {
     expect(
       analyzeBackupWindows(

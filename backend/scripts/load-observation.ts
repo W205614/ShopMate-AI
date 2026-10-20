@@ -308,6 +308,8 @@ export function analyzeBackupWindows(
           windowFailures.push(`${label} window has 429 responses`);
         if (observed.stats.p95Ms > 2000)
           windowFailures.push(`${label} window P95 exceeds 2000ms`);
+        if (observed.stats.p99Ms > 5000)
+          windowFailures.push(`${label} window P99 exceeds 5000ms`);
       }
       for (const problem of windowFailures)
         fail(`Backup ${backupId}: ${problem}`);

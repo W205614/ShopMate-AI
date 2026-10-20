@@ -28,6 +28,60 @@ const phases = smoke
       { concurrency: 20, seconds: 5400, paceMs: 500 },
     ];
 const reportPath = process.env.LOAD_REPORT ?? ".delivery/stability/load.json";
+const containerNames = {
+  api: container,
+  web: container.replace(/-api-1$/, "-web-1"),
+  provider: container.replace(/-api-1$/, "-provider-1"),
+};
+interface ContainerEvidence {
+  id: string;
+  name: string;
+  restartCount: number;
+  state: {
+    Running: boolean;
+    OOMKilled: boolean;
+    Status: string;
+    Health?: { Status: string };
+  };
+}
+async function containerEvidence(): Promise<
+  Record<keyof typeof containerNames, ContainerEvidence>
+> {
+  const output = await execute(
+    "docker",
+    ["inspect", ...Object.values(containerNames)],
+    { timeout: 15000, maxBuffer: 2 * 1024 * 1024 },
+  );
+  const inspected = JSON.parse(output.stdout) as {
+    Id: string;
+    Name: string;
+    RestartCount: number;
+    State: ContainerEvidence["state"];
+  }[];
+  return Object.fromEntries(
+    Object.entries(containerNames).map(([role, name]) => {
+      const value = inspected.find((entry) => entry.Name === `/${name}`);
+      if (!value) throw new Error(`CONTAINER_EVIDENCE_MISSING_${role}`);
+      return [
+        role,
+        {
+          id: value.Id,
+          name,
+          restartCount: value.RestartCount,
+          state: value.State,
+        },
+      ];
+    }),
+  ) as Record<keyof typeof containerNames, ContainerEvidence>;
+}
+const healthy = (evidence: ContainerEvidence) =>
+  evidence.state.Running &&
+  !evidence.state.OOMKilled &&
+  evidence.state.Status === "running" &&
+  evidence.state.Health?.Status === "healthy";
+const initialContainers = await containerEvidence();
+if (!Object.values(initialContainers).every(healthy))
+  throw new Error("INITIAL_CONTAINERS_NOT_HEALTHY");
 const observer = await observeProductionLoad(container, base);
 const imageRevision = (
   await execute("docker", [
@@ -77,6 +131,7 @@ async function request(
   path: string,
   body?: unknown,
   fault = false,
+  timeoutMs = 15000,
 ) {
   const startedAt = Date.now(),
     start = performance.now();
@@ -86,7 +141,7 @@ async function request(
       method: body === undefined ? "GET" : "POST",
       headers: { ...headers, Cookie: cookie },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     status = response.status;
     const text = await response.text();
@@ -183,8 +238,8 @@ const action = (
     { args, requestId: crypto.randomUUID() },
     fault,
   ).then((r) => r.result);
-const diagnostics = () =>
-  request(admin, "/api/admin/diagnostics", undefined, true);
+const diagnostics = (timeoutMs = 15000) =>
+  request(admin, "/api/admin/diagnostics", undefined, true, timeoutMs);
 async function resourceSample() {
   try {
     const stats = await execute(
@@ -256,34 +311,44 @@ await resourceSample();
 const sampler = setInterval(() => {
   void resourceSample();
 }, 60000);
+let supportFault: Promise<void> | undefined;
 const faultTimer = setInterval(() => {
-  void injectFault();
+  supportFault = injectFault();
 }, 60000);
 await injectFault();
-// TXT indexing must fail safely while the ordinary load remains active.
-try {
-  await request(
-    admin,
-    "/api/support/documents",
-    {
-      name: "stability-fault.txt",
-      contentBase64: Buffer.from(
-        "这是隔离验收知识资料，不得发布。".repeat(80),
-      ).toString("base64"),
-      requestId: crypto.randomUUID(),
-    },
-    true,
-  );
-  faults.push({
-    event: "document_fault_enqueued",
-    at: new Date().toISOString(),
-  });
-} catch {
-  faults.push({
-    event: "document_fault_injection_failed",
-    at: new Date().toISOString(),
-  });
+async function injectDocumentFault() {
+  const uploadStartedAt = Date.now(),
+    ordinaryRequestsAtStart = requestStats.requests;
+  try {
+    await request(
+      admin,
+      "/api/support/documents",
+      {
+        name: "stability-fault.txt",
+        contentBase64: Buffer.from(
+          "这是隔离验收知识资料，不得发布。".repeat(80),
+        ).toString("base64"),
+        requestId: crypto.randomUUID(),
+      },
+      true,
+    );
+    faults.push({
+      event: "document_fault_enqueued",
+      at: new Date().toISOString(),
+      startedAt: new Date(uploadStartedAt).toISOString(),
+      ordinaryRequestsAtStart,
+      ordinaryRequestsAtEnd: requestStats.requests,
+      ordinaryLoadActive: recording,
+    });
+  } catch {
+    faults.push({
+      event: "document_fault_injection_failed",
+      at: new Date().toISOString(),
+    });
+  }
 }
+let documentFaultTimer: ReturnType<typeof setTimeout> | undefined;
+let documentFault: Promise<void> | undefined;
 
 interface Flow {
   quote?: string;
@@ -335,7 +400,7 @@ try {
           } else if (slot === 7) {
             await action(cookie, "updateCart", [
               `${uid}-cart-0`,
-              { selected: flow.iteration % 2 === 0 },
+              { selected: Math.floor((flow.iteration - 1) / 10) % 2 === 1 },
             ]);
           } else if (slot === 8) {
             const quote = await action(cookie, "quoteCheckout", [quoteInput]);
@@ -403,6 +468,10 @@ try {
         if (phase.paceMs) await pause(phase.paceMs);
       }
     }
+    if (!documentFaultTimer)
+      documentFaultTimer = setTimeout(() => {
+        documentFault = injectDocumentFault();
+      }, 5000);
     await Promise.all(
       Array.from({ length: phase.concurrency }, (_, index) => worker(index)),
     );
@@ -426,9 +495,12 @@ try {
 } finally {
   clearInterval(sampler);
   clearInterval(faultTimer);
+  clearTimeout(documentFaultTimer);
 }
 recording = false;
 const endedAt = Date.now();
+await supportFault;
+await documentFault;
 await resourceSample();
 const observation = await observer.finish();
 const backupWindows = analyzeBackupWindows(observation.events, timeline, {
@@ -436,27 +508,56 @@ const backupWindows = analyzeBackupWindows(observation.events, timeline, {
   loadEndedAt: endedAt,
   clockPaddingMs: observation.clockPaddingMs,
 });
-const state = JSON.parse(
-  (
-    await execute("docker", [
-      "inspect",
-      "--format",
-      "{{json .State}}",
-      container,
-    ])
-  ).stdout,
+// Queue settling is reported separately and never contributes to measured load latency.
+const drainStartedAt = Date.now(),
+  drainDeadline = drainStartedAt + 120000;
+let drainDiagnostics: any;
+let drainError: string | undefined;
+let drained = false;
+try {
+  while (Date.now() < drainDeadline) {
+    drainDiagnostics = await diagnostics(
+      Math.min(15000, Math.max(1, drainDeadline - Date.now())),
+    );
+    const pendingSupport = drainDiagnostics.ai.support.some(
+      (entry: any) =>
+        ["queued", "running"].includes(entry.status) && entry.count > 0,
+    );
+    const pendingDocuments = drainDiagnostics.ai.documents.some(
+      (entry: any) =>
+        ["queued", "extracting", "indexing"].includes(entry.status) &&
+        entry.count > 0,
+    );
+    if (!pendingSupport && !pendingDocuments) {
+      drained = true;
+      break;
+    }
+    await pause(Math.min(1000, Math.max(0, drainDeadline - Date.now())));
+  }
+} catch {
+  drainError = "QUEUE_DRAIN_OBSERVATION_FAILED";
+}
+const queueDrain = {
+  startedAt: new Date(drainStartedAt).toISOString(),
+  endedAt: new Date().toISOString(),
+  elapsedSeconds: (Date.now() - drainStartedAt) / 1000,
+  drained,
+  error: drainError,
+  diagnostics: drainDiagnostics,
+};
+const finalContainers = await containerEvidence();
+const containersHealthy = (
+  Object.keys(containerNames) as (keyof typeof containerNames)[]
+).every(
+  (role) =>
+    healthy(initialContainers[role]) &&
+    healthy(finalContainers[role]) &&
+    finalContainers[role].id === initialContainers[role].id &&
+    finalContainers[role].restartCount === initialContainers[role].restartCount,
 );
-const restartCount = Number(
-  (
-    await execute("docker", [
-      "inspect",
-      "--format",
-      "{{.RestartCount}}",
-      container,
-    ])
-  ).stdout.trim(),
-);
-const providerContainer = container.replace(/-api-1$/, "-provider-1");
+const state = finalContainers.api.state;
+const restartCount = finalContainers.api.restartCount;
+const providerContainer = containerNames.provider;
 const providerOutput = await execute(
   "docker",
   ["logs", "--since", new Date(startedAt).toISOString(), providerContainer],
@@ -472,10 +573,16 @@ for (const line of providerOutput.stdout.split(/\r?\n/)) {
     /* Ignore runtime notices. */
   }
 }
-const finalDiagnostics = (samples.at(-1) as any)?.diagnostics;
+const finalDiagnostics =
+  drainDiagnostics ?? (samples.at(-1) as any)?.diagnostics;
 const faultCoverage =
   faults.some((f: any) => f.event === "support_fault_enqueued") &&
-  faults.some((f: any) => f.event === "document_fault_enqueued") &&
+  faults.some(
+    (f: any) =>
+      f.event === "document_fault_enqueued" &&
+      f.ordinaryLoadActive &&
+      f.ordinaryRequestsAtStart > 0,
+  ) &&
   !faults.some((f: any) => f.event.includes("failed")) &&
   (smoke ||
     ["http429", "invalid_json", "timeout", "http503"].every(
@@ -487,12 +594,19 @@ const faultCoverage =
   finalDiagnostics?.ai.documents.some(
     (s: any) => s.status === "failed" && s.count > 0,
   );
-const queuesHealthy = samples.every(
-  (s: any) =>
-    s.diagnostics.jobs.failed === 0 &&
-    s.diagnostics.jobs.oldestWaitingMs <= 300000,
-);
+const queuesHealthy =
+  drainDiagnostics?.jobs.failed === 0 &&
+  drainDiagnostics?.jobs.oldestWaitingMs <= 300000 &&
+  samples.every(
+    (s: any) =>
+      s.diagnostics.jobs.failed === 0 &&
+      s.diagnostics.jobs.oldestWaitingMs <= 300000,
+  );
+const completedTransactions = flows.reduce((n, f) => n + f.transactions, 0);
 const passed =
+  completedTransactions > 0 &&
+  containersHealthy &&
+  queueDrain.drained &&
   !requestStats.errors &&
   !requestStats.rejected &&
   !errors.length &&
@@ -522,7 +636,15 @@ const report = {
   statusCounts,
   routes: normalRoutes,
   phases: results,
-  completedTransactions: flows.reduce((n, f) => n + f.transactions, 0),
+  completedTransactions,
+  containers: {
+    initial: initialContainers,
+    final: finalContainers,
+    healthy: containersHealthy,
+  },
+  queueDrain,
+  providerRecovery:
+    "not-tested: deliberately failing provider has no recovery mode",
   samples,
   faults,
   faultCoverage,

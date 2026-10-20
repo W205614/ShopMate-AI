@@ -10,7 +10,8 @@ import {
 const [source, destination, temporaryId, replicaDirectory] =
   process.argv.slice(2);
 let reader: DatabaseSync | undefined,
-  phase: "backup" | "retention" | "replica" = "backup";
+  phase: "backup" | "copy" | "verify" | "publish" | "retention" | "replica" =
+    "backup";
 const releaseSnapshot = () => {
   if (reader?.isTransaction) reader.exec("ROLLBACK");
   reader?.close();
@@ -29,17 +30,23 @@ try {
   const manifest = await backupDatabase(reader, destination, {
     reason: "daily",
     temporaryId,
+    onPhase: (next) => {
+      phase = next;
+      process.send?.({ type: "phase", phase });
+    },
     // Release WAL retention before hashing, integrity checks and retention scans.
     afterCopy: releaseSnapshot,
   });
   process.send?.({ type: "created", createdAt: manifest.createdAt });
   phase = "retention";
   process.send?.({ type: "phase", phase });
-  pruneDailyBackups(dirname(destination), 7);
+  pruneDailyBackups(dirname(destination), 7, { temporaryId });
   if (replicaDirectory) {
     phase = "replica";
     process.send?.({ type: "phase", phase });
-    const replica = copyBackupPair(destination, replicaDirectory);
+    const replica = copyBackupPair(destination, replicaDirectory, {
+      temporaryId,
+    });
     process.send?.({
       type: "replicated",
       copiedAt: replica.verifiedAt,

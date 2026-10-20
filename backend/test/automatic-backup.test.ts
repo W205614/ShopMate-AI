@@ -127,6 +127,12 @@ describe("automatic backup worker", () => {
       backupId: started.backupId,
       bytes: statSync(destination).size,
     });
+    expect(completed.phaseDurations).toMatchObject({
+      copy: expect.any(Number),
+      verify: expect.any(Number),
+      publish: expect.any(Number),
+      retention: expect.any(Number),
+    });
     expect(Number(completed.durationMs)).toBeGreaterThan(0);
     expect(Number.isFinite(Date.parse(String(completed.at)))).toBe(true);
     expect(JSON.stringify(logged(output))).not.toContain(directory);
@@ -154,6 +160,26 @@ describe("automatic backup worker", () => {
     await runAutomaticBackup(source, destination, created);
     expect(created).toHaveBeenCalledOnce();
     expect(logged(output)[1].backupId).not.toBe(logged(output)[0].backupId);
+  });
+
+  it("attributes a post-copy integrity or manifest failure to verification and clears local scratch", async () => {
+    sql.exec("DROP TABLE sessions; DROP TABLE accounts");
+    await expect(runAutomaticBackup(source, destination)).rejects.toThrow(
+      "BACKUP_WORKER_FAILED",
+    );
+    expect(logged(errors)[0]).toMatchObject({
+      phase: "verify",
+      phaseDurations: {
+        copy: expect.any(Number),
+        verify: expect.any(Number),
+      },
+    });
+    expect(
+      existsSync(
+        join(tmpdir(), `shopmate-backup-${logged(output)[0].backupId}`),
+      ),
+    ).toBe(false);
+    expect(existsSync(destination)).toBe(false);
   });
 
   it("has no queue, handles unexpected termination and permits another attempt", async () => {

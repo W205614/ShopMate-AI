@@ -14,8 +14,11 @@ import {
   closeSync,
   realpathSync,
   constants,
+  rmdirSync,
+  statSync,
 } from "node:fs";
 import { resolve, dirname, basename, join } from "node:path";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { tableFor } from "./storage";
 
@@ -35,9 +38,6 @@ export interface BackupManifest {
     ai?: string;
   };
 }
-const sha256 = (value: string | Buffer) =>
-  createHash("sha256").update(value).digest("hex");
-
 /** Document BLOBs can make snapshots large; never load the SQLite file into memory. */
 function fileSha256(path: string) {
   const hash = createHash("sha256"),
@@ -122,6 +122,34 @@ const backupFiles = (path: string) => [
   `${path}-journal`,
 ];
 
+export function backupScratchDirectory(temporaryId: string) {
+  if (!/^[a-zA-Z0-9-]+$/.test(temporaryId)) throw new Error("备份临时标识无效");
+  return join(tmpdir(), `shopmate-backup-${temporaryId}`);
+}
+
+/** Only these files belong to the exclusively created staging directory. */
+export function cleanBackupScratch(temporaryId: string) {
+  const directory = backupScratchDirectory(temporaryId);
+  for (const name of ["snapshot.sqlite", "inspection.sqlite"])
+    for (const file of backupFiles(join(directory, name)))
+      if (existsSync(file)) unlinkSync(file);
+  if (existsSync(directory)) rmdirSync(directory);
+}
+
+function hashRowArray(
+  hash: ReturnType<typeof createHash>,
+  rows: Iterable<unknown>,
+) {
+  hash.update("[");
+  let count = 0;
+  for (const row of rows) {
+    if (count++) hash.update(",");
+    hash.update(JSON.stringify(row));
+  }
+  hash.update("]");
+  return count;
+}
+
 function snapshotDetails(path: string, includeAi = true) {
   const sql = new DatabaseSync(path, { readOnly: true });
   try {
@@ -154,9 +182,9 @@ function snapshotDetails(path: string, includeAi = true) {
           .prepare(
             `SELECT key,position,data FROM ${tableFor(name)} ORDER BY key`,
           )
-          .all();
-        counts[name] = rows.length;
-        business.update(name).update(JSON.stringify(rows));
+          .iterate();
+        business.update(name);
+        counts[name] = hashRowArray(business, rows);
       }
     const legacy = meta
       ? undefined
@@ -171,12 +199,16 @@ function snapshotDetails(path: string, includeAi = true) {
       for (const [name, value] of Object.entries(legacyState))
         if (Array.isArray(value)) counts[name] = value.length;
     }
-    const accounts = sql.prepare("SELECT * FROM accounts ORDER BY id").all(),
-      sessions = sql
-        .prepare("SELECT * FROM sessions ORDER BY token_hash")
-        .all();
-    counts.accounts = accounts.length;
-    counts.sessions = sessions.length;
+    const accounts = createHash("sha256"),
+      sessions = createHash("sha256");
+    counts.accounts = hashRowArray(
+      accounts,
+      sql.prepare("SELECT * FROM accounts ORDER BY id").iterate(),
+    );
+    counts.sessions = hashRowArray(
+      sessions,
+      sql.prepare("SELECT * FROM sessions ORDER BY token_hash").iterate(),
+    );
     const ai = includeAi ? aiSnapshotDetails(sql, counts) : undefined;
     return {
       schemaVersion: meta?.schema_version ?? 0,
@@ -185,8 +217,8 @@ function snapshotDetails(path: string, includeAi = true) {
       counts,
       digests: {
         business: business.digest("hex"),
-        accounts: sha256(JSON.stringify(accounts)),
-        sessions: sha256(JSON.stringify(sessions)),
+        accounts: accounts.digest("hex"),
+        sessions: sessions.digest("hex"),
         ...(ai ? { ai } : {}),
       },
     };
@@ -195,24 +227,47 @@ function snapshotDetails(path: string, includeAi = true) {
   }
 }
 
-export function inspectBackup(path: string): BackupManifest {
+export function inspectBackup(
+  path: string,
+  options: { temporaryId?: string } = {},
+): BackupManifest {
   const manifest = JSON.parse(
     readFileSync(manifestPath(path), "utf8"),
   ) as BackupManifest;
+  const assertStandalone = () => {
+    for (const suffix of ["-wal", "-journal"])
+      if (existsSync(path + suffix) && statSync(path + suffix).size > 0)
+        throw new Error("BACKUP_NOT_SELF_CONTAINED");
+  };
+  assertStandalone();
   if (manifest.format !== 1 || manifest.sha256 !== fileSha256(path))
     throw new Error("备份校验和不匹配");
-  // Format 1 manifests created before AI support have neither its digest nor counts.
-  const details = snapshotDetails(path, manifest.digests.ai !== undefined);
-  for (const key of [
-    "schemaVersion",
-    "businessVersion",
-    "revision",
-    "counts",
-    "digests",
-  ] as const)
-    if (JSON.stringify(manifest[key]) !== JSON.stringify(details[key]))
-      throw new Error(`备份摘要不匹配: ${key}`);
-  return manifest;
+  const temporaryId = options.temporaryId ?? randomUUID(),
+    directory = backupScratchDirectory(temporaryId),
+    staged = join(directory, "inspection.sqlite");
+  // Full integrity and logical checks still apply to untrusted input. Sequential
+  // copy + SHA identity lets SQLite perform its random reads on fast local storage.
+  mkdirSync(directory, { mode: 0o700 });
+  try {
+    copyFileSync(path, staged, constants.COPYFILE_EXCL);
+    assertStandalone();
+    if (fileSha256(staged) !== manifest.sha256)
+      throw new Error("备份校验和不匹配");
+    // Format 1 manifests created before AI support have neither its digest nor counts.
+    const details = snapshotDetails(staged, manifest.digests.ai !== undefined);
+    for (const key of [
+      "schemaVersion",
+      "businessVersion",
+      "revision",
+      "counts",
+      "digests",
+    ] as const)
+      if (JSON.stringify(manifest[key]) !== JSON.stringify(details[key]))
+        throw new Error(`备份摘要不匹配: ${key}`);
+    return manifest;
+  } finally {
+    cleanBackupScratch(temporaryId);
+  }
 }
 
 export interface BackupRecoveryPoint {
@@ -227,8 +282,11 @@ export interface BackupRecoveryPoint {
 }
 
 /** Reverify at the receiving filesystem before recording a usable recovery point. */
-export function verifyBackupReplica(path: string): BackupRecoveryPoint {
-  const manifest = inspectBackup(path);
+export function verifyBackupReplica(
+  path: string,
+  options: { temporaryId?: string } = {},
+): BackupRecoveryPoint {
+  const manifest = inspectBackup(path, options);
   return {
     format: 1,
     kind: "filesystem-copy",
@@ -241,9 +299,13 @@ export function verifyBackupReplica(path: string): BackupRecoveryPoint {
 }
 
 /** Never overwrite a destination or prune replica/manual/upgrade evidence. */
-export function copyBackupPair(source: string, destinationDirectory: string) {
+export function copyBackupPair(
+  source: string,
+  destinationDirectory: string,
+  options: { temporaryId?: string } = {},
+) {
   const from = realpathSync(resolve(source));
-  inspectBackup(from);
+  inspectBackup(from, options);
   const directory = resolve(destinationDirectory);
   mkdirSync(directory, { recursive: true });
   if (realpathSync(directory) === realpathSync(dirname(from)))
@@ -262,7 +324,7 @@ export function copyBackupPair(source: string, destinationDirectory: string) {
       copyFileSync(origin, target, constants.COPYFILE_EXCL);
       owned.push(target);
     }
-    const point = verifyBackupReplica(destination);
+    const point = verifyBackupReplica(destination, options);
     writeFileSync(recordPath, JSON.stringify(point, null, 2), {
       flag: "wx",
       mode: 0o600,
@@ -284,21 +346,50 @@ export async function backupDatabase(
     reason?: BackupManifest["reason"];
     afterCopy?: () => void;
     temporaryId?: string;
+    onPhase?: (phase: "copy" | "verify" | "publish") => void;
   } = {},
 ) {
   const temporaryId = options.temporaryId ?? randomUUID();
   if (!/^[a-zA-Z0-9-]+$/.test(temporaryId)) throw new Error("备份临时标识无效");
   const path = resolve(destination),
-    temporary = `${path}.partial-${temporaryId}`;
+    temporary = `${path}.partial-${temporaryId}`,
+    scratchDirectory = backupScratchDirectory(temporaryId),
+    scratch = join(scratchDirectory, "snapshot.sqlite");
   if (existsSync(path) || existsSync(manifestPath(path)))
     throw new Error("备份目标已存在，请使用新的文件名");
   mkdirSync(dirname(path), { recursive: true });
+  let ownsScratch = false,
+    ownsRead = false;
+  const releaseRead = () => {
+    if (ownsRead && sql.isOpen && sql.isTransaction) sql.exec("ROLLBACK");
+    ownsRead = false;
+  };
   try {
-    await backup(sql, temporary);
+    // The worker supplies a read-only transaction. Reject ambiguous caller write
+    // transactions: node:sqlite would otherwise keep retrying SQLITE_LOCKED.
+    if (
+      sql.isTransaction &&
+      !sql.prepare("PRAGMA query_only").get()?.query_only
+    )
+      throw new Error("BACKUP_SOURCE_TRANSACTION_UNSAFE");
+    if (!sql.isTransaction) {
+      sql.exec("BEGIN");
+      ownsRead = true;
+    }
+    // A deferred BEGIN alone does not pin a WAL snapshot.
+    sql.prepare("SELECT name FROM sqlite_master LIMIT 1").get();
+    mkdirSync(scratchDirectory, { mode: 0o700 });
+    ownsScratch = true;
+    options.onPhase?.("copy");
+    // SQLite performs small random page I/O; keep it on the container's local
+    // filesystem rather than a Docker Desktop host bind or network receiver.
+    await backup(sql, scratch);
+    releaseRead();
     options.afterCopy?.();
+    options.onPhase?.("verify");
     // Only this attempt owns the copied file. Make it self-contained before hashing;
     // later read-only inspections must not recreate persistent WAL/SHM sidecars.
-    const copied = new DatabaseSync(temporary);
+    const copied = new DatabaseSync(scratch);
     try {
       if (
         copied.prepare("PRAGMA journal_mode=DELETE").get()?.journal_mode !==
@@ -312,24 +403,36 @@ export async function backupDatabase(
       format: 1,
       createdAt: new Date().toISOString(),
       reason: options.reason ?? "manual",
-      sha256: fileSha256(temporary),
-      ...snapshotDetails(temporary),
+      sha256: fileSha256(scratch),
+      ...snapshotDetails(scratch),
     };
+    options.onPhase?.("publish");
+    copyFileSync(scratch, temporary, constants.COPYFILE_EXCL);
+    if (fileSha256(temporary) !== manifest.sha256)
+      throw new Error("BACKUP_PUBLISH_CHECKSUM_MISMATCH");
     writeFileSync(manifestPath(temporary), JSON.stringify(manifest, null, 2), {
       flag: "wx",
       mode: 0o600,
     });
     renameSync(temporary, path);
     renameSync(manifestPath(temporary), manifestPath(path));
-    return inspectBackup(path);
+    // The published bytes equal the fully validated local snapshot. Reopening
+    // SQLite here would repeat slow random reads on the receiving filesystem.
+    return manifest;
   } finally {
+    releaseRead();
     for (const partial of backupFiles(temporary))
       if (existsSync(partial)) unlinkSync(partial);
+    if (ownsScratch) cleanBackupScratch(temporaryId);
   }
 }
 
 /** Only daily files with our manifest are retained; upgrade and manual evidence is never pruned. */
-export function pruneDailyBackups(directory: string, keep = 7) {
+export function pruneDailyBackups(
+  directory: string,
+  keep = 7,
+  options: { temporaryId?: string } = {},
+) {
   if (!Number.isSafeInteger(keep) || keep < 1)
     throw new Error("备份保留数无效");
   if (!existsSync(directory)) return [];
@@ -338,7 +441,7 @@ export function pruneDailyBackups(directory: string, keep = 7) {
     .flatMap((name) => {
       const path = join(directory, name);
       try {
-        const manifest = inspectBackup(path);
+        const manifest = inspectBackup(path, options);
         return manifest.reason === "daily"
           ? [{ path, createdAt: manifest.createdAt }]
           : [];

@@ -3,6 +3,7 @@ import { fork, type ChildProcess } from "node:child_process";
 import { access, rm } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cleanBackupScratch } from "./maintenance";
 
 let active: ChildProcess | undefined,
   running = false;
@@ -34,7 +35,17 @@ export async function runAutomaticBackup(
     path = resolve(destination);
   let phase = "backup",
     created = false,
-    ownsTarget = false;
+    ownsTarget = false,
+    ownsScratch = false,
+    phaseStarted = started;
+  const phaseDurations: Record<string, number> = {};
+  const enterPhase = (next: string) => {
+    const now = performance.now();
+    phaseDurations[phase] =
+      (phaseDurations[phase] ?? 0) + Math.round(now - phaseStarted);
+    phaseStarted = now;
+    phase = next;
+  };
   const event = (name: string, fields: Record<string, unknown> = {}) =>
     JSON.stringify({
       level: name === "backup_failed" ? "error" : "info",
@@ -54,7 +65,7 @@ export async function runAutomaticBackup(
       throw new Error("BACKUP_TARGET_EXISTS");
     ownsTarget = true;
     const env = Object.fromEntries(
-      ["PATH", "TZ", "TEMP", "TMP", "SystemRoot"]
+      ["PATH", "TZ", "TEMP", "TMP", "TMPDIR", "SystemRoot"]
         .filter((key) => process.env[key] !== undefined)
         .map((key) => [key, process.env[key]!]),
     );
@@ -112,10 +123,13 @@ export async function runAutomaticBackup(
           }
         } else if (
           message.type === "phase" &&
-          (message.phase === "retention" || message.phase === "replica") &&
-          created
+          ((!created &&
+            ["copy", "verify", "publish"].includes(String(message.phase))) ||
+            (created &&
+              ["retention", "replica"].includes(String(message.phase))))
         ) {
-          phase = message.phase;
+          if (message.phase === "copy") ownsScratch = true;
+          enterPhase(String(message.phase));
         } else if (
           message.type === "replicated" &&
           phase === "replica" &&
@@ -141,10 +155,14 @@ export async function runAutomaticBackup(
             snapshotRevision: Number(message.snapshotRevision),
           };
         } else if (message.type === "failed") {
-          phase =
-            message.phase === "retention" || message.phase === "replica"
-              ? message.phase
-              : "backup";
+          const reported = String(message.phase);
+          if (
+            ["copy", "verify", "publish", "retention", "replica"].includes(
+              reported,
+            ) &&
+            reported !== phase
+          )
+            enterPhase(reported);
           failure =
             phase === "replica"
               ? "BACKUP_REPLICA_FAILED"
@@ -160,14 +178,21 @@ export async function runAutomaticBackup(
         else done(completed);
       });
     });
+    phaseDurations[phase] =
+      (phaseDurations[phase] ?? 0) +
+      Math.round(performance.now() - phaseStarted);
     console.log(
       event("backup_completed", {
         durationMs: Math.round(performance.now() - started),
         bytes: result.bytes,
+        phaseDurations,
       }),
     );
     return result;
   } catch (error) {
+    phaseDurations[phase] =
+      (phaseDurations[phase] ?? 0) +
+      Math.round(performance.now() - phaseStarted);
     const temporary = `${path}.partial-${backupId}`;
     await Promise.all(
       [
@@ -181,9 +206,17 @@ export async function runAutomaticBackup(
     // A killed child can leave the first final rename. Never remove an existing or complete pair.
     if (ownsTarget && !created && !(await exists(path + ".manifest.json")))
       await rm(path, { force: true }).catch(() => {});
+    if (ownsScratch) {
+      try {
+        cleanBackupScratch(backupId);
+      } catch {
+        /* preserve unexpected staging contents */
+      }
+    }
     console.error(
       event("backup_failed", {
         durationMs: Math.round(performance.now() - started),
+        phaseDurations,
         code: /^BACKUP_[A-Z_]+$/.test((error as Error).message)
           ? (error as Error).message
           : "BACKUP_WORKER_FAILED",

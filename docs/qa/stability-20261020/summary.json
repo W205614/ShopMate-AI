@@ -208,13 +208,15 @@
       "name": "runtime.json",
       "present": true,
       "validJson": true,
-      "sha256": "250570f7e590283327a761e85b9a2053239911bff839d90cb5b4a98ed8b9bafc"
+      "sha256": "09d005f730777d5454bef33c98634ad115b547dcbe32990374acc750fa4d91e9",
+      "sourceRawSha256": "250570f7e590283327a761e85b9a2053239911bff839d90cb5b4a98ed8b9bafc"
     },
     {
       "name": "provider-isolation.json",
       "present": true,
       "validJson": true,
-      "sha256": "dadd2d6cf7ada1edaf37d77eabc76a37e0e6a5dc2c983c9b70d756e1756ee12d"
+      "sha256": "50313001798390eafa8eff344824409840d21e6ecebf86eb5f5231f136514c64",
+      "sourceRawSha256": "dadd2d6cf7ada1edaf37d77eabc76a37e0e6a5dc2c983c9b70d756e1756ee12d"
     },
     {
       "name": "runtime-final.json",
@@ -226,7 +228,8 @@
       "name": "transaction-branches.json",
       "present": true,
       "validJson": true,
-      "sha256": "32af844da9b50c505a4a0901f24535eed4418f58ba071a97ea3f4262a4fbf62a"
+      "sha256": "c690e8d8455ecc54d030db98902c30ef004ddeed37326560c83ba7b2f2b5e855",
+      "sourceRawSha256": "32af844da9b50c505a4a0901f24535eed4418f58ba071a97ea3f4262a4fbf62a"
     }
   ],
   "provenance": {
@@ -640,5 +643,6 @@
     "Expected AI failures are separate from ordinary HTTP failures; the deliberately failing provider does not test recovery to a healthy upstream.",
     "Filesystem replica verification does not prove physical off-host disaster recovery.",
     "This summary does not replace backup/replica/restored database verification, RTO measurement or final-SHA CI."
-  ]
+  ],
+  "inputHashScope": "sha256: published UTF-8/LF evidence; sourceRawSha256: original run input before line-ending normalization"
 }

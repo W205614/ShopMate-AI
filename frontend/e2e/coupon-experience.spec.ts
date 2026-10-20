@@ -113,12 +113,21 @@ test("门槛差一分禁选且显示差额，恰好达标可用，价格下降�
   await expect(option).toBeEnabled();
   await page.goto("/checkout?productId=p01&skuId=p01-s1&quantity=1");
   await expect(option).toBeDisabled();
-  const product = (await state(page)).products.find(
+  const product = (await state(page, "admin")).products.find(
     (p: { id: string }) => p.id === "p01",
   );
-  await action(page, "saveProduct", {
+  const writableProduct = {
     ...product,
-    skus: product.skus.map((s: { id: string; price: number }) => ({
+    skus: product.skus.map(({ id, name, price, stock }) => ({
+      id,
+      name,
+      price,
+      stock,
+    })),
+  };
+  await action(page, "saveProduct", {
+    ...writableProduct,
+    skus: writableProduct.skus.map((s) => ({
       ...s,
       price: s.id === "p01-s1" ? 39901 : s.price,
     })),
@@ -131,7 +140,13 @@ test("门槛差一分禁选且显示差额，恰好达标可用，价格下降�
   await expect(
     page.getByRole("button", { name: "提交订单", exact: true }),
   ).toBeEnabled();
-  await action(page, "saveProduct", product);
+  const currentProduct = (await state(page, "admin")).products.find(
+    (p: { id: string }) => p.id === product.id,
+  );
+  await action(page, "saveProduct", {
+    ...writableProduct,
+    version: currentProduct.version,
+  });
   await expect(option).toBeDisabled();
   await expect(
     page.getByText("门槛边界券：未达门槛，还差 ¥0.01", { exact: true }),
@@ -234,8 +249,28 @@ test("后台四页名称和启停状态筛选、刷新回退及停用后页码�
   await rows.getByRole("button", { name: "停用", exact: true }).click();
   await expect(page).not.toHaveURL(/page=2/);
   await expect(rows).toHaveCount(10);
-  await page.getByPlaceholder("搜索优惠券名称").fill("运营券 00");
+  // UUID tie-breaking can put any enabled coupon on the removed last page.
+  // Search an exact name still present after that removal.
+  const searchName = (
+    await rows.first().locator("td").first().innerText()
+  ).trim();
+  const filtered = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/collections/coupons" &&
+      url.searchParams.get("search") === searchName &&
+      url.searchParams.get("status") === "active" &&
+      url.searchParams.get("page") === "1" &&
+      response.ok()
+    );
+  });
+  await page.getByPlaceholder("搜索优惠券名称").fill(searchName);
+  await filtered;
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("q"))
+    .toBe(searchName);
   await expect(rows).toHaveCount(1);
+  await expect(rows.first().locator("td").first()).toHaveText(searchName);
   await rows.getByRole("button", { name: "查看配置", exact: true }).click();
   await expect(page).toHaveURL(/detail=/);
   await page.reload();

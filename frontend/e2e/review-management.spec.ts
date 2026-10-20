@@ -73,15 +73,37 @@ test("全退历史优先于隐藏，拒绝陈旧恢复操作，用户仍可删�
     row.getByRole("button", { name: "恢复展示", exact: true }),
   ).toHaveCount(0);
   const before = await state(page);
+  const rejectionRequestId = crypto.randomUUID();
   expect(
     (
       await page.request.post("/api/actions/moderateReview", {
         headers,
-        data: { args: [review.id, false] },
+        data: { args: [review.id, false], requestId: rejectionRequestId },
       })
     ).status(),
   ).toBe(400);
-  expect(await state(page)).toEqual(before);
+  const after = await state(page);
+  const { auditEntries: beforeAudit = [], ...beforeBusiness } = before;
+  const { auditEntries: afterAudit = [], ...afterBusiness } = after;
+  expect(afterBusiness).toEqual(beforeBusiness);
+  expect(
+    afterAudit.filter((entry) =>
+      beforeAudit.some((old) => old.id === entry.id),
+    ),
+  ).toEqual(beforeAudit);
+  expect(
+    afterAudit.filter(
+      (entry) => !beforeAudit.some((old) => old.id === entry.id),
+    ),
+  ).toEqual([
+    expect.objectContaining({
+      actorId: "admin",
+      action: "moderateReview",
+      objectId: review.id,
+      requestId: rejectionRequestId,
+      result: "rejected:400",
+    }),
+  ]);
   const visible = await (
     await page.request.get(`/api/products/${line.productId}/reviews`)
   ).json();

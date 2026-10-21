@@ -1,0 +1,139 @@
+{
+  "startedAt": "2026-10-21T12:14:54.569Z",
+  "mode": "matrix",
+  "providerKind": "synthetic",
+  "syntheticDataOnly": true,
+  "base": "http://127.0.0.1:18104",
+  "cases": [
+    {
+      "id": "F07",
+      "category": "facts",
+      "name": "预算有货推荐",
+      "ok": true,
+      "outcome": "normal_answer",
+      "checks": [
+        {
+          "kind": "execution",
+          "ok": true,
+          "detail": "normal cases require completed AI output"
+        },
+        {
+          "kind": "product",
+          "ok": true,
+          "detail": "grounded product card"
+        },
+        {
+          "kind": "dynamicEvidence",
+          "ok": true,
+          "detail": "dynamic fact checks are required"
+        },
+        {
+          "kind": "fact",
+          "ok": true,
+          "detail": "each recommended live product has an in-budget available SKU"
+        }
+      ],
+      "expected": {
+        "dynamic": "budget",
+        "product": true
+      },
+      "elapsedMs": 1152,
+      "runId": "359de933-47d1-4f0f-b57b-34ac967ccc2b",
+      "runStatus": "completed",
+      "degraded": [],
+      "answer": {
+        "id": "ai-359de933-47d1-4f0f-b57b-34ac967ccc2b",
+        "role": "assistant",
+        "source": "ai",
+        "text": "有序 编织收纳篮，69元",
+        "createdAt": "2026-10-21T12:14:56.057Z",
+        "citations": [],
+        "productIds": [
+          "p08"
+        ]
+      },
+      "trace": {
+        "runIds": [
+          "359de933-47d1-4f0f-b57b-34ac967ccc2b"
+        ],
+        "retrievedSourceIds": [],
+        "modelCalls": [
+          {
+            "runId": "359de933-47d1-4f0f-b57b-34ac967ccc2b",
+            "call": 1,
+            "durationMs": 10,
+            "usage": "unknown"
+          },
+          {
+            "runId": "359de933-47d1-4f0f-b57b-34ac967ccc2b",
+            "call": 2,
+            "durationMs": 4,
+            "usage": "unknown"
+          }
+        ],
+        "tools": [
+          {
+            "name": "search_products",
+            "ok": true
+          }
+        ]
+      },
+      "providerRequests": null
+    }
+  ],
+  "documents": [
+    {
+      "key": "care",
+      "id": "doc-a729ac7f-2505-437b-918a-047cd8a4b8ec",
+      "version": 1,
+      "published": true,
+      "reused": true
+    },
+    {
+      "key": "policy",
+      "id": "doc-207dabd4-4b84-4218-a077-e9e556b9354f",
+      "version": 1,
+      "published": true,
+      "reused": true
+    },
+    {
+      "key": "draft",
+      "id": "doc-7a48bae0-8725-4c15-b3a6-1a1370dd7047",
+      "version": 1,
+      "published": false,
+      "reused": true
+    }
+  ],
+  "boundary": "Fixed synthetic cases, not real-user accuracy; matrix mode verifies contracts with fake providers.",
+  "expectedCases": [
+    "F07"
+  ],
+  "finishedAt": "2026-10-21T12:14:56.740Z",
+  "notRun": [],
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "normalAnswers": 1,
+    "safeRefusals": 0,
+    "accessDenied": 0,
+    "degraded": 0,
+    "retrieval": {
+      "passed": 0,
+      "total": 0
+    },
+    "facts": {
+      "passed": 1,
+      "total": 1
+    },
+    "citations": {
+      "passed": 0,
+      "total": 0
+    },
+    "citationSupport": {
+      "passed": 0,
+      "total": 0
+    }
+  },
+  "budget": null,
+  "ok": true
+}

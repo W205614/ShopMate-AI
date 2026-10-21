@@ -36,6 +36,7 @@ import { ensureKnowledgeSchema, registerKnowledgeRoutes } from "./ai-knowledge";
 import { ensureRuntimeSchema, audit } from "./runtime";
 import { demand, methodPermission } from "./permissions";
 import { operationsApi } from "./operations";
+import { maintenanceCommands } from "./job-maintenance";
 import { registerReadRoutes } from "./read-routes";
 import { createRequestObserver, registerDiagnostics } from "./diagnostics";
 import {
@@ -298,6 +299,7 @@ export async function createApp(
     ...supportCommands,
     ...marketingApi,
     ...operationsApi,
+    ...maintenanceCommands,
     async resetDemo() {
       admin();
       if (!config.allowDemoReset)

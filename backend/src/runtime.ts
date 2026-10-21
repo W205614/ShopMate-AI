@@ -11,6 +11,20 @@ export function ensureRuntimeSchema(sql: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS job_queue(id TEXT PRIMARY KEY,kind TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','done','failed')),attempts INTEGER NOT NULL DEFAULT 0,run_after INTEGER NOT NULL,last_error TEXT,created_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS job_queue_due ON job_queue(status,run_after);
   `);
+  // Additive migration preserves old jobs and their retry evidence.
+  if (
+    !sql
+      .prepare("PRAGMA table_info(job_queue)")
+      .all()
+      .some((column) => column.name === "retry_version")
+  )
+    sql.exec(
+      "ALTER TABLE job_queue ADD COLUMN retry_version INTEGER NOT NULL DEFAULT 0",
+    );
+  sql.exec(
+    `CREATE INDEX IF NOT EXISTS job_queue_status_page ON job_queue(status,created_at DESC,id DESC);
+     CREATE INDEX IF NOT EXISTS job_queue_time_page ON job_queue(created_at DESC,id DESC)`,
+  );
 }
 export function audit(
   sql: DatabaseSync,

@@ -695,6 +695,12 @@ export async function executeSupportTool(
   if (name === "search_knowledge") {
     const { query } = querySchema.parse(raw);
     const found = await retrieveKnowledge(sql, query, signal);
+    console.info(JSON.stringify({
+      event: "support_knowledge_retrieved",
+      runId: run.id,
+      sourceIds: found.sources.map((source) => source.id),
+      degraded: found.degraded,
+    }));
     evidence.sources.push(...found.sources);
     evidence.degraded.push(...found.degraded);
     return found;
@@ -986,6 +992,14 @@ export async function processSupportRun(
               JSON.stringify({ ok: !(result as { error?: unknown })?.error }),
               Date.now(),
             );
+          console.info(JSON.stringify({
+            event: "support_tool_call",
+            runId: run.id,
+            name: toolDefinitions.some((tool) => tool.function.name === call.function.name)
+              ? call.function.name
+              : "unsupported_tool",
+            ok: !(result as { error?: unknown })?.error,
+          }));
           messages.push({
             role: "tool",
             tool_call_id: call.id,

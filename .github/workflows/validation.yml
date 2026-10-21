@@ -77,6 +77,50 @@ jobs:
           E2E_ADMIN_PASSWORD: CIContainer123!
           E2E_MUTATIONS_ALLOWED: "1"
         run: npm run test:e2e -- e2e/extension-feature.spec.ts e2e/operations-ui.spec.ts e2e/staff-role-flows.spec.ts --output=test-results-operations
+      - name: Start a fresh maintenance and role acceptance deployment
+        working-directory: .
+        env:
+          ADMIN_PASSWORD: CIContainer123!
+          APP_PORT: "18105"
+          APP_ORIGINS: http://127.0.0.1:18105
+          VCS_REF: ${{ github.sha }}
+          ACCEPTANCE_LEGACY_COMMANDS: "false"
+          AI_ENABLED: "false"
+        run: |
+          docker compose -p shopmate-maintenance-ci -f compose.yaml -f deploy/compose.acceptance.yaml up -d --wait
+          docker compose -p shopmate-maintenance-ci -f compose.yaml -f deploy/compose.acceptance.yaml exec -T -e E2E_MUTATIONS_ALLOWED=1 api node --import tsx scripts/seed-role-maintenance.ts
+      - name: Verify owner recovery and real staff handoffs
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:18105
+          E2E_ADMIN_PASSWORD: CIContainer123!
+          E2E_MUTATIONS_ALLOWED: "1"
+          E2E_MAINTENANCE_FIXTURE: "1"
+        run: npm run test:e2e -- e2e/maintenance-workbench.spec.ts e2e/final-role-experience.spec.ts --output=test-results-maintenance
+      - name: Start isolated synthetic AI quality deployment
+        working-directory: .
+        env:
+          ADMIN_PASSWORD: CIContainer123!
+          APP_PORT: "18104"
+          APP_ORIGINS: http://127.0.0.1:18104
+          VCS_REF: ${{ github.sha }}
+          ACCEPTANCE_LEGACY_COMMANDS: "false"
+        run: docker compose -p shopmate-quality-ci -f compose.yaml -f deploy/compose.acceptance.yaml -f deploy/compose.quality.yaml up -d --wait
+      - name: Verify 40 synthetic AI contracts through real HTTP and tools
+        working-directory: .
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:18104
+          E2E_ADMIN_PASSWORD: CIContainer123!
+          AI_ACCEPTANCE_ALLOWED: "1"
+          AI_ACCEPTANCE_CONTAINER: shopmate-quality-ci-api-1
+          AI_QUALITY_MODE: matrix
+          AI_ACCEPTANCE_REPORT: .delivery/ai-quality-matrix-ci.json
+        run: node backend/scripts/ai-quality.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-quality-contract-report
+          path: .delivery/ai-quality-matrix-ci.json
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -85,3 +129,4 @@ jobs:
             frontend/test-results
             frontend/test-results-container
             frontend/test-results-operations
+            frontend/test-results-maintenance

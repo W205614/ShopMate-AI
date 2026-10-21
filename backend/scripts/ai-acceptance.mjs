@@ -3,6 +3,12 @@ import { readHttpSnapshot } from "../../shared/testing/http-snapshot.mjs";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+// Keep the historical eight-format acceptance intact; the bounded quality profile
+// has its own explicit result contract and never silently runs the paid legacy suite.
+if (process.env.AI_ACCEPTANCE_PROFILE === "quality") {
+  await import("./ai-quality.mjs");
+  process.exit(process.exitCode ?? 0);
+}
 const base = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:18092";
 if (
   process.env.AI_ACCEPTANCE_ALLOWED !== "1" ||

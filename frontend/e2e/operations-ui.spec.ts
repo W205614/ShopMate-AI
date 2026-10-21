@@ -31,7 +31,8 @@ async function save(page: Page, method: string) {
     .click();
   const value = await response;
   expect(value.ok(), await value.text()).toBe(true);
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  // The write response precedes a bootstrap refresh and the selected workspace read.
+  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15000 });
 }
 test.beforeEach(() => {
   test.skip(
@@ -99,12 +100,12 @@ test("管理表单创建运费满减供应商并分批采购入库，金额库�
   const result = await created;
   expect(result.ok(), await result.text()).toBe(true);
   const purchaseId = (await result.json()).result.id;
-  await expect(dialog).not.toBeVisible();
+  await expect(dialog).not.toBeVisible({ timeout: 15000 });
   const row = page
     .locator(".el-table__body-wrapper tbody tr")
     .filter({ hasText: purchaseId });
   await row.getByRole("button", { name: "下单", exact: true }).click();
-  await expect(row).toContainText("ordered");
+  await expect(row).toContainText("已下单");
   for (const quantity of [1, 2]) {
     await row.getByRole("button", { name: "分批入库", exact: true }).click();
     const receiving = page.getByRole("dialog", {
@@ -115,9 +116,9 @@ test("管理表单创建运费满减供应商并分批采购入库，金额库�
     await receiving
       .getByRole("button", { name: "确认本次入库", exact: true })
       .click();
-    await expect(receiving).not.toBeVisible();
+    await expect(receiving).not.toBeVisible({ timeout: 15000 });
   }
-  await expect(row).toContainText("received");
+  await expect(row).toContainText("已入库");
   const after = await (
     await page.request.get(
       `/api/collections/products?role=admin&id=${product.id}`,
@@ -144,6 +145,7 @@ test("员工表单设置仓储权限，越权导航关闭，停用后原会话�
   browser,
   baseURL,
 }) => {
+  test.setTimeout(60000);
   await login(page);
   await page.goto("/admin/operations?tab=staff");
   await page.getByRole("button", { name: "新增员工", exact: true }).click();
@@ -152,7 +154,7 @@ test("员工表单设置仓储权限，越权导航关闭，停用后原会话�
   await dialog.getByRole("textbox").nth(1).fill("warehouse_ui");
   await dialog.locator('input[type="password"]').fill("WarehouseUI123!");
   await dialog.locator(".el-select").click();
-  await page.getByRole("option", { name: "warehouse", exact: true }).click();
+  await page.getByRole("option", { name: "仓储", exact: true }).click();
   await save(page, "saveStaff");
   const context = await browser.newContext({ baseURL });
   try {

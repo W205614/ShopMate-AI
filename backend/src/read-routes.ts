@@ -703,12 +703,30 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
   });
   app.get("/api/admin/jobs", (req, res) => {
     demand(signed(sql, req, "admin"), "settings");
+    const status = z
+      .enum(["all", "pending", "failed", "done"])
+      .parse(req.query.status ?? "all");
+    const size = pageSize.parse(req.query.pageSize ?? 20);
+    const requested = pageNumber.parse(req.query.page ?? 1);
+    const where = status === "all" ? "" : " WHERE status=?";
+    const parameters = status === "all" ? [] : [status];
+    const total = Number(
+      sql
+        .prepare(`SELECT count(*) total FROM job_queue${where}`)
+        .get(...parameters)!.total,
+    );
+    const pages = Math.max(1, Math.ceil(total / size)),
+      page = Math.min(requested, pages);
     res.json({
       items: sql
         .prepare(
-          "SELECT id,kind,status,attempts,run_after AS runAfter,last_error AS lastError FROM job_queue ORDER BY created_at DESC LIMIT 100",
+          `SELECT id,kind,status,attempts,run_after AS runAfter,last_error AS lastError,retry_version AS retryVersion FROM job_queue${where} ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`,
         )
-        .all(),
+        .all(...parameters, size, (page - 1) * size),
+      total,
+      page,
+      pageSize: size,
+      pages,
     });
   });
   app.get("/api/admin/reconciliation", (req, res) => {

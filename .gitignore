@@ -3,6 +3,7 @@ frontend/dist/
 frontend/test-results/
 frontend/test-results-container/
 frontend/test-results-operations/
+frontend/test-results-*/
 frontend/playwright-report/
 .taste-skill/
 .env

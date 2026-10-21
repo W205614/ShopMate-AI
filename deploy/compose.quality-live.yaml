@@ -1,0 +1,48 @@
+# Bounded paid synthetic acceptance only. The API receives a temporary proxy token;
+# actual provider credentials are injected ONLY into the same-project gateway.
+# The host ledger directory must be preserved across retries and gateway restarts.
+services:
+  api:
+    environment:
+      AI_ENABLED: "true"
+      LLM_BASE_URL: http://provider:18102
+      LLM_API_KEY: ${AI_ACCEPTANCE_PROXY_TOKEN:?Set a unique temporary proxy token}
+      EMBEDDING_BASE_URL: http://provider:18102
+      EMBEDDING_API_KEY: ${AI_ACCEPTANCE_PROXY_TOKEN:?Set a unique temporary proxy token}
+      RERANKER_URL: http://provider:18102/rerank
+      RERANKER_API_KEY: ${AI_ACCEPTANCE_PROXY_TOKEN:?Set a unique temporary proxy token}
+      RERANKER_ENABLED: "true"
+    depends_on:
+      provider:
+        condition: service_healthy
+  provider:
+    image: shopmate-ai-api:${ACCEPTANCE_TAG:-acceptance}
+    command: ["node", "scripts/ai-acceptance-provider.mjs"]
+    environment:
+      AI_ACCEPTANCE_ALLOWED: "1"
+      AI_ACCEPTANCE_PROXY_TOKEN: ${AI_ACCEPTANCE_PROXY_TOKEN:?Set a unique temporary proxy token}
+      AI_ACCEPTANCE_PROXY_HOST: 0.0.0.0
+      AI_ACCEPTANCE_PROXY_PORT: "18102"
+      AI_ACCEPTANCE_BUDGET_FILE: /app/acceptance-budget/budget.json
+      LLM_BASE_URL: ${LLM_BASE_URL:?Set the real upstream LLM endpoint}
+      LLM_API_KEY: ${LLM_API_KEY:?Set the real upstream LLM credential}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:?Set the real embedding endpoint}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:?Set the real embedding credential}
+      RERANKER_URL: ${RERANKER_URL:?Set the real reranker endpoint}
+      RERANKER_API_KEY: ${RERANKER_API_KEY:?Set the real reranker credential}
+    volumes:
+      - ${AI_ACCEPTANCE_BUDGET_PATH:?Set a persistent dedicated ledger directory}:/app/acceptance-budget
+    ports:
+      - "127.0.0.1:18102:18102"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18102/status',{headers:{Authorization:'Bearer '+process.env.AI_ACCEPTANCE_PROXY_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    mem_limit: 256m
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

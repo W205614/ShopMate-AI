@@ -48,7 +48,7 @@ export function methodPermission(method: string, args: unknown[]): string {
   )
     return "warehouse";
   if (/^(createStaff|saveStaff)$/.test(method)) return "staff";
-  if (/^(saveSettings|saveShippingRule|resetDemo)$/.test(method))
+  if (/^(saveSettings|saveShippingRule|resetDemo|retryJob)$/.test(method))
     return "settings";
   return "support";
 }

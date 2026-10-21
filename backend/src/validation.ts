@@ -326,6 +326,7 @@ export const methods = {
     args: z.tuple([settings, settings]),
   },
   resetDemo: { role: "admin", args: z.tuple([]) },
+  retryJob: { role: "admin", args: z.tuple([id, integer.nonnegative()]) },
   saveShippingRule: {
     role: "admin",
     args: z.tuple([

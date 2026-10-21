@@ -79,6 +79,9 @@ ShopMate-AI/
 | `seed-stability.ts` | 复用历史负载种子，补充独立用户及工作集，供交易混合稳定性专项验收 |
 | `stability-load.ts` | 有思考时间的多用户交易负载与耐久验收，校验独立 Compose 项目和端口，见[稳定性专项](stability-hardening.md) |
 | `stability-provider.ts` | 隔离网络中的故障供应商，轮换返回 429、无效 JSON、超时和 503，用于故障隔离验证 |
+| `ai-quality.mjs`、`ai-quality-cases.mjs` | 40条协议契约与12条真实模型合成场景，分类统计检索、事实、引用及降级，见[2026-10-21验收](final-acceptance-20261021.md) |
+| `ai-quality-provider.mjs`、`ai-acceptance-provider.mjs` | 确定性假服务及认证预算代理；真实代理持久限制100次／20分钟，不用于日常客服服务 |
+| `seed-role-maintenance.ts` | 只为显式允许且没有普通用户／订单的新隔离库生成25条失败通知夹具，不是修复工具 |
 | `verify-stability.ts` | 对隔离验收数据库捕获基线和只读核验，不迁移、不关闭过期订单、不修复数据 |
 
 `docs/qa/stability-20261020/force-backup-due.mjs` 是专项证据附带的备份到期模拟工具，保留在报告目录以便回溯；其修改行为和隔离限制见[专项复跑说明](stability-hardening.md#复跑)。常规密码与数据库维护使用 `backend/package.json` 的 `admin:password`、`maintenance` 命令，入口位于 `backend/src/`。
@@ -106,6 +109,7 @@ ShopMate-AI/
 | `deploy/compose.acceptance.yaml` | 叠加日常编排用于独立功能/故障验收，隔离镜像标签与备份卷，关闭请求日志和自动备份；可选开启历史命令兼容 |
 | `deploy/compose.production-load.yaml` | 叠加日常编排用于保留日志和自动备份的独立负载验收，要求专用备份目录；不与 `compose.acceptance.yaml` 叠加 |
 | `deploy/compose.stability.yaml` | 在日常编排与 `compose.production-load.yaml` 后叠加，加入故障供应商及独立备份副本目录 |
+| `deploy/compose.quality.yaml`、`deploy/compose.quality-live.yaml` | 分别在独立功能验收上叠加协议假服务或有持久预算的真实模型代理；真实模式消耗模型额度 |
 
 覆盖文件仍需显式独立项目名、端口、访问源、镜像标签、数据卷和备份路径；具体命令保留在对应验收报告，不以文件名推断部署安全。`.github/workflows/validation.yml` 执行文档链接、后端、前端、依赖审计及隔离容器验证。
 

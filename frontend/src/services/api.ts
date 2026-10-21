@@ -381,4 +381,5 @@ export const api: ShopApi = {
   deleteFaq: (...args) => action("deleteFaq", args),
   saveSettings: (...args) => action("saveSettings", args),
   resetDemo: (...args) => action("resetDemo", args),
+  retryJob: (...args) => action("retryJob", args),
 };

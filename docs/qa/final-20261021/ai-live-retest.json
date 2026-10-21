@@ -1,0 +1,875 @@
+{
+  "startedAt": "2026-10-21T12:20:33.514Z",
+  "mode": "live",
+  "providerKind": "real",
+  "syntheticDataOnly": true,
+  "base": "http://127.0.0.1:18107",
+  "cases": [
+    {
+      "id": "F01",
+      "category": "facts",
+      "name": "实时规格价格",
+      "ok": true,
+      "outcome": "normal_answer",
+      "checks": [
+        {
+          "kind": "execution",
+          "ok": true,
+          "detail": "normal cases require completed AI output"
+        },
+        {
+          "kind": "product",
+          "ok": true,
+          "detail": "grounded product card"
+        },
+        {
+          "kind": "dynamicEvidence",
+          "ok": true,
+          "detail": "dynamic fact checks are required"
+        },
+        {
+          "kind": "fact",
+          "ok": true,
+          "detail": "exact amount 39900 cents expressed as yuan"
+        }
+      ],
+      "expected": {
+        "dynamic": "price",
+        "product": true
+      },
+      "elapsedMs": 2738,
+      "runId": "6898d04f-ea71-41b1-95f8-4ad30776071d",
+      "runStatus": "completed",
+      "runError": null,
+      "degraded": [],
+      "answer": {
+        "id": "ai-6898d04f-ea71-41b1-95f8-4ad30776071d",
+        "role": "assistant",
+        "source": "ai",
+        "text": "静听 无线头戴耳机（p01）的「雾白 / 标准版」（p01-s1）当前价格为 399.00 元，实时可售库存 16 件。",
+        "createdAt": "2026-10-21T12:20:36.656Z",
+        "citations": [],
+        "productIds": [
+          "p01"
+        ]
+      },
+      "trace": {
+        "runIds": [
+          "6898d04f-ea71-41b1-95f8-4ad30776071d"
+        ],
+        "retrievedSourceIds": [],
+        "modelCalls": [
+          {
+            "runId": "6898d04f-ea71-41b1-95f8-4ad30776071d",
+            "call": 1,
+            "durationMs": 1031,
+            "usage": {
+              "prompt_tokens": 1293,
+              "completion_tokens": 39,
+              "total_tokens": 1332
+            }
+          },
+          {
+            "runId": "6898d04f-ea71-41b1-95f8-4ad30776071d",
+            "call": 2,
+            "durationMs": 801,
+            "usage": {
+              "prompt_tokens": 1444,
+              "completion_tokens": 60,
+              "total_tokens": 1504
+            }
+          }
+        ],
+        "tools": [
+          {
+            "name": "product_details",
+            "ok": true
+          }
+        ]
+      },
+      "providerRequests": [
+        {
+          "id": "6b7ee3b0-792b-4a3f-b9de-f747acdb0a6c",
+          "kind": "chat",
+          "startedAt": 1792585234815,
+          "status": 200,
+          "usage": {
+            "prompt_tokens": 1293,
+            "completion_tokens": 39,
+            "total_tokens": 1332
+          },
+          "durationMs": 1012
+        },
+        {
+          "id": "8edf541c-12b4-4b7b-b615-3a89090db248",
+          "kind": "chat",
+          "startedAt": 1792585235857,
+          "status": 200,
+          "usage": {
+            "prompt_tokens": 1444,
+            "completion_tokens": 60,
+            "total_tokens": 1504
+          },
+          "durationMs": 782
+        }
+      ]
+    },
+    {
+      "id": "F04",
+      "category": "facts",
+      "name": "本人订单状态",
+      "ok": true,
+      "outcome": "normal_answer",
+      "checks": [
+        {
+          "kind": "execution",
+          "ok": true,
+          "detail": "normal cases require completed AI output"
+        },
+        {
+          "kind": "ownership",
+          "ok": true,
+          "detail": "owned order card"
+        },
+        {
+          "kind": "dynamicEvidence",
+          "ok": true,
+          "detail": "dynamic fact checks are required"
+        },
+        {
+          "kind": "fact",
+          "ok": true,
+          "detail": "exact amount 39900 cents expressed as yuan"
+        },
+        {
+          "kind": "fact",
+          "ok": true,
+          "detail": "pending answer and owned live order status agree"
+        }
+      ],
+      "expected": {
+        "dynamic": "order",
+        "order": true
+      },
+      "elapsedMs": 3762,
+      "runId": "cfa3c50c-7867-41ba-819a-785d3d4032c4",
+      "runStatus": "completed",
+      "runError": null,
+      "degraded": [],
+      "answer": {
+        "id": "ai-cfa3c50c-7867-41ba-819a-785d3d4032c4",
+        "role": "assistant",
+        "source": "ai",
+        "text": "订单 SMbaf25cf2c76e4abe844aa8d9348afb80 当前状态为「待支付（pending）」，应付金额为 399.00 元。\n\n订单明细：\n- 静听 无线头戴耳机（雾白 / 标准版）× 1，单价 399.00 元，小计 399.00 元\n- 下单时间：2026-10-21 20:20:37（北京时间，Asia/Shanghai）\n- 支付截止时间：2026-10-21 20:50:37（北京时间，Asia/Shanghai），逾期订单可能自动关闭\n- 该订单暂无售后记录；物流为模拟物流\n\n如需取消订单，我可以为你生成取消提案，需要你点击卡片确认后才会生效。",
+        "createdAt": "2026-10-21T12:20:40.413Z",
+        "citations": [],
+        "orderId": "SMbaf25cf2c76e4abe844aa8d9348afb80"
+      },
+      "trace": {
+        "runIds": [
+          "cfa3c50c-7867-41ba-819a-785d3d4032c4"
+        ],
+        "retrievedSourceIds": [],
+        "modelCalls": [
+          {
+            "runId": "cfa3c50c-7867-41ba-819a-785d3d4032c4",
+            "call": 1,
+            "durationMs": 860,
+            "usage": {
+              "prompt_tokens": 1439,
+              "completion_tokens": 57,
+              "total_tokens": 1496
+            }
+          },
+          {
+            "runId": "cfa3c50c-7867-41ba-819a-785d3d4032c4",
+            "call": 2,
+            "durationMs": 1460,
+            "usage": {
+              "prompt_tokens": 1721,
+              "completion_tokens": 212,
+              "total_tokens": 1933
+            }
+          }
+        ],
+        "tools": [
+          {
+            "name": "order_details",
+            "ok": true
+          }
+        ]
+      },
+      "providerRequests": [
+        {
+          "id": "96d17b5e-70ab-4d5d-8476-771b8eb9c7d6",
+          "kind": "chat",
+          "startedAt": 1792585238067,
+          "status": 200,
+          "usage": {
+            "prompt_tokens": 1439,
+            "completion_tokens": 57,
+            "total_tokens": 1496
+          },
+          "durationMs": 806
+        },
+        {
+          "id": "3552aea0-f9b1-4b60-a14e-e15076b2c5df",
+          "kind": "chat",
+          "startedAt": 1792585238954,
+          "status": 200,
+          "usage": {
+            "prompt_tokens": 1721,
+            "completion_tokens": 212,
+            "total_tokens": 1933
+          },
+          "durationMs": 1444
+        }
+      ]
+    },
+    {
+      "id": "C05",
+      "category": "clarification",
+      "name": "多轮指代",
+      "ok": true,
+      "outcome": "normal_answer",
+      "checks": [
+        {
+          "kind": "execution",
+          "ok": true,
+          "detail": "normal cases require completed AI output"
+        },
+        {
+          "kind": "product",
+          "ok": true,
+          "detail": "grounded product card"
+        },
+        {
+          "kind": "dynamicEvidence",
+          "ok": true,
+          "detail": "dynamic fact checks are required"
+        },
+        {
+          "kind": "fact",
+          "ok": true,
+          "detail": "exact amount 39900 cents expressed as yuan"
+        }
+      ],
+      "expected": {
+        "dynamic": "price",
+        "product": true,
+        "followup": true
+      },
+      "elapsedMs": 4176,
+      "runId": "15596f8d-845f-4d07-8195-bdc99b32a020",
+      "runStatus": "completed",
+      "runError": null,
+      "degraded": [],
+      "answer": {
+        "id": "ai-15596f8d-845f-4d07-8195-bdc99b32a020",
+        "role": "assistant",
+        "source": "ai",
+        "text": "静听 无线头戴耳机（p01）的「雾白 / 标准版」（p01-s1）当前价格为 399.00 元，实时可售库存 15 件。如需加入购物车，请告诉我数量，我会生成需你点击确认的卡片。",
+        "createdAt": "2026-10-21T12:20:44.611Z",
+        "citations": [],
+        "productIds": [
+          "p01"
+        ]
+      },
+      "trace": {
+        "runIds": [
+          "f6d23f11-dc4a-4c75-ac39-24998dd43e0b",
+          "15596f8d-845f-4d07-8195-bdc99b32a020"
+        ],
+        "retrievedSourceIds": [],
+        "modelCalls": [
+          {
+            "runId": "f6d23f11-dc4a-4c75-ac39-24998dd43e0b",
+            "call": 1,
+            "durationMs": 694,
+            "usage": {
+              "prompt_tokens": 1286,
+              "completion_tokens": 39,
+              "total_tokens": 1325
+            }
+          },
+          {
+            "runId": "f6d23f11-dc4a-4c75-ac39-24998dd43e0b",
+            "call": 2,
+            "durationMs": 1024,
+            "usage": {
+              "prompt_tokens": 1437,
+              "completion_tokens": 111,
+              "total_tokens": 1548
+            }
+          },
+          {
+            "runId": "15596f8d-845f-4d07-8195-bdc99b32a020",
+            "call": 1,
+            "durationMs": 790,
+            "usage": {
+              "prompt_tokens": 1387,
+              "completion_tokens": 78,
+              "total_tokens": 1465
+            }
+          }
+        ],
+        "tools": [
+          {
+            "name": "product_details",
+            "ok": true
+          }
+        ]
+      },
+      "providerRequests": [
+        {
+          "id": "dfaeae95-90eb-4110-8baa-58bc9c4b6cd6",
+          "kind": "chat",
+          "startedAt": 1792585241568,
+          "status": 200,
+          "usage": {
+            "prompt_tokens": 1286,
+            "completion_tokens": 39,
+            "total_tokens": 1325
+          },
+          "durationMs": 677
+        },
+        {
+          "id": "de827038-f585-48a9-97cd-b10a4b24619d",
+          "kind": "chat",
+          "startedAt": 1792585242280,
+          "status": 200,
+          "usage": {
+            "prompt_tokens": 1437,
+            "completion_tokens": 111,
+            "total_tokens": 1548
+          },
+          "durationMs": 1008
+        },
+        {
+          "id": "dbad2dfb-89cc-480a-be8c-b4854dfdb64f",
+          "kind": "chat",
+          "startedAt": 1792585243822,
+          "status": 200,
+          "usage": {
+            "prompt_tokens": 1387,
+            "completion_tokens": 78,
+            "total_tokens": 1465
+          },
+          "durationMs": 774
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "key": "care",
+      "id": "doc-82356f2c-a731-4e3b-b97d-cf9b1223202f",
+      "version": 1,
+      "published": true,
+      "reused": true
+    },
+    {
+      "key": "policy",
+      "id": "doc-8ebfc3ca-7079-467e-8b47-586fb3fad3c6",
+      "version": 1,
+      "published": true,
+      "reused": true
+    }
+  ],
+  "boundary": "Fixed synthetic cases, not real-user accuracy; matrix mode verifies contracts with fake providers.",
+  "expectedCases": [
+    "F01",
+    "F04",
+    "C05"
+  ],
+  "finishedAt": "2026-10-21T12:20:45.219Z",
+  "notRun": [],
+  "summary": {
+    "total": 3,
+    "passed": 3,
+    "normalAnswers": 3,
+    "safeRefusals": 0,
+    "accessDenied": 0,
+    "degraded": 0,
+    "retrievalDegraded": 0,
+    "providerFailure": 0,
+    "formatFailure": 0,
+    "retrieval": {
+      "passed": 0,
+      "total": 0
+    },
+    "facts": {
+      "passed": 4,
+      "total": 4
+    },
+    "citations": {
+      "passed": 0,
+      "total": 0
+    },
+    "citationSupport": {
+      "passed": 0,
+      "total": 0
+    }
+  },
+  "budget": {
+    "version": 1,
+    "startedAt": 1792585069153,
+    "deadline": 1792586269153,
+    "maxRequests": 100,
+    "maxDurationMs": 1200000,
+    "requests": [
+      {
+        "id": "01dcc992-473b-46a2-995c-4b7ac272d6d1",
+        "kind": "embedding",
+        "startedAt": 1792585069153,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 130,
+          "total_tokens": 130
+        },
+        "durationMs": 2383
+      },
+      {
+        "id": "c97ad438-d1b5-440b-976c-4ed240237a17",
+        "kind": "embedding",
+        "startedAt": 1792585072586,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 116,
+          "total_tokens": 116
+        },
+        "durationMs": 1330
+      },
+      {
+        "id": "67b3d857-3f32-4ed5-aa85-9b0ffa2b15e0",
+        "kind": "chat",
+        "startedAt": 1792585074705,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1204,
+          "completion_tokens": 49,
+          "total_tokens": 1253
+        },
+        "durationMs": 841
+      },
+      {
+        "id": "6d029a5c-5b3f-40f5-84c9-cb60d3711abc",
+        "kind": "embedding",
+        "startedAt": 1792585075583,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 21,
+          "total_tokens": 21
+        },
+        "durationMs": 760
+      },
+      {
+        "id": "49790e3c-eaaa-41d8-9a05-76b2ec5b6886",
+        "kind": "rerank",
+        "startedAt": 1792585076752,
+        "status": 200,
+        "usage": "unknown",
+        "durationMs": 855
+      },
+      {
+        "id": "109d53f4-42d1-4013-b7d5-86863b827f51",
+        "kind": "chat",
+        "startedAt": 1792585077633,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1587,
+          "completion_tokens": 85,
+          "total_tokens": 1672
+        },
+        "durationMs": 1153
+      },
+      {
+        "id": "93a4adb0-8698-42d8-82ad-50532df8aef1",
+        "kind": "chat",
+        "startedAt": 1792585079915,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1199,
+          "completion_tokens": 46,
+          "total_tokens": 1245
+        },
+        "durationMs": 687
+      },
+      {
+        "id": "b972e1d4-4bdf-422d-9153-bb9502c2060a",
+        "kind": "embedding",
+        "startedAt": 1792585080629,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 13,
+          "total_tokens": 13
+        },
+        "durationMs": 1199
+      },
+      {
+        "id": "3f0d670d-132e-4b95-ad49-833555d0e325",
+        "kind": "rerank",
+        "startedAt": 1792585082283,
+        "status": 200,
+        "usage": "unknown",
+        "durationMs": 210
+      },
+      {
+        "id": "13ad1fe0-9d3e-4385-bcfc-1d6ca73ed7d1",
+        "kind": "chat",
+        "startedAt": 1792585082516,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1579,
+          "completion_tokens": 102,
+          "total_tokens": 1681
+        },
+        "durationMs": 1107
+      },
+      {
+        "id": "ff1b1566-1ba7-4ca5-b4d6-25af561fd63b",
+        "kind": "chat",
+        "startedAt": 1792585084669,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1293,
+          "completion_tokens": 39,
+          "total_tokens": 1332
+        },
+        "durationMs": 582
+      },
+      {
+        "id": "74ddd15c-8df4-43e4-b90a-e56afb721fd3",
+        "kind": "chat",
+        "startedAt": 1792585085293,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1444,
+          "completion_tokens": 60,
+          "total_tokens": 1504
+        },
+        "durationMs": 838
+      },
+      {
+        "id": "9b5cf1d8-6436-479e-b351-370eabb010c6",
+        "kind": "chat",
+        "startedAt": 1792585087172,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1296,
+          "completion_tokens": 39,
+          "total_tokens": 1335
+        },
+        "durationMs": 867
+      },
+      {
+        "id": "8b644248-a24c-4a87-b786-7504b084a0b9",
+        "kind": "chat",
+        "startedAt": 1792585088063,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1447,
+          "completion_tokens": 79,
+          "total_tokens": 1526
+        },
+        "durationMs": 1167
+      },
+      {
+        "id": "20934a82-332b-4cde-80b1-0d8c32fb5351",
+        "kind": "chat",
+        "startedAt": 1792585090928,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1431,
+          "completion_tokens": 55,
+          "total_tokens": 1486
+        },
+        "durationMs": 718
+      },
+      {
+        "id": "cc5f4eda-a318-451e-a3bc-5ea5258a883e",
+        "kind": "chat",
+        "startedAt": 1792585091673,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1707,
+          "completion_tokens": 197,
+          "total_tokens": 1904
+        },
+        "durationMs": 1839
+      },
+      {
+        "id": "ad7a89ee-0c06-4686-83ee-e7689cf50a22",
+        "kind": "chat",
+        "startedAt": 1792585094682,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1182,
+          "completion_tokens": 62,
+          "total_tokens": 1244
+        },
+        "durationMs": 1030
+      },
+      {
+        "id": "da80af2c-e7ed-4bda-8107-0b2256c4dcaa",
+        "kind": "chat",
+        "startedAt": 1792585096684,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1194,
+          "completion_tokens": 80,
+          "total_tokens": 1274
+        },
+        "durationMs": 1087
+      },
+      {
+        "id": "a9a1681f-073e-4db7-95f9-dcc5c63c6aea",
+        "kind": "chat",
+        "startedAt": 1792585098694,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1286,
+          "completion_tokens": 39,
+          "total_tokens": 1325
+        },
+        "durationMs": 705
+      },
+      {
+        "id": "2a31b115-33bc-4204-9095-7e3a9a5033ec",
+        "kind": "chat",
+        "startedAt": 1792585099423,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1437,
+          "completion_tokens": 114,
+          "total_tokens": 1551
+        },
+        "durationMs": 881
+      },
+      {
+        "id": "60301c1f-25fb-4180-b649-889d4e58efc3",
+        "kind": "chat",
+        "startedAt": 1792585100692,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1390,
+          "completion_tokens": 55,
+          "total_tokens": 1445
+        },
+        "durationMs": 893
+      },
+      {
+        "id": "320eb51b-d527-4c27-b167-73810a0c753f",
+        "kind": "chat",
+        "startedAt": 1792585102943,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1444,
+          "completion_tokens": 231,
+          "total_tokens": 1675
+        },
+        "durationMs": 2099
+      },
+      {
+        "id": "df6c8588-147b-4d7b-b475-0cf13eb96e1f",
+        "kind": "chat",
+        "startedAt": 1792585106202,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1300,
+          "completion_tokens": 93,
+          "total_tokens": 1393
+        },
+        "durationMs": 1000
+      },
+      {
+        "id": "0fe17d09-7f4d-4155-87c5-a16289b41747",
+        "kind": "chat",
+        "startedAt": 1792585107235,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1515,
+          "completion_tokens": 77,
+          "total_tokens": 1592
+        },
+        "durationMs": 861
+      },
+      {
+        "id": "1a4b3d8b-f5fb-4244-9b2f-fb68682468cb",
+        "kind": "chat",
+        "startedAt": 1792585109955,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1438,
+          "completion_tokens": 56,
+          "total_tokens": 1494
+        },
+        "durationMs": 1169
+      },
+      {
+        "id": "30d1aca0-1e0a-4beb-8835-5a1e6ecaf99e",
+        "kind": "chat",
+        "startedAt": 1792585111152,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1717,
+          "completion_tokens": 74,
+          "total_tokens": 1791
+        },
+        "durationMs": 881
+      },
+      {
+        "id": "875d47d4-e806-493e-94c5-1110101eae72",
+        "kind": "chat",
+        "startedAt": 1792585112062,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1901,
+          "completion_tokens": 200,
+          "total_tokens": 2101
+        },
+        "durationMs": 1437
+      },
+      {
+        "id": "89adbf86-3b9f-44f1-b438-dea92de21c0b",
+        "kind": "chat",
+        "startedAt": 1792585115462,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1465,
+          "completion_tokens": 91,
+          "total_tokens": 1556
+        },
+        "durationMs": 1036
+      },
+      {
+        "id": "db5e4df6-d743-42e1-90ab-15bda797779b",
+        "kind": "embedding",
+        "startedAt": 1792585116528,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 18,
+          "total_tokens": 18
+        },
+        "durationMs": 1294
+      },
+      {
+        "id": "0b991aa3-820a-480b-9d88-77c9141c7a30",
+        "kind": "rerank",
+        "startedAt": 1792585118273,
+        "status": 200,
+        "usage": "unknown",
+        "durationMs": 207
+      },
+      {
+        "id": "8a4b483d-7562-4923-9e01-9fb0635cf5f9",
+        "kind": "chat",
+        "startedAt": 1792585118510,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 2172,
+          "completion_tokens": 158,
+          "total_tokens": 2330
+        },
+        "durationMs": 1250
+      },
+      {
+        "id": "293ae84a-ed38-472f-9c77-5b3585118d3f",
+        "kind": "chat",
+        "startedAt": 1792585119786,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 2496,
+          "completion_tokens": 261,
+          "total_tokens": 2757
+        },
+        "durationMs": 1629
+      },
+      {
+        "id": "6b7ee3b0-792b-4a3f-b9de-f747acdb0a6c",
+        "kind": "chat",
+        "startedAt": 1792585234815,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1293,
+          "completion_tokens": 39,
+          "total_tokens": 1332
+        },
+        "durationMs": 1012
+      },
+      {
+        "id": "8edf541c-12b4-4b7b-b615-3a89090db248",
+        "kind": "chat",
+        "startedAt": 1792585235857,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1444,
+          "completion_tokens": 60,
+          "total_tokens": 1504
+        },
+        "durationMs": 782
+      },
+      {
+        "id": "96d17b5e-70ab-4d5d-8476-771b8eb9c7d6",
+        "kind": "chat",
+        "startedAt": 1792585238067,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1439,
+          "completion_tokens": 57,
+          "total_tokens": 1496
+        },
+        "durationMs": 806
+      },
+      {
+        "id": "3552aea0-f9b1-4b60-a14e-e15076b2c5df",
+        "kind": "chat",
+        "startedAt": 1792585238954,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1721,
+          "completion_tokens": 212,
+          "total_tokens": 1933
+        },
+        "durationMs": 1444
+      },
+      {
+        "id": "dfaeae95-90eb-4110-8baa-58bc9c4b6cd6",
+        "kind": "chat",
+        "startedAt": 1792585241568,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1286,
+          "completion_tokens": 39,
+          "total_tokens": 1325
+        },
+        "durationMs": 677
+      },
+      {
+        "id": "de827038-f585-48a9-97cd-b10a4b24619d",
+        "kind": "chat",
+        "startedAt": 1792585242280,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1437,
+          "completion_tokens": 111,
+          "total_tokens": 1548
+        },
+        "durationMs": 1008
+      },
+      {
+        "id": "dbad2dfb-89cc-480a-be8c-b4854dfdb64f",
+        "kind": "chat",
+        "startedAt": 1792585243822,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1387,
+          "completion_tokens": 78,
+          "total_tokens": 1465
+        },
+        "durationMs": 774
+      }
+    ]
+  },
+  "ok": true
+}

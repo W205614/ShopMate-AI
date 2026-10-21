@@ -105,4 +105,8 @@ export interface ShopApi {
     baseline: Settings,
   ): Promise<{ settings: Settings; revision: number }>;
   resetDemo(): Promise<void>;
+  retryJob(
+    id: string,
+    expectedRetryVersion: number,
+  ): Promise<{ id: string; retryVersion: number; status: "pending" }>;
 }

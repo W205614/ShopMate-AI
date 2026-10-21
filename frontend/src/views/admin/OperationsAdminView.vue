@@ -15,6 +15,7 @@ import type {
   Supplier,
 } from "../../../../shared/domain/operations";
 import { useAdminAction } from "./useAdmin";
+import RuntimeMaintenancePanel from "./RuntimeMaintenancePanel.vue";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter(),
@@ -29,12 +30,32 @@ const availableTabs = [
   ["auditEntries", "操作审计", "audit"],
   ["reconciliation", "财务核对", "finance"],
   ["jobs", "后台任务", "settings"],
+  ["runtime", "运行状态", "settings"],
 ] as const;
 const tabs = computed(() =>
   availableTabs.filter((entry) =>
     shop.adminSession?.permissions?.includes(entry[2]),
   ),
 );
+const staffRoleLabels: Record<string, string> = {
+  owner: "店主",
+  operations: "运营",
+  warehouse: "仓储",
+  support: "客服",
+  finance: "财务",
+};
+const purchaseStatusLabels: Record<string, string> = {
+  draft: "草稿",
+  ordered: "已下单",
+  partial: "部分入库",
+  received: "已入库",
+  cancelled: "已取消",
+};
+const auditDateTime = (value: string) =>
+  new Date(value).toLocaleString("zh-CN", {
+    hour12: false,
+    timeZone: "Asia/Shanghai",
+  });
 const tab = computed(() => String(route.query.tab ?? tabs.value[0]?.[0] ?? ""));
 const allowed = computed(() =>
   tabs.value.some((entry) => entry[0] === tab.value),
@@ -59,7 +80,6 @@ const staff = ref<Staff[]>([]),
     }[];
     totals: { income: string; refund: string; purchase: string; net: string };
   }>();
-const jobs = ref<Record<string, unknown>[]>([]);
 let viewEpoch = 0,
   extraSequence = 0,
   alive = true;
@@ -108,12 +128,6 @@ async function loadExtra() {
       );
       if (isCurrent(scope) && current === extraSequence)
         reconciliation.value = response;
-    } else if (scope.tab === "jobs") {
-      const response = await request<
-        Record<string, unknown>[] | { items: Record<string, unknown>[] }
-      >("/api/admin/jobs");
-      if (isCurrent(scope) && current === extraSequence)
-        jobs.value = Array.isArray(response) ? response : response.items;
     }
   } catch (error) {
     if (isCurrent(scope) && current === extraSequence)
@@ -414,7 +428,6 @@ function clearPrivateState() {
   productOptions.value = [];
   staff.value = [];
   reconciliation.value = undefined;
-  jobs.value = [];
   extraError.value = "";
 }
 watch(
@@ -475,7 +488,7 @@ onUnmounted(() => {
         :closable="false"
       /><el-button v-if="extraError" @click="loadExtra">重新读取</el-button>
       <form
-        v-if="!['staff', 'reconciliation', 'jobs'].includes(tab)"
+        v-if="!['staff', 'reconciliation', 'jobs', 'runtime'].includes(tab)"
         class="admin-toolbar"
         @submit.prevent="navigate({ q: search.trim() })"
       >
@@ -568,9 +581,11 @@ onUnmounted(() => {
         ><el-table-column prop="id" label="采购单" /><el-table-column
           prop="supplierId"
           label="供应商"
-        /><el-table-column prop="status" label="状态" /><el-table-column
-          label="操作"
-          min-width="230"
+        /><el-table-column label="状态"
+          ><template #default="{ row }">{{
+            purchaseStatusLabels[row.status] ?? "未知状态"
+          }}</template></el-table-column
+        ><el-table-column label="操作" min-width="230"
           ><template #default="{ row }"
             ><el-button
               v-if="row.status === 'draft'"
@@ -632,8 +647,11 @@ onUnmounted(() => {
         ><el-table-column prop="username" label="账号" /><el-table-column
           prop="name"
           label="姓名"
-        /><el-table-column prop="staffRole" label="职责" /><el-table-column
-          label="状态"
+        /><el-table-column label="职责"
+          ><template #default="{ row }">{{
+            staffRoleLabels[row.staffRole] ?? "未知职责"
+          }}</template></el-table-column
+        ><el-table-column label="状态"
           ><template #default="{ row }">{{
             row.active ? "启用" : "停用"
           }}</template></el-table-column
@@ -646,9 +664,11 @@ onUnmounted(() => {
         ></el-table
       >
       <el-table v-if="tab === 'auditEntries'" :data="shop.db.auditEntries ?? []"
-        ><el-table-column prop="createdAt" label="时间" /><el-table-column
-          prop="actorId"
-          label="操作者" /><el-table-column
+        ><el-table-column label="时间（北京时间）" min-width="180"
+          ><template #default="{ row }">{{
+            auditDateTime(row.createdAt)
+          }}</template></el-table-column
+        ><el-table-column prop="actorId" label="操作者" /><el-table-column
           prop="action"
           label="动作" /><el-table-column
           prop="objectId"
@@ -675,20 +695,11 @@ onUnmounted(() => {
             prop="actual"
             label="实际值" /></el-table
       ></template>
-      <el-table v-if="tab === 'jobs'" :data="jobs"
-        ><el-table-column
-          v-for="key in [
-            'id',
-            'kind',
-            'status',
-            'attempts',
-            'runAfter',
-            'lastError',
-          ]"
-          :key="key"
-          :prop="key"
-          :label="key"
-      /></el-table>
+      <RuntimeMaintenancePanel
+        v-if="tab === 'jobs' || tab === 'runtime'"
+        :key="`${shop.adminSession?.id}:${tab}`"
+        :mode="tab"
+      />
       <el-pagination
         v-if="metadata && metadata.pages > 1"
         :current-page="metadata.page"
@@ -777,7 +788,7 @@ onUnmounted(() => {
               ]"
               :key="role"
               :value="role"
-              :label="role" /></el-select></el-form-item
+              :label="staffRoleLabels[role]" /></el-select></el-form-item
       ></template>
       <el-checkbox
         v-if="tab !== 'shippingRules'"

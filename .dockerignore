@@ -4,6 +4,7 @@
 **/test-results
 **/test-results-container
 **/test-results-operations
+**/test-results-*
 **/playwright-report
 .taste-skill
 .env*

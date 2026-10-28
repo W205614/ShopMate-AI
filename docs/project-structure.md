@@ -65,6 +65,7 @@ ShopMate-AI/
 | 脚本 | 用途与前提 |
 | --- | --- |
 | `monitor.ts` | 宿主机健康、容器、磁盘、任务和备份观测，可单次或持续运行；配置告警与维护静默见[运行观测](monitoring.md) |
+| `verify-security-headers.mjs` | 用 `SECURITY_BASE_URL` 指定独立本机验收入口，检查页面／资源／API／404安全头、压缩请求拒绝与后续健康；不使用账号凭据或写入业务数据 |
 | `ai-acceptance.mjs` | 真实供应商 AI 验收，上传合成文档并创建账号/交易，产生模型费用；要求显式开启及独立本机端口，见[AI 验收](ai-acceptance.md) |
 | `generate-ai-fixtures.py` | 重新生成 `backend/test/fixtures/ai/` 合成样例；依赖 Pillow、python-docx、ReportLab 和脚本指定的中文字体 |
 | `fault-acceptance.ts` | 独立容器的破坏性故障验收；校验端口、容器标签及写入开关，见[v4 验收](reliability-acceptance.md) |

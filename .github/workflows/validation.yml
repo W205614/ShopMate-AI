@@ -52,6 +52,11 @@ jobs:
           APP_ORIGINS: http://127.0.0.1:18087
           VCS_REF: ${{ github.sha }}
         run: docker compose -p shopmate-auth-ci -f compose.yaml -f deploy/compose.acceptance.yaml up -d --build --wait
+      - name: Verify proxy security headers and compressed request rejection
+        working-directory: .
+        env:
+          SECURITY_BASE_URL: http://127.0.0.1:18087
+        run: node backend/scripts/verify-security-headers.mjs
       - name: Verify authentication and traditional commerce through containers
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:18087

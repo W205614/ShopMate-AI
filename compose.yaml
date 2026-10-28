@@ -14,6 +14,7 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TRUST_PROXY: "true"
       BACKUP_DIR: /app/backups
+      BACKUP_RETENTION_MODE: ${BACKUP_RETENTION_MODE:-internal}
       LOG_REQUESTS: ${LOG_REQUESTS:-true}
       AFTER_SALE_DAYS: ${AFTER_SALE_DAYS:-7}
       ALLOW_LEGACY_COMMANDS: ${ALLOW_LEGACY_COMMANDS:-false}

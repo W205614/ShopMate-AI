@@ -57,9 +57,23 @@ Nginx 使用上游 HTTP/1.1 连接池，避免高请求量下短连接耗尽临�
 
 ## 备份、检查与离线恢复
 
+### Windows 本机只保留最新一份
+
+需要旧文件进入 Windows 回收站时，设置本机 `.env` 的 `BACKUP_RETENTION_MODE=external`。容器继续生成与校验备份，宿主机运行 `scripts/retain_latest_backup.py`：合并手动、current、升级前和 daily 完整备份，调用现有维护检查逐份验证，保留时间最新的一对数据库／清单，将其他有效备份送入当前 Windows 用户的回收站。未配齐清单、校验失败、时间异常、未知来源或运行中变化的文件保留并记录原因；没有有效恢复点时不清理。该工具不清空回收站。
+
+先预览（默认不回收），确认项目、备份目录和 Node.js 绝对路径；再加 `--execute` 执行：
+
+```powershell
+python -X utf8 scripts/retain_latest_backup.py --root E:\project\ShopMate-AI --backup-dir E:\project\ShopMate-AI\backups --node E:\download\NodeJS\node.exe
+```
+
+本机运维任务 `ShopMate-AI-LatestBackupRetention` 在当前用户登录期间每分钟检查一次，旧文件通常在新备份验证完成后的一分钟内回收；互斥锁避免重叠。任务以当前交互用户的普通权限运行，依赖该项目源码、后端依赖、本机 Python／Node.js 及回收站可用。失败时保留文件，事件记录在 `.delivery/latest-backup-retention/events.jsonl`，不做永久删除兜底。离线或未登录时任务不执行；下一次检查会重新验证后处理。仅设置 external 而没有安装并启用宿主机任务，不会自动清理。
+
 启用 `BACKUP_DIR` 后，API 每 60 秒检查最近成功恢复点。成功时间、文件路径和失败状态持久化到 `backup_runtime`，重启不会丢失标记；首次没有成功恢复点或文件／清单缺失时才重新备份。上次成功后 22 小时 57 分开始调度，给轮询和最长 120 秒子进程预留余量，目标是在 23 小时内更新恢复点；故障时该目标可能失守，必须结合告警处置，不能视为保证。文件名日期使用 UTC，不再按日期字符串去重。
 
 每次只允许一个自动备份子进程，不排队；已有任务未结束时跳过本次检查。仅自动清理带有效清单、原因是 daily、名称为 `shopmate-daily-*.sqlite` 的旧文件，保留最新 7 份；这是份数而不是保证七个自然日，手动、升级前和恢复前备份不参与自动清理。
+
+`BACKUP_RETENTION_MODE` 默认 `internal`，使用上述容器内7份保留规则；设为 `external` 时，容器仍生成并校验新备份、更新成功恢复点和可选副本，但不删除旧备份，由宿主机保留程序负责回收。只接受 `internal`／`external`，其他值使备份任务明确失败，不能静默退回删除模式。完成日志包含 `retentionMode`。Windows 希望只保留最新一份并把旧文件移入系统回收站时，应先配置并验证宿主机保留任务，再在本机未跟踪的 `.env` 设置 `BACKUP_RETENTION_MODE=external`；宿主机任务失败时旧份会保留，需检查任务结果和磁盘容量。切换该选项本身不会安装或启动宿主机任务。
 
 自动备份的复制、校验和保留清理都在独立子进程执行，不在 API 请求事件循环内处理。子进程以只读连接打开 WAL 数据库，通过事务及首次读取固定快照，再使用 Node 的 SQLite backup API 复制其中已提交的数据；复制完成立即释放源库读事务，再对副本计算摘要、检查完整性及清理旧备份，避免校验和保留扫描继续占住源库 WAL 快照。这种隔离仍会共享容器的 CPU、内存和磁盘资源，不能推导备份期间零延迟影响。
 

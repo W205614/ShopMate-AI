@@ -18,6 +18,9 @@ const releaseSnapshot = () => {
   reader = undefined;
 };
 try {
+  const retentionMode = process.env.BACKUP_RETENTION_MODE ?? "internal";
+  if (!["internal", "external"].includes(retentionMode))
+    throw new Error("BACKUP_RETENTION_MODE_INVALID");
   reader = new DatabaseSync(source, { readOnly: true });
   reader.exec("PRAGMA query_only=ON; PRAGMA busy_timeout=5000");
   if (reader.prepare("PRAGMA journal_mode").get()?.journal_mode !== "wal")
@@ -40,7 +43,10 @@ try {
   process.send?.({ type: "created", createdAt: manifest.createdAt });
   phase = "retention";
   process.send?.({ type: "phase", phase });
-  pruneDailyBackups(dirname(destination), 7, { temporaryId });
+  // External retention delegates old-file handling to the host (for example,
+  // Windows Recycle Bin). The worker still publishes and verifies the new pair.
+  if (retentionMode === "internal")
+    pruneDailyBackups(dirname(destination), 7, { temporaryId });
   if (replicaDirectory) {
     phase = "replica";
     process.send?.({ type: "phase", phase });

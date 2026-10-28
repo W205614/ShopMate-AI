@@ -16,6 +16,9 @@ jobs:
       - name: Check documentation links
         working-directory: .
         run: node scripts/check-docs.mjs
+      - name: Check latest-backup retention safety
+        working-directory: .
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - uses: actions/setup-node@v4
         with:
           node-version: 24

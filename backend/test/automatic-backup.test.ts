@@ -43,10 +43,58 @@ afterEach(() => {
   cancelAutomaticBackup();
   sql.close();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   rmSync(directory, { recursive: true, force: true });
 });
 
 describe("automatic backup worker", () => {
+  it("delegates external retention without removing old verified daily backups", async () => {
+    vi.stubEnv("BACKUP_RETENTION_MODE", "external");
+    const previous = [];
+    for (let i = 0; i < 7; i++) {
+      const file = join(
+        directory,
+        "backups",
+        `shopmate-daily-external-${i}.sqlite`,
+      );
+      await backupDatabase(sql, file, { reason: "daily" });
+      previous.push({
+        file,
+        bytes: readFileSync(file),
+        manifest: readFileSync(file + ".manifest.json"),
+      });
+    }
+    const created = vi.fn();
+    const result = await runAutomaticBackup(source, destination, created);
+    expect(created).toHaveBeenCalledWith(inspectBackup(destination).createdAt);
+    expect(inspectBackup(destination).revision).toBe(result.snapshotRevision);
+    for (const old of previous) {
+      expect(readFileSync(old.file)).toEqual(old.bytes);
+      expect(readFileSync(old.file + ".manifest.json")).toEqual(old.manifest);
+    }
+    expect(
+      readdirSync(join(directory, "backups")).filter((file) =>
+        file.endsWith(".sqlite"),
+      ),
+    ).toHaveLength(8);
+    expect(logged(output).at(-1)).toMatchObject({
+      event: "backup_completed",
+      retentionMode: "external",
+    });
+  });
+
+  it("rejects an invalid retention mode before creating a destination and releases its slot", async () => {
+    vi.stubEnv("BACKUP_RETENTION_MODE", "typo");
+    await expect(runAutomaticBackup(source, destination)).rejects.toThrow(
+      "BACKUP_RETENTION_MODE_INVALID",
+    );
+    expect(existsSync(destination)).toBe(false);
+    expect(readdirSync(join(directory, "backups"))).toEqual([]);
+    vi.stubEnv("BACKUP_RETENTION_MODE", "internal");
+    await runAutomaticBackup(source, destination);
+    expect(inspectBackup(destination).reason).toBe("daily");
+  });
+
   it("does not repeat a verified automatic backup after the API restarts", async () => {
     ensureBackupState(sql);
     await runAutomaticBackup(source, destination, (createdAt) =>

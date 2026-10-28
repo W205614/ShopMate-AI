@@ -101,6 +101,8 @@ ShopMate-AI/
 
 ## 部署文件如何组合
 
+Windows 宿主机的 `scripts/retain_latest_backup.py` 验证备份后保留最新一份，旧备份交给 `windows_recycle.py` 的回收站专用接口；默认仅预览，显式 `--execute` 才回收。`test_backup_retention.py` 检查无有效恢复点、未知来源及越界保护，运行方法和本机任务依赖见[可靠性说明](reliability.md#windows-本机只保留最新一份)。
+
 | 文件 | 职责与组合 |
 | --- | --- |
 | `compose.yaml` | 日常 API/Web、业务数据卷、备份绑定目录、资源限制和本机入口；首次部署见[README](../README.md) |

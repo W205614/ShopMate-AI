@@ -58,6 +58,9 @@ export async function runAutomaticBackup(
     });
   console.log(event("backup_started"));
   try {
+    const retentionMode = process.env.BACKUP_RETENTION_MODE ?? "internal";
+    if (!["internal", "external"].includes(retentionMode))
+      throw new Error("BACKUP_RETENTION_MODE_INVALID");
     const timeout = options.timeoutMs ?? 120000;
     if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 120000)
       throw new Error("BACKUP_TIMEOUT_INVALID");
@@ -69,6 +72,7 @@ export async function runAutomaticBackup(
         .filter((key) => process.env[key] !== undefined)
         .map((key) => [key, process.env[key]!]),
     );
+    env.BACKUP_RETENTION_MODE = retentionMode;
     const child = fork(
       fileURLToPath(new URL("./backup-worker.ts", import.meta.url)),
       [
@@ -186,6 +190,7 @@ export async function runAutomaticBackup(
         durationMs: Math.round(performance.now() - started),
         bytes: result.bytes,
         phaseDurations,
+        retentionMode,
       }),
     );
     return result;

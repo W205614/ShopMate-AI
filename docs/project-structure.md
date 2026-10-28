@@ -42,7 +42,7 @@ ShopMate-AI/
 1. 从 `frontend/src/main.ts` 和 `App.vue` 看应用初始化，再读 `router.ts`，了解商城、后台、登录与路由权限入口。
 2. 读 `shared/domain/types.ts`、`api.ts`，掌握两端约定；`shared/domain/seed.ts` 是演示商品和业务初始数据。
 3. 读 `frontend/src/services/repository.ts`、`api.ts`，理解分领域数据获取、身份与路由范围、缓存同步、请求标识及未知结果恢复。`checkoutRecovery.ts`、`stockRecovery.ts` 处理具体流程恢复，`support.ts` 和 `supportDocuments.ts` 对接客服与知识文档。
-4. 读 `frontend/src/stores/shop.ts`，看页面如何订阅数据与会话。业务页面分别在 `views/shop/` 和 `views/admin/`，通用商城组件在 `components/shop/`，后台图片编辑在 `components/admin/`。
+4. 读 `frontend/src/stores/shop.ts`，看页面如何订阅数据与会话。业务页面分别在 `views/shop/` 和 `views/admin/`，通用商城组件在 `components/shop/`，后台图片编辑在 `components/admin/`。经营工作台的员工与采购表格分别由 `StaffManagementPanel.vue` 和 `PurchaseOrdersPanel.vue` 展示，表单、权限及请求恢复仍由父页面管理。
 5. `frontend/src/domain/` 除契约入口外还包含金额、优惠券、财务、售后和评价等界面计算。公共样式从 `style.css` 进入，商城、后台及业务流程样式在 `styles/`。
 
 追一个购买流程可从 `CheckoutView.vue` 跟到前端 `services/api.ts`，再到后端 `app.ts` 与 `commerce.ts`；服务端校验和事务结果决定最终状态。
@@ -53,7 +53,7 @@ ShopMate-AI/
 2. `app.ts`、`read-routes.ts`：请求来源、认证、权限、参数校验、分领域读取及业务操作入口。相关规则在 `auth.ts`、`permissions.ts`、`validation.ts`。
 3. `repository.ts`、`database.ts`、`storage.ts`、`migration.ts`：请求上下文、事务、数据读写、关系存储与迁移；版本常量在 `versions.ts`。
 4. `commerce.ts`、`commerce-rules.ts`、`stock-availability.ts`：订单、库存及售后；`catalog.ts` 管商品分类，`marketing.ts` 管营销与会员，`operations.ts` 管采购、仓储及经营管理，`dashboard.ts` 汇总经营概览，`support.ts` 管规则与人工客服。
-5. `ai-support.ts`、`ai-knowledge.ts`、`ai-provider.ts`、`ai-schema.ts`：AI 会话、提案与确认、文档检索、供应商调用和结构校验；文档工作进程入口为 `ai-document-worker.ts`。
+5. `ai-support.ts`、`ai-knowledge.ts`、`ai-provider.ts`、`ai-schema.ts`：AI 会话、提案与确认、文档检索、供应商调用和结构校验；文档工作进程入口为 `ai-document-worker.ts`。`ai-answer.ts` 从服务端证据生成事实文案，`ai-budget.ts` 管理北京时间每日配额及工作进程额度协议。
 6. `runtime.ts`、`jobs.ts` 管审计、命令结果和持久化任务；`diagnostics.ts` 管受限诊断；`maintenance.ts`、`automatic-backup.ts`、`backup-worker.ts`、`backup-state.ts` 管备份、恢复、子进程和备份状态。`admin.ts` 是管理员密码维护入口。
 
 沿一个功能定位相关测试即可：后端在 `backend/test/`，前端逻辑测试与源码同目录，页面流程在 `frontend/e2e/`。日常验证命令见[开发与运维](development.md#验证命令)。

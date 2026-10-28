@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const tool = (name, args) => ({ role: "assistant", content: null, tool_calls: [{ id: randomUUID(), type: "function", function: { name, arguments: JSON.stringify(args) } }] });
-const final = (answer, extra = {}) => ({ role: "assistant", content: JSON.stringify({ answer, citations: [], productIds: [], ...extra }) });
+const final = (answer, extra = {}) => ({ role: "assistant", content: JSON.stringify({ replyKind: "grounded", answer, citations: [], productIds: [], ...extra }) });
 export function syntheticChat(messages) {
   const lastUser = messages.findLastIndex((m) => m.role === "user" && !m.name), question = messages[lastUser]?.content ?? "";
   const toolMessages = messages.slice(lastUser + 1).filter((m) => m.role === "tool");
@@ -17,7 +17,7 @@ export function syntheticChat(messages) {
   const skuId = question.match(/规格([A-Za-z0-9_-]+)/)?.[1] ?? context.product?.skus?.[0]?.id;
   const orderId = question.match(/订单([A-Za-z0-9_-]+)/)?.[1] ?? context.order?.id;
   if (/忽略所有规则|忽略实际来源|价格改为|输出API Key/.test(question)) return final("无法执行越权操作或泄露其他用户资料；请使用正常入口。");
-  if (/还没决定|帮我申请退款|先确认具体商品规格/.test(question)) return final("请补充订单、具体商品规格、数量和原因，核对后再生成确认卡片。");
+  if (/还没决定|帮我申请退款|先确认具体商品规格/.test(question)) return final("请补充订单、具体商品规格、数量和原因，核对后再生成确认卡片。", { replyKind: "clarify" });
   if (/紫电量子|星海秘藏/.test(question)) return final("没有已发布的资料可以确认该商品信息，无法确认容量或保修期限，请转人工。");
   if (toolMessages.length) {
     const response = JSON.parse(toolMessages.at(-1).content), name = calls.at(-1)?.function.name;

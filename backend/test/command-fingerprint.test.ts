@@ -16,6 +16,7 @@ beforeEach(async () => {
     .prepare("INSERT INTO sessions VALUES(?,?,?)")
     .run(tokenHash("owner-test-token"), "owner", Date.now() + 60000);
   const app = await createApp(sql, { origins: ["http://localhost"] });
+  sql.prepare("INSERT INTO staff_access VALUES('owner','owner',1)").run();
   server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;

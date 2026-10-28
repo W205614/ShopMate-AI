@@ -10,7 +10,7 @@ import type { Request, Response } from "express";
 import type { Role, Session } from "../../shared/domain/types";
 import { readDatabase, transaction, writeDatabase } from "./database";
 import { BoundedQueue, ensureRuntimeSchema } from "./runtime";
-import { grants } from "./permissions";
+import { grants, isStaffRole } from "./permissions";
 import type { StaffRole } from "../../shared/domain/operations";
 
 import { HttpError } from "./errors";
@@ -87,8 +87,9 @@ export function findSession(
     const access = sql
       .prepare("SELECT staff_role, active FROM staff_access WHERE account_id=?")
       .get(session.id) as { staff_role: StaffRole; active: number } | undefined;
-    if (access && !access.active) return null;
-    session.staffRole = access?.staff_role ?? "owner";
+    if (!access || access.active !== 1 || !isStaffRole(access.staff_role))
+      return null;
+    session.staffRole = access.staff_role;
     session.permissions = grants[session.staffRole];
   }
   return session;
@@ -181,6 +182,10 @@ export async function createAccount(
         passwordHash,
         Date.now(),
       );
+    if (role === "admin")
+      sql
+        .prepare("INSERT INTO staff_access VALUES (?,'owner',1)")
+        .run(account.id);
     if (role === "user") {
       const db = readDatabase(sql);
       db.users.push({
@@ -194,4 +199,39 @@ export async function createAccount(
     }
   });
   return { id: account.id, name: account.name, role };
+}
+
+/** Upgrade only identifiable pre-staff owners, once; never repair authorization during a request. */
+export function migrateLegacyAdminAccess(sql: DatabaseSync) {
+  transaction(sql, () => {
+    sql.exec(
+      "CREATE TABLE IF NOT EXISTS authorization_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)",
+    );
+    if (
+      sql
+        .prepare(
+          "SELECT 1 FROM authorization_migrations WHERE name='explicit-staff-access-v1'",
+        )
+        .get()
+    )
+      return;
+    const missing = sql
+      .prepare(
+        "SELECT a.id FROM accounts a LEFT JOIN staff_access s ON s.account_id=a.id WHERE a.role='admin' AND s.account_id IS NULL",
+      )
+      .all();
+    // Historical createAccount generated UUID owners. Employee creation has always used staff-* IDs.
+    const legacyOwnerId =
+      /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+    for (const account of missing)
+      if (legacyOwnerId.test(String(account.id)))
+        sql
+          .prepare("INSERT INTO staff_access VALUES (?,'owner',1)")
+          .run(account.id);
+    sql
+      .prepare(
+        "INSERT INTO authorization_migrations VALUES ('explicit-staff-access-v1',?)",
+      )
+      .run(new Date().toISOString());
+  });
 }

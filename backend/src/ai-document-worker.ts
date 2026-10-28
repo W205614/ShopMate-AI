@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import mammoth from "mammoth";
 import sharp from "sharp";
-import { embed, vision, ProviderError } from "./ai-provider";
+import { aiConfig, embed, vision, ProviderError } from "./ai-provider";
 
 export interface DocumentSection {
   text: string;
@@ -242,9 +242,18 @@ export async function parseDocument(
 
 export async function indexSections(
   sections: DocumentSection[],
+  budget?: { maxChunks: number; maxVectorBytes: number },
 ): Promise<KnowledgeChunk[]> {
   const chunks = splitSections(sections),
     result: KnowledgeChunk[] = [];
+  // Reject predictable capacity failures before spending any embedding calls.
+  if (budget && chunks.length > budget.maxChunks)
+    throw new Error("DOCUMENT_CORPUS_CHUNK_LIMIT");
+  if (
+    budget &&
+    chunks.length * aiConfig().embeddingDimensions * 4 > budget.maxVectorBytes
+  )
+    throw new Error("DOCUMENT_CORPUS_VECTOR_LIMIT");
   for (let i = 0; i < chunks.length; i += 16) {
     const batch = chunks.slice(i, i + 16),
       vectors = await embed(
@@ -285,6 +294,15 @@ export function cosineRank(
     .slice(0, 20);
 }
 
+export function mergeCosineRanks(
+  previous: { id: string; score: number }[],
+  batch: { id: string; score: number }[],
+) {
+  return [...previous, ...batch]
+    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+    .slice(0, 20);
+}
+
 if (process.env.AI_DOCUMENT_WORKER === "1" && process.send)
   process.once("message", async (input: unknown) => {
     const task = input as {
@@ -294,17 +312,45 @@ if (process.env.AI_DOCUMENT_WORKER === "1" && process.send)
       sections?: DocumentSection[];
       query?: number[];
       rows?: { id: string; vector: Uint8Array }[];
+      maxChunks?: number;
+      maxVectorBytes?: number;
     };
     try {
       if (task.type === "rank") {
-        process.send?.({ result: cosineRank(task.query!, task.rows!) });
+        // Keep one worker alive for the query; each IPC message carries at most one DB batch.
+        let best: { id: string; score: number }[] = [];
+        await new Promise<void>((resolve) => {
+          const accept = (raw: unknown) => {
+            const message = raw as {
+              rankBatch?: { id: string; vector: Uint8Array }[];
+              rankDone?: boolean;
+            };
+            if (!Array.isArray(message.rankBatch)) return;
+            if (message.rankDone) {
+              process.off("message", accept);
+              process.send?.({ result: best });
+              resolve();
+              return;
+            }
+            best = mergeCosineRanks(
+              best,
+              cosineRank(task.query!, message.rankBatch),
+            );
+            process.send?.({ rankReady: true });
+          };
+          process.on("message", accept);
+          process.send?.({ rankReady: true });
+        });
         return;
       }
       const sections =
         task.sections ??
         (await parseDocument(task.name, Buffer.from(task.raw)));
       process.send?.({ progress: "indexing", sections });
-      const chunks = await indexSections(sections);
+      const chunks = await indexSections(sections, {
+        maxChunks: task.maxChunks ?? 5000,
+        maxVectorBytes: task.maxVectorBytes ?? 64 * 1024 * 1024,
+      });
       process.send?.({ result: { sections, chunks } });
     } catch (error) {
       const code =

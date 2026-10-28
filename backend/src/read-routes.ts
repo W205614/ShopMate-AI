@@ -695,7 +695,7 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
     res.json({
       items: sql
         .prepare(
-          "SELECT a.id,a.username,a.name,coalesce(s.staff_role,'owner') AS staffRole,coalesce(s.active,1) AS active FROM accounts a LEFT JOIN staff_access s ON s.account_id=a.id WHERE a.role='admin' ORDER BY a.created_at LIMIT 100",
+          "SELECT a.id,a.username,a.name,s.staff_role AS staffRole,s.active FROM accounts a JOIN staff_access s ON s.account_id=a.id WHERE a.role='admin' ORDER BY a.created_at LIMIT 100",
         )
         .all()
         .map((v) => ({ ...v, active: !!v.active })),

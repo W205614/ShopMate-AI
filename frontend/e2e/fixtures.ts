@@ -34,6 +34,17 @@ export const test = base.extend<{ isolatedDatabase: void }>({
           adminHash,
           Date.now(),
         );
+        sql
+          .prepare("INSERT INTO staff_access VALUES ('admin','owner',1)")
+          .run();
+        if (
+          sql
+            .prepare(
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_daily_usage'",
+            )
+            .get()
+        )
+          sql.exec("DELETE FROM ai_daily_usage");
         writeDatabase(sql, createSeed());
         sql.exec(
           "DELETE FROM command_results; DELETE FROM job_queue; DELETE FROM operation_audit;",

@@ -10,6 +10,7 @@ import { findSession, HttpError } from "./auth";
 import { demand } from "./permissions";
 import { transaction } from "./database";
 import { aiConfig, embed, rerank } from "./ai-provider";
+import { reserveProviderRequest, withProviderBudget } from "./ai-budget";
 import {
   tokenize,
   splitSections,
@@ -43,6 +44,23 @@ interface DocumentRow {
   updated_at: string;
 }
 const maxFile = 10 * 1024 * 1024;
+const retrievalBatchSize = 64;
+function configuredLimit(name: string, fallback: number, maximum: number) {
+  const value = Number(process.env[name] ?? fallback);
+  return Number.isSafeInteger(value) && value > 0 && value <= maximum
+    ? value
+    : fallback;
+}
+export function knowledgeLimits() {
+  return {
+    chunks: configuredLimit("AI_KNOWLEDGE_MAX_CHUNKS", 5000, 100_000),
+    vectorBytes: configuredLimit(
+      "AI_KNOWLEDGE_MAX_VECTOR_BYTES",
+      64 * 1024 * 1024,
+      256 * 1024 * 1024,
+    ),
+  };
+}
 const mimes: Record<string, string> = {
   txt: "text/plain",
   md: "text/markdown",
@@ -57,6 +75,7 @@ const mimes: Record<string, string> = {
 const timestamp = () => new Date().toISOString();
 const hash = (s: string | Buffer) =>
   createHash("sha256").update(s).digest("hex");
+const contentKey = (text: string) => hash(text.replace(/\s+/gu, " ").trim());
 const faqSourceId = (faq: { id: string; question: string; answer: string }) =>
   `faq:${faq.id}:${hash(faq.question + "\0" + faq.answer).slice(0, 16)}`;
 const metadata = (row: DocumentRow, full = true) => ({
@@ -97,14 +116,54 @@ export function ensureKnowledgeSchema(sql: DatabaseSync) {
       version INTEGER NOT NULL, text TEXT NOT NULL, page INTEGER, paragraph INTEGER,
       vector BLOB NOT NULL, model TEXT NOT NULL, dimensions INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS ai_knowledge_chunks_document ON ai_knowledge_chunks(document_id,version);
+    CREATE TABLE IF NOT EXISTS ai_knowledge_content_keys (
+      chunk_id TEXT PRIMARY KEY REFERENCES ai_knowledge_chunks(id) ON DELETE CASCADE,
+      fingerprint TEXT NOT NULL);
     CREATE VIRTUAL TABLE IF NOT EXISTS ai_knowledge_fts USING fts5(chunk_id UNINDEXED,tokens,tokenize='unicode61');
     CREATE TABLE IF NOT EXISTS ai_knowledge_faqs (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS ai_knowledge_requests (
       actor_id TEXT NOT NULL, request_id TEXT NOT NULL, fingerprint TEXT NOT NULL, result TEXT NOT NULL,
       created_at TEXT NOT NULL, PRIMARY KEY(actor_id,request_id));
     CREATE TRIGGER IF NOT EXISTS ai_knowledge_chunk_delete AFTER DELETE ON ai_knowledge_chunks BEGIN
-      DELETE FROM ai_knowledge_fts WHERE chunk_id=OLD.id; END;`);
+      DELETE FROM ai_knowledge_fts WHERE chunk_id=OLD.id; END;
+    CREATE TRIGGER IF NOT EXISTS ai_knowledge_content_changed AFTER UPDATE OF text ON ai_knowledge_chunks BEGIN
+      DELETE FROM ai_knowledge_content_keys WHERE chunk_id=OLD.id; END;`);
+  syncChunkContentKeys(sql);
   syncFaqIndex(sql);
+}
+
+/** Additive metadata backfill reads only one bounded batch of old bodies at a time. */
+function syncChunkContentKeys(sql: DatabaseSync) {
+  const missing = sql.prepare(
+      `SELECT c.id,c.text FROM ai_knowledge_chunks c LEFT JOIN ai_knowledge_content_keys k ON k.chunk_id=c.id
+       WHERE k.chunk_id IS NULL ORDER BY c.id LIMIT ?`,
+    ),
+    insert = sql.prepare("INSERT INTO ai_knowledge_content_keys VALUES(?,?)");
+  for (;;) {
+    const rows = missing.all(retrievalBatchSize) as {
+      id: string;
+      text: string;
+    }[];
+    if (!rows.length) return;
+    for (const row of rows) insert.run(row.id, contentKey(row.text));
+  }
+}
+
+function remainingIndexBudget(
+  sql: DatabaseSync,
+  documentId: string,
+  version: number,
+) {
+  const limits = knowledgeLimits(),
+    existing = sql
+      .prepare(
+        "SELECT count(*) n,coalesce(sum(length(vector)),0) bytes FROM ai_knowledge_chunks WHERE NOT(document_id=? AND version=?)",
+      )
+      .get(documentId, version) as { n: number; bytes: number };
+  return {
+    maxChunks: Math.max(0, limits.chunks - existing.n),
+    maxVectorBytes: Math.max(0, limits.vectorBytes - existing.bytes),
+  };
 }
 
 function faqs(sql: DatabaseSync): {
@@ -385,10 +444,12 @@ export function registerKnowledgeRoutes(
 
 const workerChildren = new Set<ChildProcess>();
 async function runWorker<T>(
+  sql: DatabaseSync,
   input: unknown,
   signal?: AbortSignal,
   progress?: (sections: DocumentSection[]) => void,
   timeoutMs = 1200000,
+  rankBatch?: () => { id: string; vector: Uint8Array }[] | undefined,
 ): Promise<T> {
   if (signal?.aborted) throw new Error("KNOWLEDGE_CANCELLED");
   const temporary = await mkdtemp(join(tmpdir(), "shopmate-ai-worker-"));
@@ -468,7 +529,28 @@ async function runWorker<T>(
         sections?: DocumentSection[];
         result?: T;
         error?: string;
+        budgetRequest?: string;
+        rankReady?: boolean;
       };
+      if (data.budgetRequest && !settled) {
+        try {
+          reserveProviderRequest(sql);
+          child.send({ budgetResponse: data.budgetRequest, approved: true });
+        } catch {
+          child.send({
+            budgetResponse: data.budgetRequest,
+            error: "AI_PROVIDER_BUDGET_EXHAUSTED",
+          });
+        }
+      }
+      if (data.rankReady && rankBatch && !settled) {
+        try {
+          const rows = rankBatch();
+          child.send({ rankBatch: rows ?? [], rankDone: !rows?.length });
+        } catch {
+          finish(new Error("KNOWLEDGE_RANK_FAILED"));
+        }
+      }
       if (data.progress && data.sections) {
         try {
           progress?.(data.sections);
@@ -521,11 +603,13 @@ export function startKnowledgeWorker(sql: DatabaseSync): () => void {
         sections: DocumentSection[];
         chunks: KnowledgeChunk[];
       }>(
+        sql,
         {
           name: row.name,
           raw: Buffer.from(row.raw),
           ...(row.text ? { sections: JSON.parse(row.sections) } : {}),
           type: "ingest",
+          ...remainingIndexBudget(sql, row.id, row.version),
         },
         abort.signal,
         (sections) => {
@@ -556,15 +640,16 @@ export function startKnowledgeWorker(sql: DatabaseSync): () => void {
         const live = getDocument(sql, row.id);
         if (!live || live.version !== row.version || live.status !== "indexing")
           return;
-        const count = (
-          sql
-            .prepare(
-              "SELECT count(*) n FROM ai_knowledge_chunks WHERE NOT(document_id=? AND version=?)",
-            )
-            .get(row.id, row.version) as { n: number }
-        ).n;
-        if (count + result.chunks.length > 6000)
-          throw new Error("DOCUMENT_CHUNK_LIMIT");
+        const budget = remainingIndexBudget(sql, row.id, row.version);
+        if (result.chunks.length > budget.maxChunks)
+          throw new Error("DOCUMENT_CORPUS_CHUNK_LIMIT");
+        if (
+          result.chunks.reduce(
+            (bytes, chunk) => bytes + chunk.vector.byteLength,
+            0,
+          ) > budget.maxVectorBytes
+        )
+          throw new Error("DOCUMENT_CORPUS_VECTOR_LIMIT");
         sql
           .prepare(
             "DELETE FROM ai_knowledge_chunks WHERE document_id=? AND version=?",
@@ -575,6 +660,9 @@ export function startKnowledgeWorker(sql: DatabaseSync): () => void {
           ),
           fts = sql.prepare(
             "INSERT INTO ai_knowledge_fts(chunk_id,tokens) VALUES(?,?)",
+          ),
+          key = sql.prepare(
+            "INSERT INTO ai_knowledge_content_keys VALUES(?,?)",
           );
         for (const [i, chunk] of result.chunks.entries()) {
           const id = `${row.id}:v${row.version}:${i}`,
@@ -591,6 +679,7 @@ export function startKnowledgeWorker(sql: DatabaseSync): () => void {
             vector.byteLength / 4,
           );
           fts.run(id, chunk.tokens);
+          key.run(id, contentKey(chunk.text));
         }
         sql
           .prepare(
@@ -641,42 +730,29 @@ export async function retrieveKnowledge(
       text: faq.answer,
       paragraph: 1,
     });
-  const chunks = sql
-    .prepare(
-      `SELECT c.id,c.text,c.page,c.paragraph,c.document_id,c.version,c.model,c.dimensions,c.vector,d.name
-    FROM ai_knowledge_chunks c JOIN ai_documents d ON d.id=c.document_id AND d.published_version=c.version`,
-    )
-    .all() as unknown as {
-    id: string;
-    text: string;
-    page: number | null;
-    paragraph: number | null;
-    document_id: string;
-    version: number;
-    model: string;
-    dimensions: number;
-    vector: Uint8Array;
-    name: string;
-  }[];
-  for (const c of chunks)
-    sourceMap.set(c.id, {
-      id: c.id,
-      title: c.name,
-      text: c.text,
-      ...(c.page ? { page: c.page } : {}),
-      ...(c.paragraph ? { paragraph: c.paragraph } : {}),
-      documentId: c.document_id,
-      version: c.version,
-    });
-  // Collapse content copies before either ranking branch takes its top 20.
-  // Repeated uploads in different formats must not consume the context budget.
-  const canonicalByText = new Map<string, string>(),
+  syncChunkContentKeys(sql);
+  // Canonical metadata is small; document bodies and vectors are loaded only in bounded batches.
+  const canonicalByContent = new Map<string, string>(),
     canonicalIds = new Map<string, string>();
   for (const [id, source] of sourceMap) {
-    const content = source.text.replace(/\s+/gu, " ").trim();
-    const canonical = canonicalByText.get(content) ?? id;
-    canonicalByText.set(content, canonical);
+    const key = contentKey(source.text),
+      canonical = canonicalByContent.get(key) ?? id;
+    canonicalByContent.set(key, canonical);
     canonicalIds.set(id, canonical);
+  }
+  let documentCount = 0;
+  for (const raw of sql
+    .prepare(
+      `SELECT c.id,k.fingerprint FROM ai_knowledge_chunks c
+     JOIN ai_documents d ON d.id=c.document_id AND d.published_version=c.version
+     JOIN ai_knowledge_content_keys k ON k.chunk_id=c.id ORDER BY c.id`,
+    )
+    .iterate()) {
+    const row = raw as { id: string; fingerprint: string },
+      canonical = canonicalByContent.get(row.fingerprint) ?? row.id;
+    canonicalByContent.set(row.fingerprint, canonical);
+    canonicalIds.set(row.id, canonical);
+    documentCount++;
   }
   const tokens = tokenize(query.slice(0, 1000))
       .split(" ")
@@ -685,49 +761,78 @@ export async function retrieveKnowledge(
     degraded: string[] = [];
   if (!tokens.length) return { sources: [], degraded };
   const match = tokens.map((t) => `"${t}"`).join(" OR ");
-  // Filter to active sources before ranking, so retired chunks cannot crowd out live results.
-  const lexical = (
-    sql
-      .prepare(
-        `SELECT f.chunk_id,bm25(ai_knowledge_fts) rank FROM ai_knowledge_fts f
-    WHERE ai_knowledge_fts MATCH ? AND (EXISTS(SELECT 1 FROM ai_knowledge_chunks c JOIN ai_documents d ON d.id=c.document_id
-      WHERE c.id=f.chunk_id AND c.version=d.published_version) OR EXISTS(SELECT 1 FROM ai_knowledge_faqs q WHERE q.fingerprint=f.chunk_id))
-    ORDER BY rank LIMIT ?`,
-      )
-      .all(match, sourceMap.size) as { chunk_id: string }[]
-  )
-    .map((r) => canonicalIds.get(r.chunk_id))
-    .filter((id): id is string => !!id);
-  const uniqueLexical = [...new Set(lexical)].slice(0, 20);
+  // Stream matches until twenty distinct contents are found, so format copies cannot crowd them out.
+  const uniqueLexical: string[] = [],
+    lexicalSeen = new Set<string>();
+  for (const raw of sql
+    .prepare(
+      `SELECT f.chunk_id,bm25(ai_knowledge_fts) rank FROM ai_knowledge_fts f
+     WHERE ai_knowledge_fts MATCH ? AND (EXISTS(SELECT 1 FROM ai_knowledge_chunks c
+       JOIN ai_documents d ON d.id=c.document_id WHERE c.id=f.chunk_id AND c.version=d.published_version)
+       OR EXISTS(SELECT 1 FROM ai_knowledge_faqs q WHERE q.fingerprint=f.chunk_id))
+     ORDER BY rank`,
+    )
+    .iterate(match)) {
+    const canonical = canonicalIds.get(String(raw.chunk_id));
+    if (!canonical || lexicalSeen.has(canonical)) continue;
+    lexicalSeen.add(canonical);
+    uniqueLexical.push(canonical);
+    if (uniqueLexical.length === 20) break;
+  }
   let semantic: string[] = [];
-  if (chunks.length) {
+  if (documentCount) {
     try {
-      const [queryVector] = await embed([query.slice(0, 1000)], signal);
+      const [queryVector] = await withProviderBudget(sql, () =>
+        embed([query.slice(0, 1000)], signal),
+      );
       const config = aiConfig(),
         seen = new Set<string>(),
-        vectors = chunks.flatMap((c) => {
-          const canonical = canonicalIds.get(c.id)!;
-          if (
-            seen.has(canonical) ||
-            c.model !== config.embeddingModel ||
-            c.dimensions !== queryVector!.length
-          )
-            return [];
-          seen.add(canonical);
-          return [{ id: canonical, vector: c.vector }];
-        });
-      if (!vectors.length) degraded.push("embedding_model_changed");
-      else
-        semantic = (
-          await runWorker<{ id: string; score: number }[]>(
-            { type: "rank", query: queryVector, rows: vectors },
-            signal,
-            undefined,
-            15000,
-          )
-        ).map((r) => r.id);
-    } catch {
+        vectors = sql.prepare(
+          `SELECT c.id,c.vector FROM ai_knowledge_chunks c JOIN ai_documents d ON d.id=c.document_id
+           AND d.published_version=c.version WHERE c.id>? AND c.model=? AND c.dimensions=?
+           AND length(c.vector)=c.dimensions*4 ORDER BY c.id LIMIT ?`,
+        );
+      let cursor = "",
+        compatible = false;
+      const nextBatch = ():
+        { id: string; vector: Uint8Array }[] | undefined => {
+        for (;;) {
+          signal?.throwIfAborted();
+          const rows = vectors.all(
+            cursor,
+            config.embeddingModel,
+            queryVector!.length,
+            retrievalBatchSize,
+          ) as { id: string; vector: Uint8Array }[];
+          if (!rows.length) return undefined;
+          cursor = rows.at(-1)!.id;
+          const batch = rows.flatMap((row) => {
+            const canonical = canonicalIds.get(row.id);
+            if (!canonical || seen.has(canonical)) return [];
+            seen.add(canonical);
+            return [{ id: canonical, vector: row.vector }];
+          });
+          if (batch.length) {
+            compatible = true;
+            return batch;
+          }
+        }
+      };
+      semantic = (
+        await runWorker<{ id: string; score: number }[]>(
+          sql,
+          { type: "rank", query: queryVector },
+          signal,
+          undefined,
+          15000,
+          nextBatch,
+        )
+      ).map((r) => r.id);
+      if (!compatible) degraded.push("embedding_model_changed");
+    } catch (error) {
       if (signal?.aborted) throw new Error("KNOWLEDGE_CANCELLED");
+      if ((error as { code?: string }).code === "AI_PROVIDER_BUDGET_EXHAUSTED")
+        throw error;
       degraded.push("embedding_unavailable_keyword_only");
     }
   }
@@ -739,20 +844,54 @@ export async function retrieveKnowledge(
   const fused = [...scores.keys()]
     .sort((a, b) => scores.get(b)! - scores.get(a)!)
     .slice(0, 30);
-  let selected = fused.slice(0, 6);
-  if (fused.length) {
+  // Only the final fused candidates need their bodies and display metadata.
+  const source = sql.prepare(
+    `SELECT c.id,c.text,c.page,c.paragraph,c.document_id,c.version,d.name FROM ai_knowledge_chunks c
+     JOIN ai_documents d ON d.id=c.document_id AND d.published_version=c.version WHERE c.id=?`,
+  );
+  for (const id of fused) {
+    if (sourceMap.has(id)) continue;
+    const row = source.get(id) as
+      | {
+          id: string;
+          text: string;
+          page: number | null;
+          paragraph: number | null;
+          document_id: string;
+          version: number;
+          name: string;
+        }
+      | undefined;
+    if (row)
+      sourceMap.set(id, {
+        id,
+        title: row.name,
+        text: row.text,
+        documentId: row.document_id,
+        version: row.version,
+        ...(row.page ? { page: row.page } : {}),
+        ...(row.paragraph ? { paragraph: row.paragraph } : {}),
+      });
+  }
+  const candidates = fused.filter((id) => sourceMap.has(id));
+  let selected = candidates.slice(0, 6);
+  if (candidates.length) {
     try {
       selected = (
-        await rerank(
-          query.slice(0, 1000),
-          fused.map((id) => sourceMap.get(id)!.text),
-          signal,
+        await withProviderBudget(sql, () =>
+          rerank(
+            query.slice(0, 1000),
+            candidates.map((id) => sourceMap.get(id)!.text),
+            signal,
+          ),
         )
       )
-        .map((i) => fused[i]!)
+        .map((i) => candidates[i]!)
         .slice(0, 6);
-    } catch {
+    } catch (error) {
       if (signal?.aborted) throw new Error("KNOWLEDGE_CANCELLED");
+      if ((error as { code?: string }).code === "AI_PROVIDER_BUDGET_EXHAUSTED")
+        throw error;
       degraded.push("reranker_unavailable_fusion_order");
     }
   }

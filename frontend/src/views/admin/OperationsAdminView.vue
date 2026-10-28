@@ -16,6 +16,8 @@ import type {
 } from "../../../../shared/domain/operations";
 import { useAdminAction } from "./useAdmin";
 import RuntimeMaintenancePanel from "./RuntimeMaintenancePanel.vue";
+import StaffManagementPanel from "./StaffManagementPanel.vue";
+import PurchaseOrdersPanel from "./PurchaseOrdersPanel.vue";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter(),
@@ -43,13 +45,6 @@ const staffRoleLabels: Record<string, string> = {
   warehouse: "仓储",
   support: "客服",
   finance: "财务",
-};
-const purchaseStatusLabels: Record<string, string> = {
-  draft: "草稿",
-  ordered: "已下单",
-  partial: "部分入库",
-  received: "已入库",
-  cancelled: "已取消",
 };
 const auditDateTime = (value: string) =>
   new Date(value).toLocaleString("zh-CN", {
@@ -328,6 +323,18 @@ function openReceipt(order: PurchaseOrder) {
       remaining: line.quantity - line.received,
     }));
 }
+function orderPurchase(order: PurchaseOrder) {
+  return run(
+    () => commerceAction("orderPurchase", order.id, order.version),
+    "采购单已下单",
+  );
+}
+function cancelPurchase(order: PurchaseOrder) {
+  return run(
+    () => commerceAction("cancelPurchase", order.id, order.version),
+    "采购已取消",
+  );
+}
 async function receive() {
   const order = receiptOrder.value;
   if (!order) return;
@@ -562,60 +569,14 @@ onUnmounted(() => {
           ></el-table-column
         ></el-table
       >
-      <el-table
+      <PurchaseOrdersPanel
         v-if="tab === 'purchaseOrders'"
-        :data="shop.db.purchaseOrders ?? []"
-        row-key="id"
-        ><el-table-column type="expand"
-          ><template #default="{ row }"
-            ><p v-for="line in row.lines" :key="line.skuId">
-              {{ line.productId }} / {{ line.skuId }} · 采购
-              {{ line.quantity }}，已收 {{ line.received }}，单价
-              {{ money(line.unitCost) }}
-            </p>
-            <p v-for="receipt in row.receipts" :key="receipt.id">
-              入库 {{ receipt.id }} · {{ dateTime(receipt.createdAt) }} ·
-              {{ money(receipt.amount) }}
-            </p></template
-          ></el-table-column
-        ><el-table-column prop="id" label="采购单" /><el-table-column
-          prop="supplierId"
-          label="供应商"
-        /><el-table-column label="状态"
-          ><template #default="{ row }">{{
-            purchaseStatusLabels[row.status] ?? "未知状态"
-          }}</template></el-table-column
-        ><el-table-column label="操作" min-width="230"
-          ><template #default="{ row }"
-            ><el-button
-              v-if="row.status === 'draft'"
-              :disabled="busy"
-              @click="
-                run(
-                  () => commerceAction('orderPurchase', row.id, row.version),
-                  '采购单已下单',
-                )
-              "
-              >下单</el-button
-            ><el-button
-              v-if="['ordered', 'partial'].includes(row.status)"
-              :disabled="busy"
-              @click="openReceipt(row)"
-              >分批入库</el-button
-            ><el-button
-              v-if="['draft', 'ordered'].includes(row.status)"
-              :disabled="busy"
-              @click="
-                run(
-                  () => commerceAction('cancelPurchase', row.id, row.version),
-                  '采购已取消',
-                )
-              "
-              >取消</el-button
-            ></template
-          ></el-table-column
-        ></el-table
-      >
+        :orders="shop.db.purchaseOrders ?? []"
+        :busy="busy"
+        @order="orderPurchase"
+        @receive="openReceipt"
+        @cancel="cancelPurchase"
+      />
       <el-table
         v-if="tab === 'returnInspections'"
         :data="shop.db.returnInspections ?? []"
@@ -643,26 +604,13 @@ onUnmounted(() => {
           ></el-table-column
         ></el-table
       >
-      <el-table v-if="tab === 'staff'" :data="staff"
-        ><el-table-column prop="username" label="账号" /><el-table-column
-          prop="name"
-          label="姓名"
-        /><el-table-column label="职责"
-          ><template #default="{ row }">{{
-            staffRoleLabels[row.staffRole] ?? "未知职责"
-          }}</template></el-table-column
-        ><el-table-column label="状态"
-          ><template #default="{ row }">{{
-            row.active ? "启用" : "停用"
-          }}</template></el-table-column
-        ><el-table-column label="操作"
-          ><template #default="{ row }"
-            ><el-button :disabled="busy" @click="edit(row)"
-              >编辑</el-button
-            ></template
-          ></el-table-column
-        ></el-table
-      >
+      <StaffManagementPanel
+        v-if="tab === 'staff'"
+        :staff="staff"
+        :busy="busy"
+        :role-labels="staffRoleLabels"
+        @edit="edit"
+      />
       <el-table v-if="tab === 'auditEntries'" :data="shop.db.auditEntries ?? []"
         ><el-table-column label="时间（北京时间）" min-width="180"
           ><template #default="{ row }">{{

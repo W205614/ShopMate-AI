@@ -26,6 +26,7 @@ import {
   hashPassword,
   issueSession,
   rateLimit,
+  migrateLegacyAdminAccess,
 } from "./auth";
 import { context, admin, transact } from "./repository";
 import { commerceApi } from "./commerce";
@@ -34,7 +35,7 @@ import { supportApi } from "./support";
 import { registerSupportRoutes, supportCommands } from "./ai-support";
 import { ensureKnowledgeSchema, registerKnowledgeRoutes } from "./ai-knowledge";
 import { ensureRuntimeSchema, audit } from "./runtime";
-import { demand, methodPermission } from "./permissions";
+import { demand, methodPermission, isStaffRole } from "./permissions";
 import { operationsApi } from "./operations";
 import { maintenanceCommands } from "./job-maintenance";
 import { registerReadRoutes } from "./read-routes";
@@ -61,6 +62,7 @@ export async function createApp(
   },
 ) {
   ensureRuntimeSchema(sql);
+  migrateLegacyAdminAccess(sql);
   ensureKnowledgeSchema(sql);
   if (
     config.afterSaleDays !== undefined &&
@@ -99,6 +101,7 @@ export async function createApp(
     if (largeImage && !findSession(sql, req, "admin"))
       return next(new HttpError(401, "请先登录管理账号"));
     return express.json({
+      inflate: false,
       limit:
         req.path.startsWith("/api/support/documents") && req.method === "POST"
           ? "15mb"
@@ -261,9 +264,10 @@ export async function createApp(
     if (!account || !valid) throw new HttpError(401, "账号或密码错误");
     if (account.role === "admin") {
       const access = sql
-        .prepare("SELECT active FROM staff_access WHERE account_id=?")
+        .prepare("SELECT active,staff_role FROM staff_access WHERE account_id=?")
         .get(account.id);
-      if (access && !access.active) throw new HttpError(403, "员工账号已停用");
+      if (!access || access.active !== 1 || !isStaffRole(access.staff_role))
+        throw new HttpError(403, "员工权限不可用，请联系店主");
     }
     const latest = sql
       .prepare("SELECT password_hash FROM accounts WHERE id=?")
@@ -283,7 +287,7 @@ export async function createApp(
       name: account.name,
       role: account.role,
       ...(account.role === "admin"
-        ? { staffRole: access?.staff_role ?? "owner" }
+        ? { staffRole: access!.staff_role }
         : {}),
     });
   });
@@ -448,6 +452,12 @@ export async function createApp(
       return void res.status(400).json({ message: "请求必须为有效 JSON" });
     if (error.type === "entity.too.large")
       return void res.status(413).json({ message: "请求内容过大" });
+    if (error.type === "encoding.unsupported")
+      return void res.status(415).json({
+        message: "不支持压缩请求体，请发送普通 JSON",
+        code: "UNSUPPORTED_CONTENT_ENCODING",
+        requestId,
+      });
     if (databaseBusy) {
       console.error(
         JSON.stringify({

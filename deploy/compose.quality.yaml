@@ -4,6 +4,10 @@ services:
   api:
     environment:
       AI_ENABLED: "true"
+      # This isolated protocol matrix intentionally exceeds daily demo limits.
+      AI_USER_DAILY_CONSULTATIONS: "200"
+      AI_DAILY_PROVIDER_CALLS: "2000"
+      SUPPORT_DAILY_CONVERSATIONS: "200"
       LLM_BASE_URL: http://provider:18103
       LLM_API_KEY: synthetic-quality-provider
       EMBEDDING_BASE_URL: http://provider:18103

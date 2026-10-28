@@ -21,6 +21,7 @@ import {
   tokenize,
   splitSections,
   cosineRank,
+  mergeCosineRanks,
   parseDocument,
 } from "../src/ai-document-worker";
 
@@ -29,12 +30,14 @@ let sql: DatabaseSync,
   provider: Server,
   base: string,
   stop: (() => void) | undefined;
+let providerCalls = 0;
 const listen = async (server: Server) => {
   server.listen(0, "127.0.0.1");
   await new Promise<void>((r) => server.once("listening", r));
   return `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 };
 beforeEach(async () => {
+  providerCalls = 0;
   sql = openDatabase(":memory:");
   ensureRuntimeSchema(sql);
   ensureKnowledgeSchema(sql);
@@ -53,6 +56,7 @@ beforeEach(async () => {
   sql
     .prepare("INSERT INTO staff_access VALUES('marketing','operations',1)")
     .run();
+  sql.prepare("INSERT INTO staff_access VALUES('admin','owner',1)").run();
   const app = express();
   app.use(express.json({ limit: "15mb" }));
   registerKnowledgeRoutes(app, sql);
@@ -67,6 +71,7 @@ beforeEach(async () => {
   server = createServer(app);
   base = await listen(server);
   provider = createServer(async (req, res) => {
+    providerCalls++;
     const parts: Buffer[] = [];
     for await (const chunk of req) parts.push(Buffer.from(chunk));
     const body = JSON.parse(Buffer.concat(parts).toString());
@@ -170,6 +175,94 @@ async function awaitStatus(id: string, status: string) {
   );
 }
 describe("knowledge document lifecycle and retrieval", () => {
+  it.each([
+    ["AI_KNOWLEDGE_MAX_CHUNKS", "1", "DOCUMENT_CORPUS_CHUNK_LIMIT"],
+    ["AI_KNOWLEDGE_MAX_VECTOR_BYTES", "23", "DOCUMENT_CORPUS_VECTOR_LIMIT"],
+  ])(
+    "preserves published knowledge when retained versions exhaust %s",
+    async (setting, limit, error) => {
+      const doc = await upload("已发布原政策：定制商品不支持无理由退货。"),
+        priorId = `${doc.id}:v1:0`;
+      stop = startKnowledgeWorker(sql);
+      await awaitStatus(doc.id, "draft");
+      expect(
+        (
+          await request(`/${doc.id}/actions`, {
+            action: "publish",
+            version: 1,
+            requestId: crypto.randomUUID(),
+          })
+        ).status,
+      ).toBe(200);
+      const callsBefore = providerCalls;
+      vi.stubEnv(setting, limit);
+      expect(
+        (
+          await request(`/${doc.id}/actions`, {
+            action: "save",
+            version: 1,
+            requestId: crypto.randomUUID(),
+            text: "待审核新政策：定制商品先转人工。",
+          })
+        ).status,
+      ).toBe(200);
+      await awaitStatus(doc.id, "failed");
+      expect(
+        sql
+          .prepare(
+            "SELECT published_version,error FROM ai_documents WHERE id=?",
+          )
+          .get(doc.id),
+      ).toEqual({ published_version: 1, error });
+      expect(
+        sql
+          .prepare(
+            "SELECT count(*) n FROM ai_knowledge_chunks WHERE document_id=?",
+          )
+          .get(doc.id)?.n,
+      ).toBe(1);
+      expect(
+        sql
+          .prepare("SELECT text FROM ai_knowledge_chunks WHERE id=?")
+          .get(priorId)?.text,
+      ).toContain("不支持无理由退货");
+      expect(providerCalls).toBe(callsBefore);
+      expect(
+        sourcesStillValid(sql, [
+          {
+            id: priorId,
+            documentId: doc.id,
+            version: 1,
+            title: "政策",
+            text: "原政策",
+          },
+        ]),
+      ).toBe(true);
+    },
+  );
+
+  it("accounts child calls before indexing completes using the persistent provider budget", async () => {
+    vi.stubEnv("AI_DAILY_PROVIDER_CALLS", "1");
+    const doc = await upload("第一段政策。" + "甲".repeat(9000));
+    stop = startKnowledgeWorker(sql);
+    await awaitStatus(doc.id, "failed");
+    expect(
+      sql.prepare("SELECT error FROM ai_documents WHERE id=?").get(doc.id)
+        ?.error,
+    ).toBe("AI_PROVIDER_BUDGET_EXHAUSTED");
+    expect(providerCalls).toBe(1);
+    expect(
+      sql.prepare("SELECT used FROM ai_daily_usage WHERE kind='provider'").get()
+        ?.used,
+    ).toBe(1);
+    expect(
+      sql
+        .prepare(
+          "SELECT count(*) n FROM ai_knowledge_chunks WHERE document_id=?",
+        )
+        .get(doc.id)?.n,
+    ).toBe(0);
+  });
   it("enforces support role, download authentication, format and upload limits", async () => {
     expect((await request("", undefined, "customer")).status).toBe(401);
     expect((await request("", undefined, "marketing")).status).toBe(403);
@@ -360,6 +453,48 @@ describe("knowledge document lifecycle and retrieval", () => {
 });
 
 describe("bounded document processing", () => {
+  it("retrieves a semantic winner beyond the first vector batch", async () => {
+    const id = "batched-document",
+      at = new Date().toISOString();
+    sql
+      .prepare(
+        `INSERT INTO ai_documents(id,name,mime,raw,bytes,status,version,published_version,created_at,updated_at)
+      VALUES(?,?,'text/plain',?,1,'published',1,1,?,?)`,
+      )
+      .run(id, "批量合成.txt", Buffer.from("x"), at, at);
+    const insert = sql.prepare(
+      "INSERT INTO ai_knowledge_chunks VALUES(?,?,1,?,1,1,?,?,3)",
+    );
+    for (let i = 0; i < 130; i++) {
+      const chunkId = `${id}-${String(i).padStart(3, "0")}`,
+        text = `独立条目${i}，材料说明。`,
+        vector = Buffer.from(
+          new Float32Array(i === 129 ? [1, 0.5, 0.25] : [0, 1, 0]).buffer,
+        );
+      insert.run(chunkId, id, text, vector, aiConfig().embeddingModel);
+      sql
+        .prepare("INSERT INTO ai_knowledge_fts(chunk_id,tokens) VALUES(?,?)")
+        .run(chunkId, tokenize(text));
+    }
+    const result = await retrieveKnowledge(sql, "跨批向量检索");
+    expect(result.degraded).toEqual([]);
+    expect(result.sources[0]?.id).toBe(`${id}-129`);
+    expect(result.sources).toHaveLength(6);
+  });
+
+  it("merges semantic top candidates across bounded batches without retaining every vector", () => {
+    const first = Array.from({ length: 20 }, (_, i) => ({
+      id: `first-${i}`,
+      score: i / 100,
+    }));
+    const merged = mergeCosineRanks(first, [
+      { id: "later-best", score: 0.99 },
+      { id: "discarded", score: -1 },
+    ]);
+    expect(merged).toHaveLength(20);
+    expect(merged[0]?.id).toBe("later-best");
+    expect(merged.some((row) => row.id === "discarded")).toBe(false);
+  });
   it("packs short OCR paragraphs with their entity, amount, warranty and prohibition on the same page", () => {
     const chunks = splitSections([
       {

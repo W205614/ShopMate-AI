@@ -298,7 +298,7 @@ export const operationsApi = {
       const actor = admin();
       const owner = sql
         .prepare(
-          "SELECT coalesce(s.staff_role,'owner') AS role,coalesce(s.active,1) AS active FROM accounts a LEFT JOIN staff_access s ON s.account_id=a.id WHERE a.id=? AND a.role='admin'",
+          "SELECT s.staff_role AS role,s.active FROM accounts a JOIN staff_access s ON s.account_id=a.id WHERE a.id=? AND a.role='admin'",
         )
         .get(actor.id);
       if (!owner || owner.role !== "owner" || !owner.active)
@@ -306,7 +306,7 @@ export const operationsApi = {
       if (input.id) {
         const current = sql
           .prepare(
-            "SELECT a.id,a.username,coalesce(s.staff_role,'owner') AS staffRole,coalesce(s.active,1) AS active FROM accounts a LEFT JOIN staff_access s ON s.account_id=a.id WHERE a.id=? AND a.role='admin'",
+            "SELECT a.id,a.username,s.staff_role AS staffRole,s.active FROM accounts a JOIN staff_access s ON s.account_id=a.id WHERE a.id=? AND a.role='admin'",
           )
           .get(input.id) as
           | {
@@ -324,7 +324,7 @@ export const operationsApi = {
         ) {
           const owners = sql
             .prepare(
-              "SELECT count(*) AS count FROM accounts a LEFT JOIN staff_access s ON a.id=s.account_id WHERE a.role='admin' AND coalesce(s.staff_role,'owner')='owner' AND coalesce(s.active,1)=1",
+              "SELECT count(*) AS count FROM accounts a JOIN staff_access s ON a.id=s.account_id WHERE a.role='admin' AND s.staff_role='owner' AND s.active=1",
             )
             .get() as { count: number };
           requireThat(owners.count > 1, "不能停用或降级最后一位店主");

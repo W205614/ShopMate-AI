@@ -98,6 +98,7 @@ beforeEach(async () => {
     await createApp(sql, { origins: ["http://localhost"] }),
   );
   base = await listen(server);
+  sql.prepare("INSERT INTO staff_access VALUES('admin','owner',1)").run();
 });
 
 afterEach(async () => {

@@ -4,7 +4,9 @@ import { aiConfig } from "./ai-provider";
 import { enqueueSupportRun } from "./ai-support";
 import { availableStock } from "./commerce-rules";
 import { cancelSupportWork, ensureSupportSchema } from "./ai-schema";
-import { context } from "./repository";
+import { context as requestContext } from "./repository";
+import { reserveNewConversation, resourceLimits } from "./ai-budget";
+import { HttpError } from "./errors";
 import {
   transact,
   userId,
@@ -34,6 +36,7 @@ export const supportApi: Pick<
         ? db.products.find((p) => p.id === context.productId && p.active)
         : undefined;
       requireThat(!context.productId || product, "咨询的商品不存在或已下架");
+      reserveNewConversation(requestContext.getStore()!.sql, uid);
       const conversationId = id("chat-");
       db.conversations.unshift({
         id: conversationId,
@@ -70,6 +73,15 @@ export const supportApi: Pick<
         "会话不存在或已关闭，请新建咨询",
       );
       requireThat(text(message, 1000), "消息不能为空且不能超过 1000 字");
+      if (
+        conversation.messages.filter((entry) => entry.role === "user").length >=
+        resourceLimits().userTurns
+      )
+        throw new HttpError(
+          409,
+          "本次会话咨询轮次已达上限，请新建咨询",
+          "SUPPORT_TURN_LIMIT",
+        );
       const messageId = id("msg-");
       conversation.messages.push({
         id: messageId,
@@ -80,7 +92,7 @@ export const supportApi: Pick<
       if (conversation.status !== "bot") return;
       if (aiConfig().enabled) {
         enqueueSupportRun(
-          context.getStore()!.sql,
+          requestContext.getStore()!.sql,
           conversation.id,
           userId(),
           messageId,
@@ -165,8 +177,8 @@ export const supportApi: Pick<
         "会话不存在或已关闭",
       );
       if (conversation.status !== "bot") return;
-      ensureSupportSchema(context.getStore()!.sql);
-      cancelSupportWork(context.getStore()!.sql, conversationId);
+      ensureSupportSchema(requestContext.getStore()!.sql);
+      cancelSupportWork(requestContext.getStore()!.sql, conversationId);
       conversation.status = "waiting";
       conversation.messages.push({
         id: id("msg-"),
@@ -203,8 +215,8 @@ export const supportApi: Pick<
         (c) => c.id === conversationId,
       );
       requireThat(conversation, "会话不存在");
-      ensureSupportSchema(context.getStore()!.sql);
-      cancelSupportWork(context.getStore()!.sql, conversationId);
+      ensureSupportSchema(requestContext.getStore()!.sql);
+      cancelSupportWork(requestContext.getStore()!.sql, conversationId);
       conversation.status = "closed";
     });
   },

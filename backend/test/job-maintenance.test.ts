@@ -24,7 +24,7 @@ beforeAll(async () => {
       .prepare("INSERT INTO sessions VALUES(?,?,?)")
       .run(tokenHash(id!), id!, Date.now() + 3600000);
   }
-  sql.exec("INSERT INTO staff_access VALUES('staff','support',1)");
+  sql.exec("INSERT INTO staff_access VALUES('owner','owner',1),('staff','support',1)");
   server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;

@@ -68,6 +68,7 @@ export function commandReadScope(
 ): DatabaseReadScope {
   const ids = new Set<string>(),
     first = command.args[0];
+  let proposalConversation: string | undefined;
   const add = (value: unknown) => {
     if (typeof value === "string" && value) ids.add(value);
   };
@@ -80,9 +81,14 @@ export function commandReadScope(
   if (typeof first === "string") {
     if (command.method === "confirmSupportProposal") {
       const proposal = sql
-        .prepare("SELECT args FROM support_proposals WHERE id=? AND user_id=?")
+        .prepare(
+          "SELECT args,conversation_id FROM support_proposals WHERE id=? AND user_id=?",
+        )
         .get(first, user?.id ?? "");
-      if (proposal) add(JSON.parse(String(proposal.args)).orderId);
+      if (proposal) {
+        add(JSON.parse(String(proposal.args)).orderId);
+        proposalConversation = String(proposal.conversation_id);
+      }
     }
     if (
       [
@@ -160,6 +166,25 @@ export function commandReadScope(
     }
   }
   const domains: NonNullable<DatabaseReadScope["domains"]> = {};
+  if (command.method === "confirmSupportProposal")
+    domains.conversations = {
+      keys: proposalConversation ? [proposalConversation] : [],
+      userId: user?.id,
+    };
+  if (command.method === "createConversation")
+    domains.conversations = { appendOnly: "prepend" };
+  else if (
+    [
+      "sendMessage",
+      "transferConversation",
+      "replyConversation",
+      "closeConversation",
+    ].includes(command.method)
+  )
+    domains.conversations = {
+      keys: typeof first === "string" ? [first] : [],
+      ...(user ? { userId: user.id } : {}),
+    };
   if (user) {
     for (const name of ["carts", "addresses", "notifications"] as const)
       domains[name] = { userId: user.id };

@@ -85,6 +85,12 @@ export function registerDiagnostics(
           "length(CAST(result AS BLOB))",
         ),
         jobs: totals(sql, "job_queue", "length(CAST(payload AS BLOB))"),
+        conversations: totals(
+          sql,
+          "biz_conversations",
+          "length(CAST(data AS BLOB))",
+        ),
+        knowledgeVectors: totals(sql, "ai_knowledge_chunks", "length(vector)"),
         quotes: totals(
           sql,
           "biz_checkout_quotes",

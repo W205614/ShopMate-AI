@@ -1,3 +1,4 @@
+import { acquireProviderBudget } from "./ai-budget";
 /** Provider errors deliberately exclude HTTP bodies, URLs and credentials. */
 export class ProviderError extends Error {
   constructor(
@@ -70,6 +71,22 @@ async function post(
   }
   const timeout = AbortSignal.timeout(timeoutMs);
   const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  try {
+    await acquireProviderBudget(combined);
+  } catch (error) {
+    if (combined.aborted)
+      throw new ProviderError(
+        signal?.aborted ? "PROVIDER_CANCELLED" : "PROVIDER_TIMEOUT",
+      );
+    if ((error as { code?: string })?.code === "AI_PROVIDER_BUDGET_EXHAUSTED")
+      throw new ProviderError("AI_PROVIDER_BUDGET_EXHAUSTED", 429);
+    if (
+      (error as { code?: string })?.code ===
+      "AI_PROVIDER_BUDGET_CONTEXT_REQUIRED"
+    )
+      throw new ProviderError("AI_PROVIDER_BUDGET_CONTEXT_REQUIRED", 503);
+    throw error;
+  }
   try {
     const response = await fetch(endpoint, {
       method: "POST",

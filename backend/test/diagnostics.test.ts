@@ -50,7 +50,7 @@ it("restricts diagnostics to settings permission and returns aggregate data with
     sql.prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)").run(id, id, id, role, "unused", 1);
     sql.prepare("INSERT INTO sessions VALUES(?,?,?)").run(tokenHash(id!), id!, Date.now() + 3600000);
   }
-  sql.prepare("INSERT INTO staff_access VALUES('staff','support',1)").run();
+  sql.prepare("INSERT INTO staff_access VALUES('owner','owner',1),('staff','support',1)").run();
   sql.prepare("INSERT INTO command_results VALUES('customer','pay','secret-request','private-fingerprint','\"SECRET_CONTENT\"',?)").run(new Date().toISOString());
   sql.prepare("INSERT INTO job_queue(id,kind,payload,status,run_after,created_at) VALUES('secret-job','notification','SECRET_PAYLOAD','failed',?,?)").run(Date.now() - 600000, new Date().toISOString());
   sql.prepare("INSERT INTO job_queue(id,kind,payload,status,run_after,created_at) VALUES('pending-job','notification','{}','pending',?,?)").run(Date.now() - 600000, new Date().toISOString());

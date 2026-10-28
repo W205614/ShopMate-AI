@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from windows_recycle import checked_path, recycle_paths
+from windows_recycle import checked_path, hidden_process_options, recycle_paths
 
 
 def choose_backups(root: Path, directory: Path, node: str):
@@ -20,7 +20,7 @@ def choose_backups(root: Path, directory: Path, node: str):
             path = checked_path(path, directory)
             manifest = checked_path(Path(str(path) + ".manifest.json"), directory)
             before = (path.stat().st_size, path.stat().st_mtime_ns, manifest.stat().st_mtime_ns)
-            result = subprocess.run([node, "--import", "tsx", "src/maintenance.ts", "inspect", str(path)], cwd=root / "backend", capture_output=True, text=True, encoding="utf-8", timeout=120)
+            result = subprocess.run([node, "--import", "tsx", "src/maintenance.ts", "inspect", str(path)], cwd=root / "backend", capture_output=True, text=True, encoding="utf-8", timeout=120, **hidden_process_options())
             if result.returncode:
                 raise ValueError("BACKUP_VERIFICATION_FAILED")
             data = json.loads(result.stdout)

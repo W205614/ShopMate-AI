@@ -11,6 +11,11 @@ import time
 import uuid
 
 
+def hidden_process_options() -> dict:
+    """Console children of pythonw must not create their own Windows console."""
+    return {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
+
 def checked_path(value: str | Path, allowed_root: Path) -> Path:
     original = Path(value).absolute()
     root = allowed_root.resolve(strict=True)
@@ -83,7 +88,7 @@ def recycle_paths(values: list[Path], allowed_root: Path) -> list[dict]:
     paths = [checked_path(path, allowed_root) for path in values]
     if not paths:
         return []
-    identity = subprocess.check_output(["whoami", "/user", "/fo", "csv", "/nh"])
+    identity = subprocess.check_output(["whoami", "/user", "/fo", "csv", "/nh"], **hidden_process_options())
     sid = re.search(rb"S-1-[0-9-]+", identity)
     if not sid:
         raise OSError("Cannot establish current Recycle Bin owner")

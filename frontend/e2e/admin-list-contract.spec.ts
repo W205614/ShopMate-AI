@@ -223,6 +223,7 @@ test("异步图片校验期间切换管理员会关闭旧草稿，旧任务不�
         "INSERT INTO accounts SELECT 'admin2','admin2','备用管理员',role,password_hash,created_at FROM accounts WHERE id='admin'",
       )
       .run();
+    sql.prepare("INSERT INTO staff_access VALUES ('admin2','owner',1)").run();
   } finally {
     sql.close();
   }

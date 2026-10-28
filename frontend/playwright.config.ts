@@ -28,6 +28,8 @@ export default defineConfig({
             APP_ORIGINS: "http://127.0.0.1:5173",
             ALLOW_LEGACY_COMMANDS: "true",
             AI_ENABLED: "false",
+            // The isolated pagination fixture creates 31 conversations in one test.
+            SUPPORT_DAILY_CONVERSATIONS: "200",
           },
         },
         {

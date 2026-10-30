@@ -80,6 +80,16 @@ export function getPendingCommands() {
     (entry) => entry.role === role && entry.actorId === actorId,
   );
 }
+export function getPendingCommandState() {
+  try {
+    return { commands: getPendingCommands(), error: "" };
+  } catch (cause) {
+    return {
+      commands: [],
+      error: cause instanceof Error ? cause.message : "无法读取请求恢复记录",
+    };
+  }
+}
 export async function resolvePendingCommand(command: PendingCommand) {
   const result = await request<{ found: boolean }>(
     `/api/requests/${encodeURIComponent(command.requestId)}?method=${encodeURIComponent(command.method)}&role=${command.role}`,

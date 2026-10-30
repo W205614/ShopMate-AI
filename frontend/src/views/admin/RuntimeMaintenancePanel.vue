@@ -5,6 +5,7 @@ import { useShop } from "../../stores/shop";
 import {
   commerceAction,
   getPendingCommands,
+  getPendingCommandState,
   resolvePendingCommand,
 } from "../../services/api";
 import { request, RequestError } from "../../services/repository";
@@ -63,8 +64,9 @@ const loading = ref(false),
   total = ref(0),
   pages = ref(1),
   originalRetry = ref<Job>();
-const recoveryCommands = ref(
-  getPendingCommands().filter((c) => c.method === "retryJob"),
+const recoveryState = ref(getPendingCommandState());
+const recoveryCommands = computed(() =>
+  recoveryState.value.commands.filter((c) => c.method === "retryJob"),
 );
 const permitted = computed(() =>
   shop.adminSession?.permissions?.includes("settings"),
@@ -124,6 +126,7 @@ const backupStale = computed(() => {
 });
 async function load() {
   if (!current()) return;
+  recoveryState.value = getPendingCommandState();
   const ticket = ++sequence;
   loading.value = true;
   error.value = "";
@@ -170,7 +173,7 @@ async function submitRetry(job: Job) {
       await commerceAction("retryJob", job.id, job.retryVersion);
       assertCurrent();
       originalRetry.value = undefined;
-      recoveryCommands.value = [];
+      recoveryState.value = getPendingCommandState();
       await load();
     } catch (failure) {
       if (current()) {
@@ -178,16 +181,19 @@ async function submitRetry(job: Job) {
           originalRetry.value = undefined;
           if (failure.status === 409) await load();
         }
-        recoveryCommands.value = getPendingCommands().filter(
-          (c) => c.method === "retryJob",
-        );
+        recoveryState.value = getPendingCommandState();
       }
       throw failure;
     }
   }, "任务已重新排队，请刷新查看执行结果");
 }
 async function retry(job: Job) {
-  if (busy.value || originalRetry.value || recoveryCommands.value.length)
+  if (
+    busy.value ||
+    recoveryState.value.error ||
+    originalRetry.value ||
+    recoveryCommands.value.length
+  )
     return;
   try {
     await ElMessageBox.confirm(
@@ -219,7 +225,7 @@ async function resolveOriginal() {
         );
     }
     originalRetry.value = undefined;
-    recoveryCommands.value = [];
+    recoveryState.value = getPendingCommandState();
     await load();
   }, "已核对上次请求，请查看任务最新状态");
 }
@@ -231,7 +237,7 @@ watch(
     jobs.value = [];
     diagnostics.value = undefined;
     originalRetry.value = undefined;
-    recoveryCommands.value = [];
+    recoveryState.value = { commands: [], error: "" };
     loadedAt.value = "";
     error.value = "";
   },
@@ -269,6 +275,12 @@ onUnmounted(() => {
       <span v-if="loadedAt">读取于 {{ beijing(loadedAt) }}（北京时间）</span>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
+    <el-alert
+      v-if="recoveryState.error"
+      :title="recoveryState.error"
+      type="error"
+      :closable="false"
+    />
     <template v-if="mode === 'jobs'">
       <el-alert
         v-if="originalRetry || recoveryCommands.length"
@@ -323,7 +335,12 @@ onUnmounted(() => {
                 row.status === 'failed' &&
                 ['notification', 'expiry'].includes(row.kind)
               "
-              :disabled="busy || !!originalRetry || !!recoveryCommands.length"
+              :disabled="
+                busy ||
+                !!recoveryState.error ||
+                !!originalRetry ||
+                !!recoveryCommands.length
+              "
               @click="retry(row)"
               >重试任务</el-button
             >
@@ -376,9 +393,7 @@ onUnmounted(() => {
         <el-descriptions-item label="业务任务"
           >待执行 {{ diagnostics.jobs.pending }}；失败
           {{ diagnostics.jobs.failed }}；最老到期等待
-          {{
-            Math.round(diagnostics.jobs.oldestWaitingMs / 1000)
-          }}
+          {{ Math.round(diagnostics.jobs.oldestWaitingMs / 1000) }}
           秒</el-descriptions-item
         >
         <el-descriptions-item label="AI 客服"

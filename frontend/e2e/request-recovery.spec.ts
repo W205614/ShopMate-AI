@@ -32,6 +32,31 @@ test("损坏的请求恢复记录显示错误，修复存储后可重新读取",
   await expect(warning).toHaveCount(0);
 });
 
+test("恢复记录损坏时后台任务面板仍可读取，刷新后恢复正常提示", async ({
+  page,
+}) => {
+  await page.request.post("/api/auth/login", {
+    headers,
+    data: { role: "admin", username: "admin", password: TEST_ADMIN_PASSWORD },
+  });
+  await page.addInitScript(() =>
+    sessionStorage.setItem("shopmate:pending-commands", "[null]"),
+  );
+  await page.goto("/admin/operations?tab=jobs");
+  await expect(page.locator(".maintenance-panel")).toBeVisible();
+  await expect(
+    page.locator(".maintenance-panel").getByRole("alert"),
+  ).toContainText("请求恢复记录损坏");
+  await page.evaluate(() =>
+    sessionStorage.setItem("shopmate:pending-commands", "[]"),
+  );
+  await page.getByRole("button", { name: "重新读取恢复记录" }).click();
+  await page.getByRole("button", { name: "刷新任务", exact: true }).click();
+  await expect(
+    page.getByText("请求恢复记录损坏，请核对已提交记录", { exact: true }),
+  ).toHaveCount(0);
+});
+
 test("后台提交已成功但状态读取失败，保留成功结果并允许重新同步", async ({
   page,
 }) => {

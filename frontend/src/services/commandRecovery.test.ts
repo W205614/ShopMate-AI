@@ -29,10 +29,15 @@ it.each(["{", "{}", "[null]"])(
     const fetch = vi.fn().mockResolvedValueOnce(json(snapshot()));
     vi.stubGlobal("fetch", fetch);
     const repository = await import("./repository");
-    const { getPendingCommands, commerceAction } = await import("./api");
+    const { getPendingCommands, getPendingCommandState, commerceAction } =
+      await import("./api");
     await repository.refreshState("admin");
     sessionStorage.setItem("shopmate:pending-commands", raw);
     expect(() => getPendingCommands()).toThrow(/请求恢复记录/);
+    expect(getPendingCommandState()).toEqual({
+      commands: [],
+      error: expect.stringMatching(/请求恢复记录/),
+    });
     await expect(
       commerceAction("toggleProduct", "p01", true, 1),
     ).rejects.toThrow(/请求恢复记录/);

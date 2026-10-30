@@ -6,7 +6,7 @@ import {
   hasPasswordChangeNotice,
   refreshState,
   hasConfirmedLogout,
-  getPendingCommands,
+  getPendingCommandState,
   resolvePendingCommand,
 } from "./services/api";
 const shop = useShop();
@@ -59,14 +59,7 @@ const pendingVersion = ref(0),
 const pendingState = computed(() => {
   void shop.db;
   void pendingVersion.value;
-  try {
-    return { commands: getPendingCommands(), error: "" };
-  } catch (cause) {
-    return {
-      commands: [],
-      error: cause instanceof Error ? cause.message : "无法读取请求恢复记录",
-    };
-  }
+  return getPendingCommandState();
 });
 const pendingCommands = computed(() => pendingState.value.commands);
 async function checkCommands() {

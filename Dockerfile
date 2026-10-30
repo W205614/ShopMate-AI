@@ -1,4 +1,4 @@
-FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS build
+FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
@@ -6,7 +6,8 @@ COPY frontend/ ./
 COPY shared/ /app/shared/
 RUN npm run build
 
-FROM nginx:stable-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
+FROM nginx:stable-alpine-slim@sha256:dede8895648b461178c3bc604f7eed4423efe5220b2c4d839f5eb3d34ac3f8f7
+RUN apk --timeout 60 update && apk --timeout 60 upgrade && rm -rf /var/cache/apk/*
 ARG VCS_REF=local
 LABEL org.opencontainers.image.source="https://github.com/W205614/ShopMate-AI" \
       org.opencontainers.image.revision=$VCS_REF

@@ -55,6 +55,36 @@ jobs:
           APP_ORIGINS: http://127.0.0.1:18087
           VCS_REF: ${{ github.sha }}
         run: docker compose -p shopmate-auth-ci -f compose.yaml -f deploy/compose.acceptance.yaml up -d --build --wait
+      - name: Scan complete API image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: shopmate-ai-api:acceptance
+          scanners: vuln
+          format: json
+          output: api-vulnerabilities.json
+          exit-code: "0"
+      - name: Scan complete Web image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: shopmate-ai-web:acceptance
+          scanners: vuln
+          format: json
+          output: web-vulnerabilities.json
+          exit-code: "0"
+          skip-setup-trivy: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-vulnerability-reports
+          path: "*-vulnerabilities.json"
+          if-no-files-found: error
+      - name: Reject high and critical image vulnerabilities
+        working-directory: .
+        env:
+          TRIVY_CACHE_DIR: ${{ github.workspace }}/.cache/trivy
+        run: |
+          trivy image --scanners vuln --skip-db-update --severity HIGH,CRITICAL --exit-code 1 shopmate-ai-api:acceptance
+          trivy image --scanners vuln --skip-db-update --severity HIGH,CRITICAL --exit-code 1 shopmate-ai-web:acceptance
       - name: Verify proxy security headers and compressed request rejection
         working-directory: .
         env:

@@ -95,6 +95,16 @@ npm --prefix frontend run test:e2e
 
 生产依赖审计使用 `npm --prefix backend audit --omit=dev` 和 `npm --prefix frontend audit --omit=dev`。
 
+容器系统包和 Node.js 内置组件不属于项目 npm 锁文件的审计范围。更新 Dockerfile 中的官方基础镜像摘要后，应重新构建并扫描实际镜像；运行时安全公告还需核对对应 Node.js 补丁版本，不能只比较其内置库显示的版本号，因为安全修复可能回移植而不改库版本号。
+
+```powershell
+docker compose build --pull
+docker scout cves local://shopmate-ai-api:local
+docker scout cves local://shopmate-ai-web:local
+```
+
+CI 使用 Trivy 扫描 API/Web 镜像中的系统包和应用库，所有等级报告保存在 `container-vulnerability-reports` 构件中；高危和严重漏洞会使检查失败，包括尚无修复版本的条目。不得以 npm 审计通过代替镜像检查，也不得将未修复告警默认为已修复。
+
 浏览器测试自动启动隔离后端与 Vite，种子和测试账号仅写入 `backend/.e2e/`，运行前释放 3001/5173 端口。Windows 默认使用已安装的 Edge；Linux 需在 `frontend` 目录先执行 `npx playwright install --with-deps chromium`。
 
 外部容器写入验收必须使用独立项目、镜像标签、端口和数据卷，不能指向日常部署。完整命令、环境变量及边界见 [联合验收](archive/joint-acceptance.md)。日常环境只做健康与公开目录等只读检查。

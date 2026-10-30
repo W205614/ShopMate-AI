@@ -23,6 +23,32 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it.each(["{", "{}", "[null]"])(
+  "reports corrupt recovery data %j and prevents a new submission",
+  async (raw) => {
+    const fetch = vi.fn().mockResolvedValueOnce(json(snapshot()));
+    vi.stubGlobal("fetch", fetch);
+    const repository = await import("./repository");
+    const { getPendingCommands, commerceAction } = await import("./api");
+    await repository.refreshState("admin");
+    sessionStorage.setItem("shopmate:pending-commands", raw);
+    expect(() => getPendingCommands()).toThrow(/请求恢复记录/);
+    await expect(
+      commerceAction("toggleProduct", "p01", true, 1),
+    ).rejects.toThrow(/请求恢复记录/);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.getItem("shopmate:pending-commands")).toBe(raw);
+  },
+);
+
+it("reports unavailable recovery storage instead of returning an empty list", async () => {
+  const { getPendingCommands } = await import("./api");
+  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    throw new Error("denied");
+  });
+  expect(() => getPendingCommands()).toThrow("无法读取请求恢复记录");
+});
+
 it("rejects an identity change during fingerprinting before sending the old draft", async () => {
   const fetch = vi.fn().mockResolvedValueOnce(json(snapshot()));
   vi.stubGlobal("fetch", fetch);

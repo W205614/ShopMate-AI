@@ -10,6 +10,8 @@ import { context } from "../src/repository";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { methods } from "../src/validation";
 import { statSync } from "node:fs";
+import { createApp } from "../src/app";
+import { tokenHash } from "../src/auth";
 const sql = openDatabase(":memory:");
 const png = (size: number) => {
   const bytes = Buffer.alloc(size);
@@ -66,29 +68,61 @@ it("rejects remote/unknown local sources, malformed encodings and mismatched fil
     expect(() => validateImages([image]), image).toThrow();
   }
 });
-it("validates product and category images inside the transaction, preserving drafts' persisted data on rejection", async () => {
+it("rejects invalid images at the request boundary without changing persisted data", async () => {
   const before = readDatabase(sql),
     product = before.products[0]!;
-  await expect(
-    admin(() =>
-      catalogApi.saveProduct({
-        ...product,
-        images: ["data:image/png;base64,aGVsbG8="],
-      }),
-    ),
-  ).rejects.toThrow();
-  expect(readDatabase(sql)).toEqual(before);
-  await expect(
-    admin(() =>
-      catalogApi.saveCategory({
-        name: "无效图",
-        description: "测试无效分类图片",
-        sort: 1,
-        image: "https://example.com/x.jpg",
-      }),
-    ),
-  ).rejects.toThrow();
-  expect(readDatabase(sql)).toEqual(before);
+  sql
+    .prepare(
+      "INSERT INTO accounts VALUES ('admin','admin','管理员','admin','synthetic',1)",
+    )
+    .run();
+  sql
+    .prepare("INSERT INTO sessions VALUES (?, 'admin', ?)")
+    .run(tokenHash("image-boundary"), Date.now() + 60000);
+  const app = await createApp(sql, { origins: [] });
+  sql.prepare("INSERT INTO staff_access VALUES ('admin','owner',1)").run();
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const address = server.address() as { port: number };
+  try {
+    for (const [method, input] of [
+      [
+        "saveProduct",
+        { ...product, images: ["data:image/png;base64,aGVsbG8="] },
+      ],
+      [
+        "saveCategory",
+        {
+          name: "无效图",
+          description: "测试",
+          sort: 1,
+          image: "https://example.com/x.jpg",
+        },
+      ],
+    ]) {
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/api/actions/${method}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-ShopMate-Request": "1",
+            Cookie: "shopmate_admin=image-boundary",
+          },
+          body: JSON.stringify({
+            args: [input],
+            requestId: crypto.randomUUID(),
+          }),
+        },
+      );
+      expect(response.status).toBe(400);
+      expect((await response.json()).code).toBe("INVALID_INPUT");
+      expect(readDatabase(sql)).toEqual(before);
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
   await admin(() =>
     catalogApi.saveCategory({
       name: "新分类",

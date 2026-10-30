@@ -7,16 +7,15 @@ import { createSeed } from "../../shared/domain/seed";
 import { expireOrders } from "../src/commerce-rules";
 import { createApp } from "../src/app";
 import { createAccount } from "../src/auth";
+import { methods } from "../src/validation";
 const sql = openDatabase(":memory:");
 const sessions = {
   user: { id: "u1", name: "用户", role: "user" as const },
   admin: { id: "admin", name: "管理员", role: "admin" as const },
 };
-function adjust(...args: unknown[]) {
+async function adjust(...args: unknown[]) {
   return context.run({ sql, ...sessions }, () =>
-    (catalogApi.adjustStock as (...args: unknown[]) => Promise<unknown>)(
-      ...args,
-    ),
+    catalogApi.adjustStock(...methods.adjustStock.args.parse(args)),
   );
 }
 const db = () => readDatabase(sql);
@@ -195,7 +194,9 @@ it("幂等记录 24 小时清理，历史变动和采购流水保留；管理员
     );
     const before = db();
     expect(Reflect.get(before, "inventoryRequests")).toHaveLength(2);
-    expect(before.orders.some((order) => order.status === "pending")).toBe(true);
+    expect(before.orders.some((order) => order.status === "pending")).toBe(
+      true,
+    );
     expect(expireOrders(before, "2026-10-18T09:59:59Z")).toBe(true); // seed pending orders also expire
     expect(Reflect.get(before, "inventoryRequests")).toHaveLength(2);
     expireOrders(before, "2026-10-18T10:00:00Z");
@@ -207,7 +208,10 @@ it("幂等记录 24 小时清理，历史变动和采购流水保留；管理员
   }
 });
 it("库存 HTTP 兼容五参数、校验扩展参数并隔离管理员请求记录", async () => {
-  const app = await createApp(sql, { origins: ["http://localhost"], allowLegacyCommands: true });
+  const app = await createApp(sql, {
+    origins: ["http://localhost"],
+    allowLegacyCommands: true,
+  });
   await createAccount(
     sql,
     {

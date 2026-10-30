@@ -3,27 +3,32 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { transaction } from "./database";
 import { HttpError } from "./errors";
+import { integerSetting } from "./config";
 
 type BudgetGuard = () => void | Promise<void>;
 const providerBudget = new AsyncLocalStorage<BudgetGuard>();
 
-function positiveLimit(name: string, fallback: number, maximum: number) {
-  const value = Number(process.env[name] ?? fallback);
-  return Number.isSafeInteger(value) && value >= 1 && value <= maximum
-    ? value
-    : fallback;
-}
-
 export function resourceLimits() {
   return {
-    userDailyConsultations: positiveLimit(
+    userDailyConsultations: integerSetting(
       "AI_USER_DAILY_CONSULTATIONS",
       20,
+      1,
       10000,
     ),
-    dailyProviderCalls: positiveLimit("AI_DAILY_PROVIDER_CALLS", 100, 100000),
-    dailyConversations: positiveLimit("SUPPORT_DAILY_CONVERSATIONS", 20, 1000),
-    userTurns: positiveLimit("SUPPORT_MAX_USER_TURNS", 100, 1000),
+    dailyProviderCalls: integerSetting(
+      "AI_DAILY_PROVIDER_CALLS",
+      100,
+      1,
+      100000,
+    ),
+    dailyConversations: integerSetting(
+      "SUPPORT_DAILY_CONVERSATIONS",
+      20,
+      1,
+      1000,
+    ),
+    userTurns: integerSetting("SUPPORT_MAX_USER_TURNS", 100, 1, 1000),
   };
 }
 
@@ -113,28 +118,41 @@ type Pending = {
 const pending = new Map<string, Pending>();
 
 class WorkerBudgetError extends Error {
-  readonly code = "AI_PROVIDER_BUDGET_EXHAUSTED";
+  constructor(public readonly code: string) {
+    super(code);
+  }
 }
 
 if (process.env.AI_DOCUMENT_WORKER === "1") {
   process.on("message", (raw: unknown) => {
     if (!raw || typeof raw !== "object") return;
-    const reply = raw as { budgetResponse?: string; approved?: boolean };
+    const reply = raw as {
+      budgetResponse?: string;
+      approved?: boolean;
+      error?: string;
+    };
     if (typeof reply.budgetResponse !== "string") return;
     const request = pending.get(reply.budgetResponse);
     if (!request) return;
     if (reply.approved === true) request.resolve();
-    else request.reject(new WorkerBudgetError("AI_PROVIDER_BUDGET_EXHAUSTED"));
+    else
+      request.reject(
+        new WorkerBudgetError(
+          reply.error === "AI_PROVIDER_BUDGET_EXHAUSTED"
+            ? reply.error
+            : "AI_PROVIDER_BUDGET_UNAVAILABLE",
+        ),
+      );
   });
   process.on("disconnect", () => {
     for (const request of pending.values())
-      request.reject(new WorkerBudgetError("AI_PROVIDER_BUDGET_EXHAUSTED"));
+      request.reject(new WorkerBudgetError("AI_PROVIDER_BUDGET_UNAVAILABLE"));
   });
 }
 
 function requestWorkerBudget(signal: AbortSignal) {
   if (!process.send || !process.connected)
-    throw new WorkerBudgetError("AI_PROVIDER_BUDGET_EXHAUSTED");
+    throw new WorkerBudgetError("AI_PROVIDER_BUDGET_UNAVAILABLE");
   return new Promise<void>((resolve, reject) => {
     const id = randomUUID();
     const finish = (error?: Error) => {
@@ -146,7 +164,7 @@ function requestWorkerBudget(signal: AbortSignal) {
     };
     const cancel = () => finish(new Error("PROVIDER_CANCELLED"));
     const timer = setTimeout(
-      () => finish(new WorkerBudgetError("AI_PROVIDER_BUDGET_EXHAUSTED")),
+      () => finish(new WorkerBudgetError("AI_PROVIDER_BUDGET_UNAVAILABLE")),
       5000,
     );
     pending.set(id, {
@@ -156,7 +174,8 @@ function requestWorkerBudget(signal: AbortSignal) {
     signal.addEventListener("abort", cancel, { once: true });
     if (signal.aborted) return cancel();
     process.send!({ budgetRequest: id }, (error) => {
-      if (error) finish(new WorkerBudgetError("AI_PROVIDER_BUDGET_EXHAUSTED"));
+      if (error)
+        finish(new WorkerBudgetError("AI_PROVIDER_BUDGET_UNAVAILABLE"));
     });
   });
 }

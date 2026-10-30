@@ -12,10 +12,8 @@ import {
   now,
   ownedOrder,
   requireThat,
-  text,
   transact,
   userId,
-  integer,
 } from "./repository";
 
 export const activeAfterSale = (status: string) =>
@@ -87,23 +85,13 @@ export const marketingApi: Pick<
   async saveCoupon(input) {
     await transact((db) => {
       admin();
-      requireThat(
-        text(input.name, 60) &&
-          integer(input.threshold, 2) &&
-          integer(input.discount, 1) &&
-          input.discount < input.threshold &&
-          integer(input.totalLimit, 1),
-        "请填写有效券名称、满减金额和发行量，减免额须小于门槛",
-      );
+      requireThat(input.discount < input.threshold, "减免额须小于门槛");
       const start = Date.parse(input.claimStartsAt),
         end = Date.parse(input.claimEndsAt),
         from = Date.parse(input.validFrom),
         until = Date.parse(input.validUntil);
       requireThat(
-        [start, end, from, until].every(Number.isFinite) &&
-          start < end &&
-          from < until &&
-          end <= until,
+        start < end && from < until && end <= until,
         "领取与使用时间范围无效，领取截止不能晚于使用截止",
       );
       const old = db.coupons.find((c) => c.id === input.id);
@@ -204,13 +192,6 @@ export const marketingApi: Pick<
         "售后处理中暂不可评价",
       );
       requireThat(
-        integer(input.rating, 1) &&
-          input.rating <= 5 &&
-          text(input.content, 1000) &&
-          input.content.trim().length >= 5,
-        "请填写1–5星评分和5–1000字评价",
-      );
-      requireThat(
         !db.reviews.some(
           (r) => r.orderId === order.id && r.orderItemId === line.id,
         ),
@@ -242,7 +223,6 @@ export const marketingApi: Pick<
       admin();
       const review = db.reviews.find((r) => r.id === reviewId);
       requireThat(review && !review.deleted, "评价不存在或已被用户删除");
-      requireThat(typeof hidden === "boolean", "隐藏状态无效");
       requireThat(
         reviewEligible(db, review),
         "评价仅保留历史，不能恢复或隐藏公开展示",

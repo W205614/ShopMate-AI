@@ -56,11 +56,19 @@ const error = ref("");
 const reconnecting = ref(false);
 const pendingVersion = ref(0),
   commandNotice = ref("");
-const pendingCommands = computed(() => {
+const pendingState = computed(() => {
   void shop.db;
   void pendingVersion.value;
-  return getPendingCommands();
+  try {
+    return { commands: getPendingCommands(), error: "" };
+  } catch (cause) {
+    return {
+      commands: [],
+      error: cause instanceof Error ? cause.message : "无法读取请求恢复记录",
+    };
+  }
 });
+const pendingCommands = computed(() => pendingState.value.commands);
 async function checkCommands() {
   if (reconnecting.value) return;
   reconnecting.value = true;
@@ -119,7 +127,16 @@ onErrorCaptured((cause) => {
 });
 </script>
 <template>
-  <aside v-if="pendingCommands.length" class="storage-warning" role="status">
+  <aside v-if="pendingState.error" class="storage-warning" role="alert">
+    {{ pendingState.error }}。<button @click="pendingVersion++">
+      重新读取恢复记录
+    </button>
+  </aside>
+  <aside
+    v-else-if="pendingCommands.length"
+    class="storage-warning"
+    role="status"
+  >
     有 {{ pendingCommands.length }} 个提交结果待核对。<button
       :disabled="reconnecting"
       @click="checkCommands"

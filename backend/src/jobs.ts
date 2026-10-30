@@ -58,12 +58,18 @@ export function runDueJobs(
             .prepare("SELECT status FROM job_queue WHERE id=?")
             .get(job.id) as { status: string } | undefined;
           if (current?.status !== "pending") return;
-          const payload = JSON.parse(job.payload) as {
+          let payload: {
             userId?: unknown;
             orderId?: unknown;
             text?: unknown;
           };
+          try {
+            payload = JSON.parse(job.payload);
+          } catch {
+            throw new Error("INVALID_NOTIFICATION_PAYLOAD");
+          }
           if (
+            !payload ||
             typeof payload.userId !== "string" ||
             !payload.userId ||
             typeof payload.text !== "string" ||
@@ -113,7 +119,9 @@ export function runDueJobs(
         )
         .run(
           attempts,
-          attempts >= MAX_ATTEMPTS ? "failed" : "pending",
+          code !== "JOB_EXECUTION_FAILED" || attempts >= MAX_ATTEMPTS
+            ? "failed"
+            : "pending",
           at + Math.min(3600000, 1000 * 2 ** attempts),
           code,
           job.id,

@@ -38,33 +38,47 @@ interface PendingCommand {
   role: Role;
   actorId: string;
 }
+function readPendingCommands(): PendingCommand[] {
+  let current: unknown;
+  try {
+    current = JSON.parse(sessionStorage.getItem(commandStorageKey) ?? "[]");
+  } catch {
+    throw new Error(
+      "无法读取请求恢复记录，请先恢复浏览器会话存储并核对已提交记录",
+    );
+  }
+  if (
+    !Array.isArray(current) ||
+    current.some(
+      (entry) =>
+        !entry ||
+        ![
+          entry.fingerprint,
+          entry.requestId,
+          entry.method,
+          entry.actorId,
+        ].every((value) => typeof value === "string" && value.length > 0) ||
+        !["user", "admin"].includes(entry.role),
+    )
+  )
+    throw new Error("请求恢复记录损坏，请核对已提交记录");
+  return current;
+}
 function removePendingCommands(matches: (entry: PendingCommand) => boolean) {
   // Other commands may have started since this request was sent.
-  const current = JSON.parse(
-    sessionStorage.getItem(commandStorageKey) ?? "[]",
-  ) as PendingCommand[];
-  if (!Array.isArray(current))
-    throw new Error("请求恢复记录损坏，请核对已提交记录");
+  const current = readPendingCommands();
   sessionStorage.setItem(
     commandStorageKey,
     JSON.stringify(current.filter((entry) => !matches(entry))),
   );
 }
 export function getPendingCommands() {
-  try {
-    const pending = JSON.parse(
-      sessionStorage.getItem(commandStorageKey) ?? "[]",
-    ) as PendingCommand[];
-    const role = getSyncStatus().role,
-      actorId = getSession(role)?.id;
-    return Array.isArray(pending)
-      ? pending.filter(
-          (entry) => entry.role === role && entry.actorId === actorId,
-        )
-      : [];
-  } catch {
-    return [];
-  }
+  const pending = readPendingCommands();
+  const role = getSyncStatus().role,
+    actorId = getSession(role)?.id;
+  return pending.filter(
+    (entry) => entry.role === role && entry.actorId === actorId,
+  );
 }
 export async function resolvePendingCommand(command: PendingCommand) {
   const result = await request<{ found: boolean }>(
@@ -147,16 +161,7 @@ async function action<T>(
   ).join("");
   assertIdentity();
   const storageKey = commandStorageKey;
-  let pending: PendingCommand[];
-  try {
-    pending = JSON.parse(
-      sessionStorage.getItem(storageKey) ?? "[]",
-    ) as PendingCommand[];
-  } catch {
-    throw new Error("无法读取请求恢复记录，请先恢复浏览器会话存储");
-  }
-  if (!Array.isArray(pending))
-    throw new Error("请求恢复记录损坏，请核对已提交记录");
+  const pending = readPendingCommands();
   const previous = pending.find((entry) => entry.fingerprint === fingerprint);
   const otherPending = pending.find(
     (entry) =>

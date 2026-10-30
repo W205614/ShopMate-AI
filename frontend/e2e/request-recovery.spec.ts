@@ -10,6 +10,28 @@ test.beforeEach(() => {
 });
 const headers = { "X-ShopMate-Request": "1" };
 
+test("损坏的请求恢复记录显示错误，修复存储后可重新读取", async ({ page }) => {
+  await page.addInitScript(() =>
+    sessionStorage.setItem("shopmate:pending-commands", "[null]"),
+  );
+  await page.goto("/");
+  const warning = page
+    .getByRole("alert")
+    .filter({ hasText: "请求恢复记录损坏" });
+  await expect(warning).toBeVisible();
+  await expect(page.getByText(/个提交结果待核对/)).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem("shopmate:pending-commands"),
+    ),
+  ).toBe("[null]");
+  await page.evaluate(() =>
+    sessionStorage.setItem("shopmate:pending-commands", "[]"),
+  );
+  await page.getByRole("button", { name: "重新读取恢复记录" }).click();
+  await expect(warning).toHaveCount(0);
+});
+
 test("后台提交已成功但状态读取失败，保留成功结果并允许重新同步", async ({
   page,
 }) => {
@@ -108,11 +130,11 @@ test("写入后响应丢失显示结果未知，不自动重发", async ({ page 
   await expect(
     page.getByRole("alert").filter({ hasText: "结果暂无法确认" }),
   ).toBeVisible();
-  await page.waitForResponse((r) => r.url().includes("/api/bootstrap?") && r.ok());
+  await page.waitForResponse(
+    (r) => r.url().includes("/api/bootstrap?") && r.ok(),
+  );
   expect(writes).toBe(1);
-  const after = (
-    await readSnapshot(page.request, "user")
-  ).db.carts.find(
+  const after = (await readSnapshot(page.request, "user")).db.carts.find(
     (c: { userId: string; skuId: string }) =>
       c.userId === "u1" && c.skuId === "p01-s1",
   );

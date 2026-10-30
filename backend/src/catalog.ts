@@ -1,13 +1,11 @@
 import { checkVersion } from "./versions";
 import { reservedStock } from "./commerce-rules";
 import type { ShopApi } from "../../shared/domain/api";
-import { validateImages } from "../../shared/domain/images";
 import { HttpError } from "./auth";
 import {
   transact,
   admin,
   requireThat,
-  text,
   integer,
   id,
   clone,
@@ -30,27 +28,8 @@ export const catalogApi: Pick<
     await transact((db) => {
       admin();
       requireThat(
-        text(input.name, 80) &&
-          text(input.subtitle, 120) &&
-          text(input.description, 3000) &&
-          text(input.material, 300),
-        "请完整填写商品名称、副标题、说明与材质",
-      );
-      requireThat(
         db.categories.some((c) => c.id === input.categoryId),
         "请选择有效分类",
-      );
-      try {
-        validateImages(input.images);
-      } catch (error) {
-        throw new HttpError(400, (error as Error).message);
-      }
-      requireThat(
-        input.skus.length > 0 &&
-          input.skus.every(
-            (s) => text(s.name, 100) && integer(s.price, 1) && integer(s.stock),
-          ),
-        "SKU 名称、价格或库存无效",
       );
       const existing = input.id
         ? db.products.find((p) => p.id === input.id)
@@ -71,7 +50,7 @@ export const catalogApi: Pick<
         );
         return {
           id: skuId,
-          name: s.name.trim(),
+          name: s.name,
           price: s.price,
           stock: s.stock,
         };
@@ -117,21 +96,8 @@ export const catalogApi: Pick<
   async saveCategory(input) {
     await transact((db) => {
       admin();
-      try {
-        validateImages([input.image], 1);
-      } catch (error) {
-        throw new HttpError(400, (error as Error).message);
-      }
       requireThat(
-        text(input.name, 30) &&
-          text(input.description, 200) &&
-          integer(input.sort),
-        "请完整填写分类信息，排序必须为非负整数",
-      );
-      requireThat(
-        !db.categories.some(
-          (c) => c.name === input.name.trim() && c.id !== input.id,
-        ),
+        !db.categories.some((c) => c.name === input.name && c.id !== input.id),
         "分类名称已存在",
       );
       const old = input.id
@@ -141,7 +107,6 @@ export const catalogApi: Pick<
       if (old) checkVersion(old, input.version);
       const value = {
         ...input,
-        name: input.name.trim(),
         id: old?.id ?? id("cat-"),
         version: (old?.version ?? (old ? 1 : 0)) + 1,
       };
@@ -167,15 +132,8 @@ export const catalogApi: Pick<
       const adminId = admin().id;
       const mode = options?.mode ?? "delta";
       requireThat(
-        Number.isSafeInteger(quantity) &&
-          (mode === "count" ? quantity >= 0 : quantity !== 0) &&
-          integer(cost) &&
-          text(reason, 200) &&
-          ["delta", "count"].includes(mode) &&
-          (!options || text(options.requestId, 100)) &&
-          (options?.expectedStock === undefined ||
-            integer(options.expectedStock)),
-        "请填写有效库存数量、采购金额、请求标识及原因",
+        mode === "count" ? quantity >= 0 : quantity !== 0,
+        "盘点数量不能为负数，库存增减不能为零",
       );
       requireThat(
         mode !== "count" ||
@@ -250,13 +208,6 @@ export const catalogApi: Pick<
   async saveSettings(input, baseline) {
     return transact((db) => {
       admin();
-      requireThat(
-        text(input.name, 40) &&
-          text(input.slogan, 80) &&
-          typeof input.notice === "string" &&
-          input.notice.length <= 200,
-        "商城名称和标语不能为空，公告最多 200 字",
-      );
       if (
         (["name", "slogan", "notice"] as const).some(
           (key) => db.settings[key] !== baseline[key],

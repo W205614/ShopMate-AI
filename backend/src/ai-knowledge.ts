@@ -11,6 +11,7 @@ import { demand } from "./permissions";
 import { transaction } from "./database";
 import { aiConfig, embed, rerank } from "./ai-provider";
 import { reserveProviderRequest, withProviderBudget } from "./ai-budget";
+import { integerSetting } from "./config";
 import {
   tokenize,
   splitSections,
@@ -45,18 +46,13 @@ interface DocumentRow {
 }
 const maxFile = 10 * 1024 * 1024;
 const retrievalBatchSize = 64;
-function configuredLimit(name: string, fallback: number, maximum: number) {
-  const value = Number(process.env[name] ?? fallback);
-  return Number.isSafeInteger(value) && value > 0 && value <= maximum
-    ? value
-    : fallback;
-}
 export function knowledgeLimits() {
   return {
-    chunks: configuredLimit("AI_KNOWLEDGE_MAX_CHUNKS", 5000, 100_000),
-    vectorBytes: configuredLimit(
+    chunks: integerSetting("AI_KNOWLEDGE_MAX_CHUNKS", 5000, 1, 100_000),
+    vectorBytes: integerSetting(
       "AI_KNOWLEDGE_MAX_VECTOR_BYTES",
       64 * 1024 * 1024,
+      1,
       256 * 1024 * 1024,
     ),
   };
@@ -535,13 +531,28 @@ async function runWorker<T>(
       if (data.budgetRequest && !settled) {
         try {
           reserveProviderRequest(sql);
-          child.send({ budgetResponse: data.budgetRequest, approved: true });
-        } catch {
-          child.send({
-            budgetResponse: data.budgetRequest,
-            error: "AI_PROVIDER_BUDGET_EXHAUSTED",
-          });
+        } catch (error) {
+          if (
+            !(error instanceof HttpError) ||
+            error.code !== "AI_PROVIDER_BUDGET_EXHAUSTED"
+          ) {
+            finish(new Error("AI_PROVIDER_BUDGET_UNAVAILABLE"));
+            return;
+          }
+          child.send(
+            { budgetResponse: data.budgetRequest, error: error.code },
+            (failure) => {
+              if (failure) finish(new Error("DOCUMENT_WORKER_FAILED"));
+            },
+          );
+          return;
         }
+        child.send(
+          { budgetResponse: data.budgetRequest, approved: true },
+          (failure) => {
+            if (failure) finish(new Error("DOCUMENT_WORKER_FAILED"));
+          },
+        );
       }
       if (data.rankReady && rankBatch && !settled) {
         try {

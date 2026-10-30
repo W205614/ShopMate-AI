@@ -9,7 +9,9 @@ import { runDueJobs, ensureRecurringJobs } from "./jobs";
 import { runAutomaticBackup, cancelAutomaticBackup } from "./automatic-backup";
 import { resolve } from "node:path";
 import { startSupportWorker } from "./ai-support";
-import { startKnowledgeWorker } from "./ai-knowledge";
+import { startKnowledgeWorker, knowledgeLimits } from "./ai-knowledge";
+import { aiConfig } from "./ai-provider";
+import { resourceLimits } from "./ai-budget";
 import {
   ensureBackupState,
   automaticBackupDue,
@@ -19,6 +21,9 @@ import {
   setBackupRunning,
 } from "./backup-state";
 
+aiConfig();
+resourceLimits();
+knowledgeLimits();
 const databasePath = process.env.DATABASE_PATH ?? "data/shopmate.sqlite";
 const sql = openDatabase(databasePath);
 ensureRuntimeSchema(sql);

@@ -31,18 +31,22 @@ describe("durable AI service quotas", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("uses Beijing calendar days and rejects invalid configuration values", () => {
+  it("uses Beijing calendar days", () => {
     expect(budgetDay(Date.parse("2026-10-28T15:59:59Z"))).toBe("2026-10-28");
     expect(budgetDay(Date.parse("2026-10-28T16:00:00Z"))).toBe("2026-10-29");
-    vi.stubEnv("AI_DAILY_PROVIDER_CALLS", "0");
-    vi.stubEnv("AI_USER_DAILY_CONSULTATIONS", "NaN");
-    vi.stubEnv("SUPPORT_MAX_USER_TURNS", "1000000000");
-    expect(resourceLimits()).toMatchObject({
-      dailyProviderCalls: 100,
-      userDailyConsultations: 20,
-      userTurns: 100,
-    });
   });
+
+  it.each([
+    ["AI_DAILY_PROVIDER_CALLS", "0"],
+    ["AI_USER_DAILY_CONSULTATIONS", "NaN"],
+    ["SUPPORT_MAX_USER_TURNS", "1000000000"],
+  ])(
+    "rejects invalid %s rather than increasing the configured quota",
+    (name, value) => {
+      vi.stubEnv(name, value);
+      expect(() => resourceLimits()).toThrow(name);
+    },
+  );
 
   it("keeps a shared cap across connections and close/reopen without resetting usage", () => {
     vi.stubEnv("AI_DAILY_PROVIDER_CALLS", "2");

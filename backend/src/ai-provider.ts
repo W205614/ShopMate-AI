@@ -1,4 +1,5 @@
 import { acquireProviderBudget } from "./ai-budget";
+import { integerSetting } from "./config";
 /** Provider errors deliberately exclude HTTP bodies, URLs and credentials. */
 export class ProviderError extends Error {
   constructor(
@@ -8,28 +9,21 @@ export class ProviderError extends Error {
     super(code);
   }
 }
-const boundedInt = (
-  name: string,
-  fallback: number,
-  min: number,
-  max: number,
-) => {
-  const n = Number(process.env[name] ?? fallback);
-  return Number.isSafeInteger(n) && n >= min && n <= max ? n : fallback;
-};
 export function aiConfig() {
   return {
     enabled: process.env.AI_ENABLED === "true",
     model: process.env.LLM_MODEL_ID || "deepseek-flash",
     baseUrl: process.env.LLM_BASE_URL || "https://api.deepseek.com",
-    timeoutMs: boundedInt("AI_PROVIDER_TIMEOUT_MS", 30000, 100, 90000),
-    maxConcurrent: boundedInt("AI_MAX_CONCURRENT", 2, 1, 8),
-    maxQueue: boundedInt("AI_MAX_QUEUE", 20, 1, 100),
+    timeoutMs: integerSetting("AI_PROVIDER_TIMEOUT_MS", 30000, 100, 90000),
+    maxConcurrent: integerSetting("AI_MAX_CONCURRENT", 2, 1, 8),
+    maxQueue: integerSetting("AI_MAX_QUEUE", 20, 1, 100),
+    rerankerTimeoutMs:
+      integerSetting("RERANKER_TIMEOUT_SECONDS", 2, 1, 30) * 1000,
     embeddingModel:
       process.env.EMBEDDING_MODEL ||
       process.env.EMBEDDING_MODEL_ID ||
       "text-embedding-3-large",
-    embeddingDimensions: boundedInt(
+    embeddingDimensions: integerSetting(
       process.env.EMBEDDING_DIMENSIONS
         ? "EMBEDDING_DIMENSIONS"
         : "EMBEDDING_DIMENSION",
@@ -81,10 +75,12 @@ async function post(
     if ((error as { code?: string })?.code === "AI_PROVIDER_BUDGET_EXHAUSTED")
       throw new ProviderError("AI_PROVIDER_BUDGET_EXHAUSTED", 429);
     if (
-      (error as { code?: string })?.code ===
-      "AI_PROVIDER_BUDGET_CONTEXT_REQUIRED"
+      [
+        "AI_PROVIDER_BUDGET_CONTEXT_REQUIRED",
+        "AI_PROVIDER_BUDGET_UNAVAILABLE",
+      ].includes((error as { code?: string })?.code ?? "")
     )
-      throw new ProviderError("AI_PROVIDER_BUDGET_CONTEXT_REQUIRED", 503);
+      throw new ProviderError((error as { code: string }).code, 503);
     throw error;
   }
   try {
@@ -293,7 +289,7 @@ export async function rerank(
       return_documents: false,
     },
     signal,
-    boundedInt("RERANKER_TIMEOUT_SECONDS", 2, 1, 30) * 1000,
+    aiConfig().rerankerTimeoutMs,
   );
   const results = data.results as
     { index: number; relevance_score: number }[] | undefined;

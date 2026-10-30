@@ -36,6 +36,8 @@ AI 功能在现有 Node.js／Express、Vue 和 SQLite 服务内运行，仍使�
 
 完整文档检索需配置对话与 Embedding；Reranker 不可用时可降级。仅使用商品／订单工具和 FAQ 时，不需要先上传文档。`AI_ENABLED` 控制客服对话，文档上传后的处理任务独立运行，仍可能调用 Embedding 或视觉模型。
 
+数值配置仅在未设置时使用默认值；非法值、非整数或越界值会在启动时明确报错。`0` 不是停用额度的方式，关闭对话使用 `AI_ENABLED=false`。文档任务的 `AI_PROVIDER_BUDGET_EXHAUSTED` 表示当日额度耗尽；`AI_PROVIDER_BUDGET_UNAVAILABLE` 表示额度数据库或进程通信不可用，应先检查服务状态。
+
 修改 `.env` 后，在根目录执行：
 
 ```powershell

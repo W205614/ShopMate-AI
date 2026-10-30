@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import JSZip from "jszip";
 import sharp from "sharp";
 import { aiConfig } from "../src/ai-provider";
+import { reserveProviderRequest } from "../src/ai-budget";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { tokenHash } from "../src/auth";
 import { ensureRuntimeSchema } from "../src/runtime";
@@ -263,6 +264,20 @@ describe("knowledge document lifecycle and retrieval", () => {
         .get(doc.id)?.n,
     ).toBe(0);
   });
+  it("reports database budget failures separately from exhausted provider quota", async () => {
+    reserveProviderRequest(sql);
+    sql.exec(`CREATE TRIGGER reject_budget BEFORE INSERT ON ai_daily_usage
+      WHEN NEW.kind='provider' BEGIN SELECT RAISE(ABORT,'synthetic private database failure'); END`);
+    const doc = await upload();
+    stop = startKnowledgeWorker(sql);
+    await awaitStatus(doc.id, "failed");
+    expect(
+      sql.prepare("SELECT error FROM ai_documents WHERE id=?").get(doc.id)
+        ?.error,
+    ).toBe("AI_PROVIDER_BUDGET_UNAVAILABLE");
+    expect(providerCalls).toBe(0);
+  });
+
   it("enforces support role, download authentication, format and upload limits", async () => {
     expect((await request("", undefined, "customer")).status).toBe(401);
     expect((await request("", undefined, "marketing")).status).toBe(403);

@@ -290,7 +290,7 @@ describe("backup and persistent recovery jobs", () => {
     }
   });
 
-  it("delivers notifications once across restarts and keeps bounded retry failures", () => {
+  it("delivers notifications once across restarts and immediately fails invalid payloads", () => {
     const dir = mkdtempSync(join(tmpdir(), "shopmate-jobs-")),
       path = join(dir, "jobs.sqlite");
     let sql = openDatabase(path);
@@ -315,12 +315,7 @@ describe("backup and persistent recovery jobs", () => {
       runDueJobs(sql);
       expect(readDatabase(sql).notifications).toHaveLength(1);
       enqueue(sql, "notification", { userId: "u1", text: null }, "bad-job");
-      for (let i = 0; i < 5; i++) {
-        sql
-          .prepare("UPDATE job_queue SET run_after=0 WHERE id='bad-job'")
-          .run();
-        runDueJobs(sql);
-      }
+      runDueJobs(sql);
       expect(
         sql
           .prepare(
@@ -329,7 +324,7 @@ describe("backup and persistent recovery jobs", () => {
           .get(),
       ).toEqual({
         status: "failed",
-        attempts: 5,
+        attempts: 1,
         last_error: "INVALID_NOTIFICATION_PAYLOAD",
       });
       expect(readDatabase(sql).notifications).toHaveLength(1);

@@ -168,3 +168,11 @@ jobs:
             frontend/test-results-container
             frontend/test-results-operations
             frontend/test-results-maintenance
+      - name: Export validated container images
+        working-directory: .
+        run: docker image save shopmate-ai-api:acceptance shopmate-ai-web:acceptance | gzip > validated-images.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-container-images
+          path: validated-images.tar.gz
+          retention-days: 1

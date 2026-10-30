@@ -105,6 +105,8 @@ docker scout cves local://shopmate-ai-web:local
 
 CI 使用 Trivy 扫描 API/Web 镜像中的系统包和应用库，所有等级报告保存在 `container-vulnerability-reports` 构件中；高危和严重漏洞会使检查失败，包括尚无修复版本的条目。不得以 npm 审计通过代替镜像检查，也不得将未修复告警默认为已修复。
 
+全部验证通过后，CI 导出 `validated-container-images` 构件（保留 1 天）。需要使用已验证的相同镜像时，可下载并解压其中的 `validated-images.tar.gz`，使用 `docker load` 导入，再将 `shopmate-ai-api:acceptance`、`shopmate-ai-web:acceptance` 标记为各自的 `:local` 标签，核对镜像的 `org.opencontainers.image.revision` 与通过 CI 的提交一致后，执行 `docker compose up -d --no-build --force-recreate --wait`。已有业务数据卷保持不变。
+
 浏览器测试自动启动隔离后端与 Vite，种子和测试账号仅写入 `backend/.e2e/`，运行前释放 3001/5173 端口。Windows 默认使用已安装的 Edge；Linux 需在 `frontend` 目录先执行 `npx playwright install --with-deps chromium`。
 
 外部容器写入验收必须使用独立项目、镜像标签、端口和数据卷，不能指向日常部署。完整命令、环境变量及边界见 [联合验收](archive/joint-acceptance.md)。日常环境只做健康与公开目录等只读检查。

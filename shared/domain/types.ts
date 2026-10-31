@@ -188,6 +188,7 @@ export interface LedgerEntry {
   inventoryMovementId?: string;
 }
 export interface Message {
+  replyKind?: "clarify" | "grounded" | "handoff";
   source?: "ai" | "rule";
   citations?: {
     id: string;

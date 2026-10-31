@@ -28,7 +28,7 @@ import { cancelSupportWork, ensureSupportSchema } from "./ai-schema";
 import { audit, enqueue } from "./runtime";
 import { releaseSnapshot, type DatabaseReadScope } from "./storage";
 import { reserveConsultation, withProviderBudget } from "./ai-budget";
-import { renderGroundedAnswer } from "./ai-answer";
+import { renderGroundedAnswer, answerPresentationSchema } from "./ai-answer";
 
 type Source = {
   id: string;
@@ -684,6 +684,7 @@ export async function executeSupportTool(
   evidence: {
     sources: Source[];
     products: Set<string>;
+    productCaps: Map<string, number | undefined>;
     orders: Set<string>;
     degraded: string[];
   },
@@ -806,6 +807,7 @@ export async function executeSupportTool(
         .slice(0, 5)
         .map(({ p }) => {
           evidence.products.add(p.id);
+          evidence.productCaps.set(p.id, maxPrice);
           return publicProduct(db, p.id);
         });
     }
@@ -820,6 +822,7 @@ const finalSchema = z
     citations: z.array(z.string()).max(12).default([]),
     productIds: z.array(z.string()).max(5).default([]),
     orderId: z.string().optional(),
+    presentation: answerPresentationSchema.optional(),
   })
   .strict();
 export async function processSupportRun(
@@ -863,6 +866,7 @@ async function processBudgetedSupportRun(
   const evidence = {
     sources: [] as Source[],
     products: new Set<string>(),
+    productCaps: new Map<string, number | undefined>(),
     orders: new Set<string>(),
     degraded: [] as string[],
   };
@@ -913,7 +917,7 @@ async function processBudgetedSupportRun(
       {
         role: "system",
         content:
-          "最终JSON还需声明replyKind：clarify（缺少参数）、grounded（事实答复）或handoff（无法确认或越权）。澄清和转人工由服务端使用固定文案；answer不直接展示。事实正文由服务端按所选有效citations、productIds、orderId和待确认操作生成。政策答复必须先search_knowledge再选择支持该问题的来源；没有依据使用handoff。引用应直接支持提问，不要选择无关资料。商品和订单必须返回本轮已查到的标识，禁止猜测。",
+          "最终JSON还需声明replyKind：clarify（缺少参数）、grounded（事实答复）或handoff（无法确认或越权）。answer不直接展示，事实由服务端生成。可选presentation控制表达：productView为details、compare或recommend；focus为description、material、price、stock的非空数组，按用户所问选择，比较与推荐须保留price，推荐还须保留description或material说明差异；missingFields为product、sku、quantity、order、reason、items数组，仅追问当前真正缺失的信息，不重复询问已知订单；sourceQuotes为[{sourceId,text}]，只能逐字摘录本轮已选引用中的完整相关句子，保留实体、单位、条件和否定词，不能拼接改写。比较时逐一查询相关商品，推荐先search_products按用户预算及需求检索，再选择有货商品。政策答复必须先search_knowledge；没有依据使用handoff。只保留直接回答本次问题所必需的最少引用；逐项检查所问的每个子问题。用户指定某份资料或政策时，限定在该资料范围内，不附加没有被询问的操作FAQ或售后流程。商品和订单必须返回本轮已查到的标识，禁止猜测。",
       },
       ...c.messages
         .slice(Math.max(0, msgIndex - 12), msgIndex + 1)
@@ -1047,7 +1051,7 @@ async function processBudgetedSupportRun(
         messages.push({
           role: "user",
           content:
-            "回答格式校验失败。请只返回JSON对象，字段为replyKind（clarify、grounded或handoff）、answer（非空字符串）、citations和productIds（字符串数组）。只有已查询的本人订单才可添加字符串orderId，否则省略该字段；不要返回null、额外字段或代码块。信息不足时选择clarify，不要猜测业务参数。",
+            "回答格式校验失败。请只返回JSON对象，字段为replyKind（clarify、grounded或handoff）、answer（非空字符串）、citations和productIds（字符串数组），可选presentation仅使用规定的枚举及逐字摘录。只有已查询的本人订单才可添加字符串orderId，否则省略该字段；不要返回null、额外字段或代码块。信息不足时选择clarify，不要猜测业务参数。",
         });
         continue;
       }
@@ -1077,7 +1081,24 @@ async function processBudgetedSupportRun(
       const factual = final.replyKind === "grounded";
       const products = factual
         ? withScopedDb(sql, (db) =>
-            final.productIds.map((productId) => publicProduct(db, productId)),
+            final.productIds
+              .map((productId) => {
+                const product = publicProduct(db, productId);
+                if (final.presentation?.productView === "recommend") {
+                  const cap = evidence.productCaps.get(productId);
+                  requireThat(
+                    evidence.productCaps.has(productId),
+                    "推荐商品必须先按需求检索",
+                  );
+                  product.skus = product.skus.filter(
+                    (sku) =>
+                      sku.availableStock > 0 &&
+                      (cap === undefined || sku.price <= cap),
+                  );
+                }
+                return product;
+              })
+              .filter((product) => product.skus.length > 0),
           )
         : [];
       const owned =
@@ -1093,12 +1114,22 @@ async function processBudgetedSupportRun(
           "SELECT summary FROM support_proposals WHERE run_id=? AND user_id=? AND status='pending'",
         )
         .all(run.id, run.user_id) as { summary: string }[];
+      const replyKind =
+        factual &&
+        !sources.length &&
+        !products.length &&
+        !owned &&
+        !pending.length
+          ? "handoff"
+          : final.replyKind;
       const answer: Message = {
         id: `ai-${run.id}`,
         role: "assistant",
         source: "ai",
+        replyKind,
         text: renderGroundedAnswer({
-          kind: final.replyKind,
+          kind: replyKind,
+          presentation: final.presentation,
           sources: factual ? sources : [],
           products,
           order: owned ? publicOrder(owned) : undefined,
@@ -1115,8 +1146,8 @@ async function processBudgetedSupportRun(
             paragraph,
           }),
         ),
-        ...(factual && final.productIds.length
-          ? { productIds: final.productIds }
+        ...(factual && products.length
+          ? { productIds: products.map((product) => product.id) }
           : {}),
         ...(owned ? { orderId: owned.id } : {}),
       };
@@ -1177,10 +1208,13 @@ async function processBudgetedSupportRun(
       fail(
         controller.signal.aborted
           ? "AI_TIMEOUT"
-          : (error as { code?: string })?.code ===
-              "AI_PROVIDER_BUDGET_EXHAUSTED"
-            ? "AI_PROVIDER_BUDGET_EXHAUSTED"
-            : "AI_PROVIDER_FAILED",
+          : error instanceof Error &&
+              error.message === "AI_INVALID_SOURCE_QUOTE"
+            ? "AI_INVALID_RESPONSE"
+            : (error as { code?: string })?.code ===
+                "AI_PROVIDER_BUDGET_EXHAUSTED"
+              ? "AI_PROVIDER_BUDGET_EXHAUSTED"
+              : "AI_PROVIDER_FAILED",
       );
   } finally {
     finished = true;

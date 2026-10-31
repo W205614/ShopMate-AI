@@ -67,11 +67,13 @@ watch([() => route.query.q, tab], ([value]) => {
 const staff = ref<Staff[]>([]),
   reconciliation = ref<{
     balanced: boolean;
+    revision: number;
+    checkedAt: string;
     issues: {
       kind: string;
       reference: string;
-      expected: number;
-      actual: number;
+      expected: string;
+      actual: string;
     }[];
     totals: { income: string; refund: string; purchase: string; net: string };
   }>();
@@ -628,6 +630,12 @@ onUnmounted(() => {
         ><h2>
           {{ reconciliation.balanced ? "收支核对一致" : "存在核对差异" }}
         </h2>
+        <p class="admin-note">
+          核对时间
+          {{
+            dateTime(reconciliation.checkedAt)
+          }}；结果对应当时的数据快照，后续交易请重新核对。
+        </p>
         <p>
           收款 {{ money(BigInt(reconciliation.totals.income)) }} · 退款
           {{ money(BigInt(reconciliation.totals.refund)) }} · 采购

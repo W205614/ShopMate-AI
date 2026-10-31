@@ -7,6 +7,7 @@ services:
       dockerfile: backend/Dockerfile
       args:
         VCS_REF: ${VCS_REF:-local}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-https://dl-cdn.alpinelinux.org/alpine}
     environment:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env before first startup}
@@ -37,7 +38,7 @@ services:
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-3072}
       SEND_EMBEDDING_DIMENSIONS: ${SEND_EMBEDDING_DIMENSIONS:-false}
       RERANKER_ENABLED: ${RERANKER_ENABLED:-true}
-      RERANKER_MODEL: ${RERANKER_MODEL:-Pro/BAAI/bge-reranker-v2-m3}
+      RERANKER_MODEL: ${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
       RERANKER_URL: ${RERANKER_URL:-https://api.siliconflow.cn/v1/rerank}
       RERANKER_API_KEY: ${RERANKER_API_KEY:-}
       RERANKER_TIMEOUT_SECONDS: ${RERANKER_TIMEOUT_SECONDS:-2}
@@ -59,6 +60,7 @@ services:
       context: .
       args:
         VCS_REF: ${VCS_REF:-local}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-https://dl-cdn.alpinelinux.org/alpine}
     ports:
       - "127.0.0.1:${APP_PORT:-18086}:80"
     depends_on:

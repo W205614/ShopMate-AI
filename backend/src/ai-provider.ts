@@ -34,7 +34,7 @@ export function aiConfig() {
     rerankerModel:
       process.env.RERANKER_MODEL ||
       process.env.RERANKER_MODEL_ID ||
-      "Pro/BAAI/bge-reranker-v2-m3",
+      "BAAI/bge-reranker-v2-m3",
   };
 }
 

@@ -1,0 +1,141 @@
+{
+  "at": "2026-10-31T03:16:26.405Z",
+  "scope": "Recruitment demonstration and local single-instance use; simulated commerce; isolated validation only.",
+  "baseCommit": "8f87502ce08c1903113e5cfce7f2fedd5b6b9293",
+  "gitHubCIForThisWorkingCopy": "not run; changes are uncommitted",
+  "backend": {
+    "firstFullRun": {
+      "total": 296,
+      "passed": 294,
+      "failed": 1,
+      "skipped": 1
+    },
+    "initialFailure": "automatic-backup external-retention test exceeded the unchanged 15-second limit during overlapping frontend checks",
+    "isolatedFailureRetest": {
+      "passed": 1,
+      "timeoutMs": 15000
+    },
+    "passedAcrossFullSuiteAndRetest": 295,
+    "skippedReason": "host lacks pdftotext for one extraction test",
+    "finalAffectedTests": 32,
+    "typecheck": "passed"
+  },
+  "frontend": {
+    "unitTests": 57,
+    "typecheck": "passed",
+    "lint": "passed",
+    "productionBuild": "passed",
+    "browser": {
+      "passed": 2,
+      "scope": [
+        "real task comparison, reload and targeted clarification",
+        "commerce, reservation, refund, inspection and reconciliation on a fresh isolated volume"
+      ],
+      "initialFailure": "commerce test shared earlier matrix reservations; original assertion preserved; rerun on a fresh deployment passed"
+    }
+  },
+  "ai": {
+    "syntheticContract": {
+      "passed": 40,
+      "total": 40
+    },
+    "independentSyntheticTasks": {
+      "passed": 12,
+      "total": 12
+    },
+    "realTasks": {
+      "total": 12,
+      "passed": 12,
+      "answerable": 8,
+      "resolvedAnswerable": 5,
+      "falseRefusals": 0,
+      "resolutionRate": 0.625,
+      "falseRefusalRate": 0,
+      "humanReview": "pending; automated assertions do not constitute a human quality score",
+      "normalAnswers": 5,
+      "safeRefusals": 2,
+      "clarifications": 2,
+      "accessDenied": 0,
+      "degraded": 0,
+      "retrievalDegraded": 5,
+      "providerFailure": 0,
+      "formatFailure": 0,
+      "retrieval": {
+        "passed": 3,
+        "total": 3
+      },
+      "facts": {
+        "passed": 22,
+        "total": 22
+      },
+      "citations": {
+        "passed": 3,
+        "total": 3
+      },
+      "citationSupport": {
+        "passed": 6,
+        "total": 6
+      }
+    },
+    "realCoverage": "Cumulative coverage: initial 11/12, H08 targeted retest 1/1; not a full twelve-case rerun.",
+    "budget": {
+      "used": 44,
+      "limit": 60,
+      "elapsedMs": 293190,
+      "statuses": {
+        "embedding:200": 8,
+        "chat:200": 30,
+        "rerank:402": 6
+      }
+    },
+    "humanReview": "pending; unfilled sheet generated"
+  },
+  "reconciliationBenchmark": {
+    "at": "2026-10-31T03:11:51.908Z",
+    "scope": "Isolated synthetic file-backed databases; health probes overlap real HTTP reconciliation. Not production capacity or payment throughput.",
+    "results": [
+      {
+        "historicalOrders": 1000,
+        "historicalPayments": 500,
+        "reconciliationMs": 367,
+        "snapshotRevision": 0,
+        "healthSamples": 10,
+        "healthMaxMs": 59
+      },
+      {
+        "historicalOrders": 10000,
+        "historicalPayments": 5000,
+        "reconciliationMs": 455,
+        "snapshotRevision": 0,
+        "healthSamples": 13,
+        "healthMaxMs": 53
+      },
+      {
+        "historicalOrders": 50000,
+        "historicalPayments": 25000,
+        "reconciliationMs": 929,
+        "snapshotRevision": 0,
+        "healthSamples": 31,
+        "healthMaxMs": 48
+      }
+    ]
+  },
+  "containerValidation": {
+    "standardBuild": "two attempts failed on Alpine repository I/O; not passed",
+    "method": "Existing 8f87502 API/Web runtime bases plus current application files and locally built frontend assets. API package.json and package-lock hashes exactly matched the existing image.",
+    "apiRuntimeBase": "sha256:abe71fb93e905e1d3e19a1e2f0a5a466f9b68956523213cba6f8e6db18c78bf7",
+    "webRuntimeBase": "sha256:e3643b11cca6608cf6b36d2794ffd648bc907b8856887d086e004ddb8b94f820",
+    "newDependencyChanges": false
+  },
+  "dailyEnvironment": {
+    "api": "unchanged; exited",
+    "web": "unchanged; exited",
+    "automaticBackupPolicy": "unchanged"
+  },
+  "limitations": [
+    "Reranker upstream returned HTTP 402 six times; five final task cases include explicit retrieval degradation.",
+    "Eight answerable cases: five completed without degradation; zero false refusals. This is fixed-sample evidence, not population accuracy.",
+    "Full clean Docker build and new GitHub CI are not claimed as passed.",
+    "Independent process startup adds fixed reconciliation latency; the purpose is to keep the API responsive."
+  ]
+}

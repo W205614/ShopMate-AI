@@ -52,7 +52,7 @@ ShopMate-AI/
 1. `backend/src/index.ts`：打开数据库、初始化管理员、启动 HTTP 服务、定时任务、AI 工作器和自动备份，并处理退出。
 2. `app.ts`、`read-routes.ts`：请求来源、认证、权限、参数校验、分领域读取及业务操作入口。相关规则在 `auth.ts`、`permissions.ts`、`validation.ts`。
 3. `repository.ts`、`database.ts`、`storage.ts`、`migration.ts`：请求上下文、事务、数据读写、关系存储与迁移；版本常量在 `versions.ts`。
-4. `commerce.ts`、`commerce-rules.ts`、`stock-availability.ts`：订单、库存及售后；`catalog.ts` 管商品分类，`marketing.ts` 管营销与会员，`operations.ts` 管采购、仓储及经营管理，`dashboard.ts` 汇总经营概览，`support.ts` 管规则与人工客服。
+4. `commerce.ts`、`commerce-rules.ts`、`stock-availability.ts`：订单、库存及售后；`catalog.ts` 管商品分类，`marketing.ts` 管营销与会员，`operations.ts` 管采购、仓储及经营管理，`dashboard.ts` 汇总经营概览，`support.ts` 管规则与人工客服。`reconciliation.ts` 负责精确聚合与核对，`reconciliation-reader.ts`、`reconciliation-worker.ts` 将文件库核对放到独立只读进程。
 5. `ai-support.ts`、`ai-knowledge.ts`、`ai-provider.ts`、`ai-schema.ts`：AI 会话、提案与确认、文档检索、供应商调用和结构校验；文档工作进程入口为 `ai-document-worker.ts`。`ai-answer.ts` 从服务端证据生成事实文案，`ai-budget.ts` 管理北京时间每日配额及工作进程额度协议。
 6. `runtime.ts`、`jobs.ts` 管审计、命令结果和持久化任务；`diagnostics.ts` 管受限诊断；`maintenance.ts`、`automatic-backup.ts`、`backup-worker.ts`、`backup-state.ts` 管备份、恢复、子进程和备份状态。`admin.ts` 是管理员密码维护入口。
 
@@ -80,7 +80,8 @@ ShopMate-AI/
 | `seed-stability.ts` | 复用历史负载种子，补充独立用户及工作集，供交易混合稳定性专项验收 |
 | `stability-load.ts` | 有思考时间的多用户交易负载与耐久验收，校验独立 Compose 项目和端口，见[稳定性专项](stability-hardening.md) |
 | `stability-provider.ts` | 隔离网络中的故障供应商，轮换返回 429、无效 JSON、超时和 503，用于故障隔离验证 |
-| `ai-quality.mjs`、`ai-quality-cases.mjs` | 40条协议契约与12条真实模型合成场景，分类统计检索、事实、引用及降级，见[2026-10-21验收](final-acceptance-20261021.md) |
+| `ai-quality.mjs`、`ai-quality-cases.mjs`、`ai-quality-holdout.mjs` | 原40条协议契约与独立12条任务问题，记录来源、误拒答、解决率与待填人工评分，见[AI质量验证](ai-quality.md) |
+| `reconciliation-load.ts` | 显式启用后创建独立文件库，测量历史数据增长时的真实核对接口与重叠健康探测，不访问日常库 |
 | `ai-quality-provider.mjs`、`ai-acceptance-provider.mjs` | 确定性假服务及认证预算代理；真实代理持久限制100次／20分钟，不用于日常客服服务 |
 | `seed-role-maintenance.ts` | 只为显式允许且没有普通用户／订单的新隔离库生成25条失败通知夹具，不是修复工具 |
 | `verify-stability.ts` | 对隔离验收数据库捕获基线和只读核验，不迁移、不关闭过期订单、不修复数据 |

@@ -1,0 +1,123 @@
+{
+  "at": "2026-10-31T04:13:20.592Z",
+  "scope": "Recruitment demonstration and local stable use; isolated validation; formal services kept stopped.",
+  "standardBuild": {
+    "dockerfiles": [
+      "Dockerfile",
+      "backend/Dockerfile"
+    ],
+    "noCache": true,
+    "result": "passed",
+    "mirror": "https://mirrors.aliyun.com/alpine",
+    "defaultMirror": "https://dl-cdn.alpinelinux.org/alpine",
+    "signatureVerification": "retained"
+  },
+  "reranker": {
+    "model": "BAAI/bge-reranker-v2-m3",
+    "beforeAccountHandling": {
+      "at": "2026-10-31T04:07:03.127Z",
+      "status": 402,
+      "model": "BAAI/bge-reranker-v2-m3",
+      "providerCode": 30001,
+      "insufficientBalance": true,
+      "verificationRequired": false
+    },
+    "afterAccountHandling": {
+      "at": "2026-10-31T04:12:12.996Z",
+      "model": "BAAI/bge-reranker-v2-m3",
+      "httpStatus": 200,
+      "elapsedMs": 1976,
+      "ranking": [
+        {
+          "index": 0,
+          "relevance_score": 0.9351219534873962
+        },
+        {
+          "index": 1,
+          "relevance_score": 1.619644353922922e-05
+        }
+      ],
+      "ok": true,
+      "boundary": "Authenticated persistent-budget proxy; synthetic query; counted in the authorized 60-call follow-up round."
+    },
+    "accountAction": "handled by user; no recharge performed by the agent"
+  },
+  "localChecks": {
+    "backendTypecheck": "passed",
+    "providerConfigQualityTests": 28,
+    "syntheticContract": {
+      "passed": 40,
+      "total": 40
+    },
+    "independentTasks": {
+      "passed": 12,
+      "total": 12
+    },
+    "browserFlows": {
+      "passed": 2,
+      "total": 2
+    },
+    "workflowSyntax": "passed"
+  },
+  "realTasks": {
+    "total": 12,
+    "passed": 12,
+    "answerable": 8,
+    "resolvedAnswerable": 8,
+    "falseRefusals": 0,
+    "resolutionRate": 1,
+    "falseRefusalRate": 0,
+    "humanReview": "pending; automated assertions do not constitute a human quality score",
+    "normalAnswers": 8,
+    "safeRefusals": 2,
+    "clarifications": 2,
+    "accessDenied": 0,
+    "degraded": 0,
+    "retrievalDegraded": 0,
+    "providerFailure": 0,
+    "formatFailure": 0,
+    "retrieval": {
+      "passed": 3,
+      "total": 3
+    },
+    "facts": {
+      "passed": 22,
+      "total": 22
+    },
+    "citations": {
+      "passed": 3,
+      "total": 3
+    },
+    "citationSupport": {
+      "passed": 6,
+      "total": 6
+    }
+  },
+  "budget": {
+    "used": 39,
+    "limit": 60,
+    "startedAt": 1793419422125,
+    "deadline": 1793420622125,
+    "elapsedMs": 577807,
+    "statuses": {
+      "rerank:402": 1,
+      "rerank_diagnostic:402": 1,
+      "rerank:200": 5,
+      "embedding:200": 6,
+      "chat:200": 26
+    }
+  },
+  "formalPreflight": {
+    "state": [
+      "exited",
+      "exited"
+    ],
+    "readOnlyVolume": true,
+    "integrity": "ok",
+    "foreignKeyErrors": 0,
+    "tables": 55,
+    "persistentRestoreSetCreated": false
+  },
+  "releaseStatus": "Local validation complete; exact GitHub CI result and stopped deployment recorded separately after commit.",
+  "boundary": "Fixed synthetic cases, not population accuracy; human scoring sheet remains pending."
+}

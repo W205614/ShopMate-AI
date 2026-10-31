@@ -1,8 +1,9 @@
 /** Real HTTP quality matrix; the live profile is deliberately limited to 12 cases. */
 import { readHttpSnapshot } from "../../shared/testing/http-snapshot.mjs";
 import { qualityCases, knowledgeDocuments, evaluateQualityCase, summarizeQuality, budgetRecommendationCheck, answerHasAmount } from "./ai-quality-cases.mjs";
+import { holdoutCases } from "./ai-quality-holdout.mjs";
 import { randomUUID, createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -10,6 +11,8 @@ import { promisify } from "node:util";
 const exec = promisify(execFile);
 const base = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:18092";
 const mode = process.env.AI_QUALITY_MODE ?? "live";
+const suite = process.env.AI_QUALITY_SUITE ?? "contract";
+if (!["contract", "holdout"].includes(suite)) throw Error("INVALID_QUALITY_SUITE");
 const providerKind = mode === "live" ? "real" : "synthetic";
 const container = process.env.AI_ACCEPTANCE_CONTAINER;
 const proxy = process.env.AI_ACCEPTANCE_PROXY_URL;
@@ -45,11 +48,15 @@ if (mode === "live") {
       throw Error("SYNTHETIC_MATRIX_REQUIRES_LOCAL_FAKE_PROVIDERS");
   }
 }
-const report = { startedAt: new Date().toISOString(), mode, providerKind, syntheticDataOnly: true, base, cases: [], documents: [],
+const report = { startedAt: new Date().toISOString(), mode, suite, providerKind, syntheticDataOnly: true, base, cases: [], documents: [],
   boundary: "Fixed synthetic cases, not real-user accuracy; matrix mode verifies contracts with fake providers." };
+report.models = Object.fromEntries(["LLM_MODEL_ID", "EMBEDDING_MODEL", "EMBEDDING_DIMENSION", "RERANKER_MODEL", "RERANKER_ENABLED"].map((key) => [key, env[key]]));
+report.sourceHashes = Object.fromEntries(await Promise.all([
+  "../src/ai-answer.ts", "../src/ai-support.ts", "../src/ai-provider.ts", "../src/ai-budget.ts", "./ai-quality.mjs", "./ai-quality-cases.mjs", "./ai-quality-holdout.mjs",
+].map(async (file) => [file, createHash("sha256").update(await readFile(new URL(file, import.meta.url))).digest("hex")])));
 const reportPath = process.env.AI_ACCEPTANCE_REPORT ?? `.delivery/ai-quality-${Date.now()}.json`;
 const selectedIds = process.env.AI_QUALITY_CASE_IDS?.split(",").filter(Boolean);
-const cases = qualityCases.filter((c) => (!selectedIds || selectedIds.includes(c.id)) && (mode === "matrix" || c.live));
+const cases = (suite === "holdout" ? holdoutCases : qualityCases).filter((c) => (!selectedIds || selectedIds.includes(c.id)) && (mode === "matrix" || c.live));
 report.expectedCases = cases.map((c) => c.id);
 const cookies = new Map();
 const headers = (jar) => ({ Cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; "), "Content-Type": "application/json", "X-ShopMate-Request": "1" });
@@ -160,8 +167,8 @@ try {
     const started = Date.now(), beforeBudget = await budgetStatus();
     try {
       let ownOrder;
-      if (item.expected.order || ["A02", "A03", "A04", "A07", "C03", "S01"].includes(item.id))
-        ownOrder = await order(["F05", "F08", "A03"].includes(item.id));
+      if (item.setupOrder || item.expected.order || ["A02", "A03", "A04", "A07", "C03", "S01"].includes(item.id))
+        ownOrder = await order(item.setupPaidOrder || ["F05", "F08", "A03"].includes(item.id));
       if (item.id === "F08") await action("requestAfterSale", [ownOrder.id, "测试破损", "合成验收包装破损", [{ orderItemId: ownOrder.items[0].id, quantity: 1 }]]);
       let foreignOrder;
       if (["S02", "S03"].includes(item.id)) {
@@ -202,6 +209,11 @@ try {
       }
       if (item.expected.dynamic === "material") observation.dynamicChecks.push({ ok: detail.answer.text.includes(product.material), detail: "material matches server product" });
       if (item.expected.dynamic === "budget") observation.dynamicChecks.push({ ok: budgetRecommendationCheck(detail.answer, detail.products), detail: "each recommended live product has an in-budget available SKU" });
+      if (item.expected.dynamic === "comparison") observation.dynamicChecks.push({
+        ok: ["p01", "p02"].every((id) => detail.answer.productIds?.includes(id) &&
+          answerHasAmount(detail.answer.text, db.products.find((product) => product.id === id).skus[0].price)),
+        detail: "both requested products and their current prices are present",
+      });
       if (item.expected.proposal) {
         const proposal = detail.proposals.find((p) => p.kind === item.expected.proposal && p.status === "pending");
         if (proposal) {
@@ -238,12 +250,12 @@ try {
         observation.allowedSourceIds = current.publishedVersion === source.publishedVersion ? traces.retrievedSourceIds.filter((id) => id.startsWith(`${source.id}:v${source.publishedVersion}:`)) : [];
       }
       const result = evaluateQualityCase(item, observation), afterBudget = await budgetStatus();
-      report.cases.push({ ...result, expected: item.expected, elapsedMs: Date.now() - started, runId: detail.run.id, runStatus: detail.run.status, runError: detail.run.error,
+      report.cases.push({ ...result, question, expected: item.expected, elapsedMs: Date.now() - started, runId: detail.run.id, runStatus: detail.run.status, runError: detail.run.error,
         degraded: detail.run.degraded, answer: detail.answer, trace: traces,
         providerRequests: afterBudget ? afterBudget.requests.slice(beforeBudget.requests.length) : null });
       console.log(JSON.stringify({ case: item.id, ok: result.ok, outcome: result.outcome }));
     } catch (error) {
-      report.cases.push({ id: item.id, category: item.category, name: item.name, ok: false, error: error.message, checks: [], elapsedMs: Date.now() - started });
+      report.cases.push({ id: item.id, category: item.category, name: item.name, question: item.question, expected: item.expected, ok: false, error: error.message, checks: [], elapsedMs: Date.now() - started });
       console.log(JSON.stringify({ case: item.id, ok: false, error: error.message }));
     }
   }
@@ -256,6 +268,12 @@ finally {
   report.ok = !report.fatal && report.cases.length === report.expectedCases?.length && report.cases.every((c) => c.ok);
   await mkdir(dirname(reportPath), { recursive: true });
   await writeFile(reportPath, JSON.stringify(report, null, 2));
+  await writeFile(reportPath.replace(/\.json$/, "") + ".human-review.json", JSON.stringify({
+    status: "pending_human_review", sourceReport: reportPath, providerKind, suite,
+    rubric: { factuality: "0=错误/无依据，1=部分正确，2=事实与引用均支持", relevance: "0=未回答，1=部分回答，2=直接解决问题", actionability: "0=错误操作/无效追问，1=部分有用，2=有效建议或只追问缺失字段" },
+    cases: report.cases.map((item) => ({ id: item.id, question: item.question, answer: item.answer?.text,
+      citations: item.answer?.citations, automatedResult: item.ok, scores: { factuality: null, relevance: null, actionability: null }, reviewer: null, notes: "" })),
+  }, null, 2));
   console.log(JSON.stringify({ report: reportPath, ok: report.ok, summary: report.summary, fatal: report.fatal }));
   if (!report.ok) process.exitCode = 1;
 }

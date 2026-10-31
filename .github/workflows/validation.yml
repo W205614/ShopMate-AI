@@ -153,12 +153,29 @@ jobs:
           AI_QUALITY_MODE: matrix
           AI_ACCEPTANCE_REPORT: .delivery/ai-quality-matrix-ci.json
         run: node backend/scripts/ai-quality.mjs
+      - name: Verify independent AI task questions
+        working-directory: .
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:18104
+          E2E_ADMIN_PASSWORD: CIContainer123!
+          AI_ACCEPTANCE_ALLOWED: "1"
+          AI_ACCEPTANCE_CONTAINER: shopmate-quality-ci-api-1
+          AI_QUALITY_MODE: matrix
+          AI_QUALITY_SUITE: holdout
+          AI_ACCEPTANCE_REPORT: .delivery/ai-quality-holdout-ci.json
+        run: node backend/scripts/ai-quality.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ai-quality-contract-report
-          path: .delivery/ai-quality-matrix-ci.json
+          path: .delivery/ai-quality-*-ci*.json
           if-no-files-found: ignore
+      - name: Verify task answers and reload with synthetic providers
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:18104
+          E2E_AI_TASK_FIXTURE: "1"
+        run: npm run test:e2e -- e2e/ai-task-experience.spec.ts --output=test-results-ai-task
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -168,6 +185,7 @@ jobs:
             frontend/test-results-container
             frontend/test-results-operations
             frontend/test-results-maintenance
+            frontend/test-results-ai-task
       - name: Export validated container images
         working-directory: .
         run: docker image save shopmate-ai-api:acceptance shopmate-ai-web:acceptance | gzip > validated-images.tar.gz

@@ -8,6 +8,8 @@
 
 根目录 `.env` 从 `.env.example` 复制，已有配置应保留。`ADMIN_PASSWORD` 必须设置，不能上传凭据。首次启动初始化管理员，后续重启不会覆盖已有账号或密码。
 
+标准 Dockerfile 支持构建参数 `ALPINE_MIRROR`，默认使用 Alpine 官方 CDN。本机遇到该 CDN 的 APK 索引 I/O 错误时，可在 `.env` 显式设置 `ALPINE_MIRROR=https://mirrors.aliyun.com/alpine`，再执行正常构建；该站列于 [Alpine 官方镜像列表](https://mirrors.alpinelinux.org/)。参数只替换源地址前缀，保留基础镜像对应发行版路径、包签名校验及安全更新，不自动切源或无限重试。CI 未配置该参数时仍使用默认 CDN。
+
 | 配置 | 用途 |
 | --- | --- |
 | `APP_PORT` | Docker 对外端口，默认 18086 |

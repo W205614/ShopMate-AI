@@ -1,12 +1,16 @@
 FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS dependencies
 WORKDIR /app/backend
-RUN apk --timeout 60 add --no-cache poppler-utils
+ARG ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine
+RUN sed -i "s#https://dl-cdn.alpinelinux.org/alpine#${ALPINE_MIRROR%/}#g" /etc/apk/repositories \
+    && apk --timeout 60 add --no-cache poppler-utils
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 
 FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85
 WORKDIR /app/backend
-RUN apk --timeout 60 update \
+ARG ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine
+RUN sed -i "s#https://dl-cdn.alpinelinux.org/alpine#${ALPINE_MIRROR%/}#g" /etc/apk/repositories \
+    && apk --timeout 60 update \
     && apk --timeout 60 upgrade \
     && apk --timeout 60 add poppler poppler-data font-noto-cjk \
     && rm -rf /var/cache/apk/* \

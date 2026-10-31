@@ -14,7 +14,7 @@ import { readDatabase, queryPage, queryRecord, tableFor } from "./database";
 import { findSession, HttpError } from "./auth";
 import { collectionPermission, demand, permits } from "./permissions";
 import { availableStock, reservedStock } from "./commerce-rules";
-import { reconcile } from "./operations";
+import { createReconciliationReader } from "./reconciliation-reader";
 import type { Promotion, PurchaseOrder } from "../../shared/domain/operations";
 import { queryMemberSummary, type PageOptions } from "./storage";
 import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
@@ -729,9 +729,12 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
       pages,
     });
   });
-  app.get("/api/admin/reconciliation", (req, res) => {
+  const reconciliation = createReconciliationReader(sql);
+  app.get("/api/admin/reconciliation", async (req, res) => {
     demand(signed(sql, req, "admin"), "finance");
-    res.json(reconcile(readDatabase(sql)));
+    const result = await reconciliation();
+    demand(signed(sql, req, "admin"), "finance");
+    res.json(result);
   });
   app.get("/api/admin/dashboard", (req, res) => {
     res.json(dashboard(sql, signed(sql, req, "admin")));

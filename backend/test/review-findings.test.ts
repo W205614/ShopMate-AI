@@ -3,7 +3,7 @@ import { createApp } from "../src/app";
 import { createAccount } from "../src/auth";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { createSeed } from "../../shared/domain/seed";
-import { reconcile } from "../src/operations";
+import { reconcile } from "../src/reconciliation";
 
 it("keyed review moderation loads its completed purchase rather than only pending orders", async () => {
   const sql = openDatabase(":memory:");
@@ -100,5 +100,11 @@ it("inventory reconciliation sums integer movements exactly regardless of stored
       createdAt: new Date().toISOString(),
     }),
   );
-  expect(reconcile(db)).toMatchObject({ balanced: true, issues: [] });
+  const sql = openDatabase(":memory:");
+  try {
+    writeDatabase(sql, db);
+    expect(reconcile(sql)).toMatchObject({ balanced: true, issues: [] });
+  } finally {
+    sql.close();
+  }
 });

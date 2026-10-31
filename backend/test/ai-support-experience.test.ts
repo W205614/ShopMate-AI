@@ -25,6 +25,7 @@ async function queued(orderId?: string) {
 const evidence = () => ({
   sources: [],
   products: new Set<string>(),
+  productCaps: new Map<string, number | undefined>(),
   orders: new Set<string>(),
   degraded: [],
 });

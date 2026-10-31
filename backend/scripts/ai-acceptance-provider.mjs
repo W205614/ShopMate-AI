@@ -128,7 +128,9 @@ export function createAcceptanceProxy({ token, budget, upstreams, fetcher = fetc
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   if (process.env.AI_ACCEPTANCE_ALLOWED !== "1") throw Error("ISOLATED_ACCEPTANCE_AUTHORIZATION_REQUIRED");
   const file = resolve(process.env.AI_ACCEPTANCE_BUDGET_FILE ?? ".delivery/ai-provider-budget.json");
-  const budget = createAcceptanceBudget(file);
+  const maxRequests = Number(process.env.AI_ACCEPTANCE_MAX_REQUESTS ?? "100");
+  if (!Number.isSafeInteger(maxRequests) || maxRequests < 1 || maxRequests > 100) throw Error("INVALID_ACCEPTANCE_BUDGET");
+  const budget = createAcceptanceBudget(file, { maxRequests });
   const server = createAcceptanceProxy({
     token: process.env.AI_ACCEPTANCE_PROXY_TOKEN,
     budget,
@@ -140,5 +142,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   });
   const port = Number(process.env.AI_ACCEPTANCE_PROXY_PORT ?? 18102);
   server.listen(port, process.env.AI_ACCEPTANCE_PROXY_HOST ?? "127.0.0.1", () =>
-    console.log(JSON.stringify({ event: "acceptance_proxy_started", port, ledger: file, maxRequests: 100, maxDurationMs: 1_200_000 })));
+    console.log(JSON.stringify({ event: "acceptance_proxy_started", port, ledger: file, maxRequests: budget.snapshot().maxRequests, maxDurationMs: 1_200_000 })));
 }

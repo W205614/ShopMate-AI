@@ -24,6 +24,7 @@ services:
       AI_ACCEPTANCE_PROXY_HOST: 0.0.0.0
       AI_ACCEPTANCE_PROXY_PORT: "18102"
       AI_ACCEPTANCE_BUDGET_FILE: /app/acceptance-budget/budget.json
+      AI_ACCEPTANCE_MAX_REQUESTS: ${AI_ACCEPTANCE_MAX_REQUESTS:-100}
       LLM_BASE_URL: ${LLM_BASE_URL:?Set the real upstream LLM endpoint}
       LLM_API_KEY: ${LLM_API_KEY:?Set the real upstream LLM credential}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:?Set the real embedding endpoint}

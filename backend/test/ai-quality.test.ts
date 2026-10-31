@@ -9,8 +9,26 @@ import { createAcceptanceBudget, createAcceptanceProxy, providerUsage } from "..
 import { qualityCases, evaluateQualityCase, summarizeQuality, budgetRecommendationCheck, answerHasAmount } from "../scripts/ai-quality-cases.mjs";
 // @ts-expect-error Protocol double used only by isolated acceptance.
 import { syntheticChat } from "../scripts/ai-quality-provider.mjs";
+// @ts-expect-error Separate native-mjs evaluation set.
+import { holdoutCases } from "../scripts/ai-quality-holdout.mjs";
 
 describe("quality acceptance evidence guards", () => {
+  it("keeps independent task questions and reports refusal and resolution denominators honestly", () => {
+    expect(holdoutCases).toHaveLength(12);
+    expect(holdoutCases.every((item: any) => !qualityCases.some((old: any) => old.question === item.question))).toBe(true);
+    const item = holdoutCases.find((item: any) => item.id === "H03");
+    const refused = evaluateQualityCase(item, { runStatus: "completed", answer: { replyKind: "handoff", text: "无法确认" } });
+    expect(refused.ok).toBe(false);
+    expect(refused.falseRefusal).toBe(true);
+    expect(refused.outcome).toBe("safe_refusal");
+    expect(evaluateQualityCase(holdoutCases.find((item: any) => item.id === "H06"), {
+      runStatus: "completed", answer: { replyKind: "clarify", text: "请补充规格和数量" }, proposals: [],
+    }).outcome).toBe("clarification");
+    expect(summarizeQuality([{ ...refused, expected: item.expected, runStatus: "completed" },
+      { ok: true, expected: { answerable: false }, outcome: "safe_refusal", checks: [] }]))
+      .toMatchObject({ answerable: 1, resolvedAnswerable: 0, falseRefusals: 1, resolutionRate: 0, falseRefusalRate: 1 });
+    expect(summarizeQuality([])).toMatchObject({ resolutionRate: null, falseRefusalRate: null });
+  });
   it("locks the forty-case category contract and twelve live representatives", () => {
     expect(qualityCases).toHaveLength(40);
     expect(new Set(qualityCases.map((c: any) => c.id)).size).toBe(40);

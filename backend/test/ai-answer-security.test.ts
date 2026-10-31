@@ -9,7 +9,11 @@ import {
   supportCommands,
   createSupportProposal,
 } from "../src/ai-support";
-import { handoffReply, clarificationReply } from "../src/ai-answer";
+import {
+  handoffReply,
+  clarificationReply,
+  renderGroundedAnswer,
+} from "../src/ai-answer";
 import { reserveProviderRequest } from "../src/ai-budget";
 import { ensureKnowledgeSchema } from "../src/ai-knowledge";
 
@@ -84,6 +88,134 @@ it("renders current server product facts instead of false numeric claims from th
     `${(product.skus[0]!.price / 100).toFixed(2)}元`,
   );
   expect(last(run.conversation_id).text).not.toMatch(/1分钱|999999/);
+});
+
+it("asks only for the specified missing fields while ignoring arbitrary model wording", async () => {
+  const run = await queued("p01");
+  await processSupportRun(sql, String(run.id), async () => ({
+    role: "assistant",
+    content: JSON.stringify({
+      replyKind: "clarify",
+      answer: "请重新提供订单和所有个人资料",
+      presentation: { missingFields: ["sku", "quantity"] },
+    }),
+  }));
+  expect(last(run.conversation_id).text).toContain("商品规格、购买数量");
+  expect(last(run.conversation_id).text).not.toMatch(/订单|个人资料|售后原因/);
+});
+
+it("compares queried products with exact server prices and a computed price difference", async () => {
+  const run = await queued("p01");
+  let count = 0;
+  await processSupportRun(sql, String(run.id), async () =>
+    ++count === 1
+      ? {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "second",
+              type: "function",
+              function: {
+                name: "product_details",
+                arguments: JSON.stringify({ productId: "p02" }),
+              },
+            },
+          ],
+        }
+      : {
+          role: "assistant",
+          content: JSON.stringify({
+            replyKind: "grounded",
+            answer: "两件均只要1分钱",
+            productIds: ["p01", "p02"],
+            presentation: {
+              productView: "compare",
+              focus: ["price", "material"],
+            },
+          }),
+        },
+  );
+  const answer = last(run.conversation_id);
+  expect(answer.productIds).toEqual(["p01", "p02"]);
+  expect(answer.text).toMatch(/商品对比/);
+  expect(answer.text).toContain("价格取舍");
+  expect(answer.text).toContain("相差120.00元");
+  expect(answer.text).not.toContain("1分钱");
+});
+
+it("filters recommendation variants against search budget and current availability", async () => {
+  const run = await queued();
+  let count = 0;
+  await processSupportRun(sql, String(run.id), async () =>
+    ++count === 1
+      ? {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "search",
+              type: "function",
+              function: {
+                name: "search_products",
+                arguments: JSON.stringify({ query: "耳机", maxPrice: 40000 }),
+              },
+            },
+          ],
+        }
+      : {
+          role: "assistant",
+          content: JSON.stringify({
+            replyKind: "grounded",
+            answer: "假推荐理由",
+            productIds: ["p01"],
+            presentation: {
+              productView: "recommend",
+              focus: ["description", "price", "stock"],
+            },
+          }),
+        },
+  );
+  expect(last(run.conversation_id).text).toContain("399.00元");
+  expect(last(run.conversation_id).text).not.toMatch(/409.00元|假推荐理由/);
+});
+
+it("selects whole source sentences and rejects removing negations, conditions or numeric prefixes", () => {
+  const base = {
+    kind: "grounded" as const,
+    sources: [
+      {
+        id: "policy",
+        title: "政策",
+        text: "定制款不支持无理由退货。\n商品实付满99元包邮，未满收取8元运费。",
+      },
+    ],
+    products: [],
+    afterSales: [],
+    proposals: [],
+  };
+  expect(
+    renderGroundedAnswer({
+      ...base,
+      presentation: {
+        sourceQuotes: [
+          { sourceId: "policy", text: "定制款不支持无理由退货。" },
+        ],
+      },
+    }),
+  ).not.toContain("99");
+  for (const text of [
+    "支持无理由退货。",
+    "99元包邮，未满收取8元运费。",
+    "包邮",
+    "无条件退货",
+  ])
+    expect(() =>
+      renderGroundedAnswer({
+        ...base,
+        presentation: { sourceQuotes: [{ sourceId: "policy", text }] },
+      }),
+    ).toThrow("AI_INVALID_SOURCE_QUOTE");
 });
 
 it("quotes published policy evidence without accepting a contradictory model paraphrase", async () => {

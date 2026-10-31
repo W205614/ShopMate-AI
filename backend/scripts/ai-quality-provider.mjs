@@ -16,9 +16,16 @@ export function syntheticChat(messages) {
   const productId = question.match(/商品([A-Za-z0-9_-]+)/)?.[1] ?? context.product?.id;
   const skuId = question.match(/规格([A-Za-z0-9_-]+)/)?.[1] ?? context.product?.skus?.[0]?.id;
   const orderId = question.match(/订单([A-Za-z0-9_-]+)/)?.[1] ?? context.order?.id;
+  if (/售后原因还没/.test(question)) return final("请补充售后原因。", { replyKind: "clarify", presentation: { missingFields: ["reason"] } });
+  if (/规格和数量都没选/.test(question)) return final("请补充规格与数量。", { replyKind: "clarify", presentation: { missingFields: ["sku", "quantity"] } });
+  const compared = [...question.matchAll(/商品(p\d+)/g)].map((match) => match[1]);
+  if (/对比|比较/.test(question) && compared.length > 1) {
+    if (toolMessages.length) return final("按已查询资料比较。", { productIds: compared, presentation: { productView: "compare", focus: ["price", "material", "description", "stock"] } });
+    return { role: "assistant", content: null, tool_calls: compared.map((productId) => ({ id: randomUUID(), type: "function", function: { name: "product_details", arguments: JSON.stringify({ productId }) } })) };
+  }
   if (/忽略所有规则|忽略实际来源|价格改为|输出API Key/.test(question)) return final("无法执行越权操作或泄露其他用户资料；请使用正常入口。");
   if (/还没决定|帮我申请退款|先确认具体商品规格/.test(question)) return final("请补充订单、具体商品规格、数量和原因，核对后再生成确认卡片。", { replyKind: "clarify" });
-  if (/紫电量子|星海秘藏/.test(question)) return final("没有已发布的资料可以确认该商品信息，无法确认容量或保修期限，请转人工。");
+  if (/紫电量子|星海秘藏|月影反重力/.test(question)) return final("没有已发布的资料可以确认该商品信息，无法确认容量或保修期限，请转人工。", { replyKind: "handoff" });
   if (toolMessages.length) {
     const response = JSON.parse(toolMessages.at(-1).content), name = calls.at(-1)?.function.name;
     if (response.error) return final("订单不存在或不属于当前账号，无法查询，也不能操作。");
@@ -35,8 +42,8 @@ export function syntheticChat(messages) {
       const status = ({ pending: "待付款", paid: "已付款，待发货", shipped: "已发货", completed: "已收货", cancelled: "已取消" })[response.status] ?? response.status;
       return final(`订单${response.id}：${status}；应付${response.total / 100}元；创建时间${response.createdAtDisplay}。模拟物流尚未发货，无签收记录。${response.afterSales?.length ? "售后申请待审核。" : ""}`, { orderId: response.id });
     }
-    if (name === "search_products") return final(response.map((p) => `${p.name}，${p.skus[0].price / 100}元`).join("；"), { productIds: response.map((p) => p.id) });
-    if (name === "product_details") return final(`${response.name}，材质${response.material}；${response.skus.map((s) => `规格${s.id}价格${s.price / 100}元，可售库存${s.availableStock}件`).join("；")}`, { productIds: [response.id] });
+    if (name === "search_products") return final(response.map((p) => `${p.name}，${p.skus[0].price / 100}元`).join("；"), { productIds: response.map((p) => p.id), presentation: { productView: "recommend", focus: ["description", "material", "price", "stock"] } });
+    if (name === "product_details") return final(`${response.name}，材质${response.material}；${response.skus.map((s) => `规格${s.id}价格${s.price / 100}元，可售库存${s.availableStock}件`).join("；")}`, { productIds: [response.id], ...(/只需要告诉我材质/.test(question) ? { presentation: { focus: ["material"] } } : {}) });
   }
   if (/生成确认卡片/.test(question)) {
     if (/加入购物车/.test(question)) return tool("propose_action", { kind: "addCart", productId, skuId, quantity: 1 });

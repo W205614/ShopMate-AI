@@ -7,7 +7,9 @@ COPY shared/ /app/shared/
 RUN npm run build
 
 FROM nginx:stable-alpine-slim@sha256:dede8895648b461178c3bc604f7eed4423efe5220b2c4d839f5eb3d34ac3f8f7
-RUN apk --timeout 60 update && apk --timeout 60 upgrade && rm -rf /var/cache/apk/*
+ARG ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine
+RUN sed -i "s#https://dl-cdn.alpinelinux.org/alpine#${ALPINE_MIRROR%/}#g" /etc/apk/repositories \
+    && apk --timeout 60 update && apk --timeout 60 upgrade && rm -rf /var/cache/apk/*
 ARG VCS_REF=local
 LABEL org.opencontainers.image.source="https://github.com/W205614/ShopMate-AI" \
       org.opencontainers.image.revision=$VCS_REF

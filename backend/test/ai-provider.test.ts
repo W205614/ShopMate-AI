@@ -16,6 +16,13 @@ function configure() {
   vi.stubEnv("RERANKER_URL", "https://reranker.invalid/v1/rerank");
 }
 describe("AI provider protocol and failure boundaries", () => {
+  it("defaults to the standard reranker while respecting an explicit provider tier", () => {
+    vi.stubEnv("RERANKER_MODEL", "");
+    vi.stubEnv("RERANKER_MODEL_ID", "");
+    expect(aiConfig().rerankerModel).toBe("BAAI/bge-reranker-v2-m3");
+    vi.stubEnv("RERANKER_MODEL", "Pro/BAAI/bge-reranker-v2-m3");
+    expect(aiConfig().rerankerModel).toBe("Pro/BAAI/bge-reranker-v2-m3");
+  });
   it("requires JSON output for tool-enabled support but keeps vision transcription in text mode", async () => {
     configure();
     const fetcher = vi

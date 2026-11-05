@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "vue-tsc -b",
     "lint": "eslint .",
+    "format:check": "node scripts/check-format.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },

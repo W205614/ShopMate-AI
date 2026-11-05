@@ -90,10 +90,13 @@ npm --prefix backend run typecheck
 npm --prefix backend test
 npm --prefix frontend run typecheck
 npm --prefix frontend run lint
+npm --prefix frontend run format:check
 npm --prefix frontend test
 npm --prefix frontend run build
 npm --prefix frontend run test:e2e
 ```
+
+格式检查复用前端锁文件中的 Prettier 和根目录配置，检查 `frontend/`、`backend/`、`shared/`、`scripts/` 内本次变更的 TypeScript、JavaScript、Vue 和 CSS。默认相对 `HEAD` 检查暂存、未暂存及新增文件；检查整个分支时可传入分支起点，例如 `npm --prefix frontend run format:check -- origin/main`。CI 针对 PR 或推送的完整改动运行相同检查。要修正一个文件，可在 `frontend/` 中运行 `npx prettier --write src/views/CreditsView.vue` 并替换为实际路径。
 
 生产依赖审计使用 `npm --prefix backend audit --omit=dev` 和 `npm --prefix frontend audit --omit=dev`。
 

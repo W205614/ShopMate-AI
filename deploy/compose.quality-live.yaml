@@ -36,7 +36,13 @@ services:
     ports:
       - "127.0.0.1:18102:18102"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18102/status',{headers:{Authorization:'Bearer '+process.env.AI_ACCEPTANCE_PROXY_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18102/status',{headers:{Authorization:'Bearer '+process.env.AI_ACCEPTANCE_PROXY_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 5s
       timeout: 3s
       retries: 5

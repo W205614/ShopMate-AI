@@ -1,49 +1,65 @@
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { lstat, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { check, resolveConfig } from "prettier";
+import { format, getFileInfo, resolveConfig } from "prettier";
 
 process.chdir(fileURLToPath(new URL("../../", import.meta.url)));
+const write = process.argv.includes("--write");
+const repositoryOnly = process.argv.includes("--tracked");
+const args = ["ls-files", "--cached", "--deduplicate", "-z"];
+if (!repositoryOnly) args.push("--others", "--exclude-standard");
+const paths = new Set(
+  execFileSync("git", args, { encoding: "utf8" }).split("\0").filter(Boolean),
+);
+// This machine's active Compose override is ignored via .git/info/exclude.
+if (!repositoryOnly) paths.add("compose.override.yaml");
 
-const archivedScript = "docs/qa/stability-20261020/force-backup-due.mjs";
-const paths = execFileSync(
-  "git",
-  [
-    "ls-files",
-    "--cached",
-    "--others",
-    "--exclude-standard",
-    "--deduplicate",
-    "-z",
-  ],
-  { encoding: "utf8" },
-).split("\0");
-
+const pythonFiles = [];
 let checked = 0;
 for (const filepath of paths) {
+  const basic =
+    /(?:^|\/)(?:Dockerfile|\.gitignore|\.gitattributes|\.dockerignore|\.prettierignore|\.env\.example|nginx\.conf|requirements-format\.txt)$/.test(
+      filepath,
+    );
+  const python = filepath.endsWith(".py");
   if (
-    filepath === archivedScript ||
-    !/\.(?:[cm]?[jt]sx?|vue|css)$/.test(filepath)
+    !basic &&
+    !python &&
+    !/\.(?:[cm]?[jt]sx?|vue|css|jsonc?|ya?ml|html|md|svg)$/.test(filepath)
   )
     continue;
-
-  let source;
-  try {
-    source = await readFile(filepath, "utf8");
-  } catch (error) {
-    // A tracked file deleted from the working tree can still be in the index.
-    if (error.code === "ENOENT") continue;
-    throw error;
+  if (/(?:^|\/)(?:credentials?|secrets?)(?:[./]|$)/i.test(filepath)) continue;
+  const { ignored } = await getFileInfo(filepath, {
+    ignorePath: ".prettierignore",
+    resolveConfig: false,
+  });
+  if (ignored) continue;
+  const stat = await lstat(filepath).catch((error) => {
+    if (error.code !== "ENOENT") throw error;
+  });
+  if (!stat?.isFile()) continue;
+  if (python) {
+    pythonFiles.push(filepath);
+    continue;
   }
-
-  const options = await resolveConfig(filepath);
-  if (
-    !(await check(source.replaceAll("\r\n", "\n"), { ...options, filepath }))
-  ) {
-    console.error(filepath);
-    process.exitCode = 1;
+  const source = (await readFile(filepath, "utf8")).replaceAll("\r\n", "\n");
+  const formatted = basic
+    ? source.replace(/[ \t]+$/gm, "").replace(/\n*$/, "\n")
+    : await format(source, { ...(await resolveConfig(filepath)), filepath });
+  if (formatted !== source) {
+    console.log(filepath);
+    if (write) await writeFile(filepath, formatted);
+    else process.exitCode = 1;
   }
   checked++;
 }
-
-console.log(`Prettier checked ${checked} source files.`);
+if (pythonFiles.length) {
+  execFileSync(
+    process.platform === "win32" ? "python" : "python3",
+    ["-m", "black", ...(write ? [] : ["--check"]), "--", ...pythonFiles],
+    { stdio: "inherit" },
+  );
+}
+console.log(
+  `Checked ${checked} source, documentation and configuration files and ${pythonFiles.length} Python files.`,
+);

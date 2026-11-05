@@ -8,31 +8,31 @@ AI 功能在现有 Node.js／Express、Vue 和 SQLite 服务内运行，仍使�
 
 从仓库根目录的 `.env.example` 复制缺少的配置到被 Git 忽略的 `.env`，保留原管理员、访问源、端口和备份配置。全部凭据仅供后端使用，不使用 `VITE_` 前缀，不提交 `.env`，不在排障输出中打印完整环境变量。
 
-| 配置 | 默认值与用途 |
-| --- | --- |
-| `AI_ENABLED` | `false`；设为 `true` 开启 AI 对话 |
-| `LLM_BASE_URL` | `https://api.deepseek.com`；后端在其后拼接 `chat/completions` |
-| `LLM_MODEL_ID` | `deepseek-flash`；对话、工具调用及图片转录共用，账号需有相应模型访问权限 |
-| `LLM_API_KEY` | 必填的模型服务 Key |
-| `AI_PROVIDER_TIMEOUT_MS` | `30000`；单次对话／Embedding 请求超时，允许 100–90000 ms |
-| `AI_MAX_CONCURRENT` | `2`；全局同时处理会话数，允许 1–8 |
-| `AI_MAX_QUEUE` | `20`；除并发处理数外的排队容量，允许 1–100 |
-| `AI_USER_DAILY_CONSULTATIONS` | `20`；每账号每日 AI 咨询数，失败任务重试也占一次，允许 1–10000 |
-| `AI_DAILY_PROVIDER_CALLS` | `100`；全局每日对话、Embedding、重排和视觉请求数，允许 1–100000 |
-| `SUPPORT_DAILY_CONVERSATIONS` | `20`；每账号每日新建会话数，允许 1–1000 |
-| `SUPPORT_MAX_USER_TURNS` | `100`；每会话用户消息轮次上限，允许 1–1000 |
-| `AI_KNOWLEDGE_MAX_CHUNKS` | `5000`；全库索引分段上限，包含草稿及保留版本，允许 1–100000 |
-| `AI_KNOWLEDGE_MAX_VECTOR_BYTES` | `67108864`（64 MiB）；全库向量字节上限，允许 1–268435456 |
-| `EMBEDDING_BASE_URL` | 填写供应商的 OpenAI 兼容 API 基址，例如服务要求的 `/v1` 基址；后端拼接 `embeddings` |
-| `EMBEDDING_API_KEY` | 文档索引及向量检索使用的 Key |
-| `EMBEDDING_MODEL` | `text-embedding-3-large` |
-| `EMBEDDING_DIMENSION` | `3072`；返回向量长度必须与之匹配，且各元素有限、向量非零 |
-| `SEND_EMBEDDING_DIMENSIONS` | 示例与 Compose 为 `false`；不向不兼容该参数的代理传 `dimensions`，仍校验实际返回长度 |
-| `RERANKER_ENABLED` | `true`；可设为 `false`，检索会标明使用融合排序降级 |
-| `RERANKER_URL` | `https://api.siliconflow.cn/v1/rerank`；也可填写兼容服务的基址 |
-| `RERANKER_API_KEY` | 重排服务 Key |
-| `RERANKER_MODEL` | `BAAI/bge-reranker-v2-m3`；显式配置优先 |
-| `RERANKER_TIMEOUT_SECONDS` | `2`；独立重排请求超时，允许 1–30 s |
+| 配置                            | 默认值与用途                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------ |
+| `AI_ENABLED`                    | `false`；设为 `true` 开启 AI 对话                                                    |
+| `LLM_BASE_URL`                  | `https://api.deepseek.com`；后端在其后拼接 `chat/completions`                        |
+| `LLM_MODEL_ID`                  | `deepseek-flash`；对话、工具调用及图片转录共用，账号需有相应模型访问权限             |
+| `LLM_API_KEY`                   | 必填的模型服务 Key                                                                   |
+| `AI_PROVIDER_TIMEOUT_MS`        | `30000`；单次对话／Embedding 请求超时，允许 100–90000 ms                             |
+| `AI_MAX_CONCURRENT`             | `2`；全局同时处理会话数，允许 1–8                                                    |
+| `AI_MAX_QUEUE`                  | `20`；除并发处理数外的排队容量，允许 1–100                                           |
+| `AI_USER_DAILY_CONSULTATIONS`   | `20`；每账号每日 AI 咨询数，失败任务重试也占一次，允许 1–10000                       |
+| `AI_DAILY_PROVIDER_CALLS`       | `100`；全局每日对话、Embedding、重排和视觉请求数，允许 1–100000                      |
+| `SUPPORT_DAILY_CONVERSATIONS`   | `20`；每账号每日新建会话数，允许 1–1000                                              |
+| `SUPPORT_MAX_USER_TURNS`        | `100`；每会话用户消息轮次上限，允许 1–1000                                           |
+| `AI_KNOWLEDGE_MAX_CHUNKS`       | `5000`；全库索引分段上限，包含草稿及保留版本，允许 1–100000                          |
+| `AI_KNOWLEDGE_MAX_VECTOR_BYTES` | `67108864`（64 MiB）；全库向量字节上限，允许 1–268435456                             |
+| `EMBEDDING_BASE_URL`            | 填写供应商的 OpenAI 兼容 API 基址，例如服务要求的 `/v1` 基址；后端拼接 `embeddings`  |
+| `EMBEDDING_API_KEY`             | 文档索引及向量检索使用的 Key                                                         |
+| `EMBEDDING_MODEL`               | `text-embedding-3-large`                                                             |
+| `EMBEDDING_DIMENSION`           | `3072`；返回向量长度必须与之匹配，且各元素有限、向量非零                             |
+| `SEND_EMBEDDING_DIMENSIONS`     | 示例与 Compose 为 `false`；不向不兼容该参数的代理传 `dimensions`，仍校验实际返回长度 |
+| `RERANKER_ENABLED`              | `true`；可设为 `false`，检索会标明使用融合排序降级                                   |
+| `RERANKER_URL`                  | `https://api.siliconflow.cn/v1/rerank`；也可填写兼容服务的基址                       |
+| `RERANKER_API_KEY`              | 重排服务 Key                                                                         |
+| `RERANKER_MODEL`                | `BAAI/bge-reranker-v2-m3`；显式配置优先                                              |
+| `RERANKER_TIMEOUT_SECONDS`      | `2`；独立重排请求超时，允许 1–30 s                                                   |
 
 完整文档检索需配置对话与 Embedding；Reranker 不可用时可降级。仅使用商品／订单工具和 FAQ 时，不需要先上传文档。`AI_ENABLED` 控制客服对话，文档上传后的处理任务独立运行，仍可能调用 Embedding 或视觉模型。
 
@@ -67,12 +67,12 @@ docker compose ps
 
 ## 知识上传、版本与检索
 
-| 格式 | 处理方式 |
-| --- | --- |
-| TXT、MD、Markdown | 严格 UTF-8 文本提取，拒绝无效编码和 NUL 字符 |
-| DOCX | 校验 ZIP 结构及展开大小后，用 Mammoth 提取正文，不执行宏或输出文档 HTML |
-| 文字 PDF | 使用 Poppler 检查页数、加密状态并逐页提取文字 |
-| 扫描 PDF | 某页有效文字少于 20 字符时，将该页渲染为图片后调用视觉模型转录 |
+| 格式                 | 处理方式                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| TXT、MD、Markdown    | 严格 UTF-8 文本提取，拒绝无效编码和 NUL 字符                                               |
+| DOCX                 | 校验 ZIP 结构及展开大小后，用 Mammoth 提取正文，不执行宏或输出文档 HTML                    |
+| 文字 PDF             | 使用 Poppler 检查页数、加密状态并逐页提取文字                                              |
+| 扫描 PDF             | 某页有效文字少于 20 字符时，将该页渲染为图片后调用视觉模型转录                             |
 | PNG、JPG／JPEG、WebP | 解码校验后缩放至不超过 2000 × 2000，调用视觉模型转录；拒绝多帧图片及超过 2000 万像素的输入 |
 
 限制为每文件 10 MiB、PDF 30 页、全库 300 份文档、原文件合计 256 MiB；单份正文提取或编辑最多 100 万字符，单文档切分最多 6000 个。另有全库默认5000个分段／64 MiB向量预算，包含草稿及保留的旧版本，索引前和事务落库时均检查。超限会明确报错并保留原发布版本，不会静默截断或自动删除资料；已有超额库仍可检索，需先核对容量再索引新版本。加密、损坏或无法提取有效正文的文件不能发布。
@@ -99,16 +99,16 @@ docker compose ps
 
 每个账号同时只能有一个活跃客服任务，因此同一会话也不会同时生成两轮。默认全局 2 个运行任务加 20 个排队任务，繁忙时返回 429；每轮最多 4 次模型调用、8 次工具执行，从入队起总期限 90 秒。HTTP 发送消息仅在短事务内保存消息、任务和幂等结果，模型请求在事务外执行。
 
-| 情况 | 行为与处理 |
-| --- | --- |
-| 模型未配置、超时、429／5xx、断网或结构异常 | 保留用户消息，任务失败并给出规则来源的失败提示；修复配置／网络后点击重试或转人工 |
-| Embedding 检索故障 | 显示 `embedding_unavailable_keyword_only`，使用关键词结果；文档索引故障则保持失败，不允许发布 |
-| Embedding 模型与已存向量不匹配 | 显示 `embedding_model_changed`；重新索引并发布匹配的版本 |
-| Reranker 故障或关闭 | 显示 `reranker_unavailable_fusion_order`，使用 RRF 融合顺序 |
-| 文档识别或索引失败 | 在管理端查看错误码，确认配置、文件格式和容量；核对可用的提取文本，可修改保存或重试 |
-| 用户转人工或会话关闭 | 取消该会话活跃任务及未确认提案，迟到回答不得写入；已完成的业务确认仍保留 |
-| API 重启 | 中断的客服任务重新排队，保留调用计数和总期限；文档中断阶段重新处理。已经落库的回答不重复追加 |
-| 用户明确重试失败客服任务 | 重新分配本轮期限与调用预算，旧未确认提案取消，新的提案需要重新确认 |
+| 情况                                       | 行为与处理                                                                                    |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| 模型未配置、超时、429／5xx、断网或结构异常 | 保留用户消息，任务失败并给出规则来源的失败提示；修复配置／网络后点击重试或转人工              |
+| Embedding 检索故障                         | 显示 `embedding_unavailable_keyword_only`，使用关键词结果；文档索引故障则保持失败，不允许发布 |
+| Embedding 模型与已存向量不匹配             | 显示 `embedding_model_changed`；重新索引并发布匹配的版本                                      |
+| Reranker 故障或关闭                        | 显示 `reranker_unavailable_fusion_order`，使用 RRF 融合顺序                                   |
+| 文档识别或索引失败                         | 在管理端查看错误码，确认配置、文件格式和容量；核对可用的提取文本，可修改保存或重试            |
+| 用户转人工或会话关闭                       | 取消该会话活跃任务及未确认提案，迟到回答不得写入；已完成的业务确认仍保留                      |
+| API 重启                                   | 中断的客服任务重新排队，保留调用计数和总期限；文档中断阶段重新处理。已经落库的回答不重复追加  |
+| 用户明确重试失败客服任务                   | 重新分配本轮期限与调用预算，旧未确认提案取消，新的提案需要重新确认                            |
 
 重启恢复不保证外部供应商“恰好调用一次”：进程可能在供应商已返回、业务结果尚未落库时退出，再次请求可能重复计费。当前部署仍为单 API 实例，不支持多个实例同时消费这些任务。
 
@@ -118,16 +118,16 @@ docker compose ps
 
 以下接口沿用现有 Cookie 认证、`X-ShopMate-Request: 1` 写入标识、访问源校验与权限约定：
 
-| 接口 | 内容 |
-| --- | --- |
-| `GET /api/support/config` | 读取 `aiEnabled`，不包含凭据 |
-| `GET /api/support/conversations/:id` | 本人会话、最新任务、提案和关联商品／本人订单；不依赖列表当前页 |
-| `POST /api/actions/sendMessage` | 原参数 `[conversationId, text]`，顶层传 `requestId` |
-| `POST /api/actions/retrySupportRun` | 参数 `[runId]`，顶层传 `requestId` |
-| `POST /api/actions/confirmSupportProposal`、`cancelSupportProposal` | 参数 `[proposalId]`，顶层传 `requestId` |
-| `GET /api/support/documents`、`/:id`、`/:id/file` | 具有客服管理权限的账号读取列表、提取结果及原始文件 |
-| `POST /api/support/documents` | JSON 中传 `name`、`contentBase64`、`requestId`，原文件上限 10 MiB，传输 JSON 上限 15 MiB |
-| `POST /api/support/documents/:id/actions` | `action` 为 `save/publish/disable/delete/retry`，携带当前 `version`、`requestId`；`save` 另带 `text` |
+| 接口                                                                | 内容                                                                                                 |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GET /api/support/config`                                           | 读取 `aiEnabled`，不包含凭据                                                                         |
+| `GET /api/support/conversations/:id`                                | 本人会话、最新任务、提案和关联商品／本人订单；不依赖列表当前页                                       |
+| `POST /api/actions/sendMessage`                                     | 原参数 `[conversationId, text]`，顶层传 `requestId`                                                  |
+| `POST /api/actions/retrySupportRun`                                 | 参数 `[runId]`，顶层传 `requestId`                                                                   |
+| `POST /api/actions/confirmSupportProposal`、`cancelSupportProposal` | 参数 `[proposalId]`，顶层传 `requestId`                                                              |
+| `GET /api/support/documents`、`/:id`、`/:id/file`                   | 具有客服管理权限的账号读取列表、提取结果及原始文件                                                   |
+| `POST /api/support/documents`                                       | JSON 中传 `name`、`contentBase64`、`requestId`，原文件上限 10 MiB，传输 JSON 上限 15 MiB             |
+| `POST /api/support/documents/:id/actions`                           | `action` 为 `save/publish/disable/delete/retry`，携带当前 `version`、`requestId`；`save` 另带 `text` |
 
 文档操作按管理账号和请求标识幂等，旧版本冲突返回 409。客服确认沿用已有业务命令的账号／方法／请求标识幂等，提案本身另有消费状态保护。
 

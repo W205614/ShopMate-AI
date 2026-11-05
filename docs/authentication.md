@@ -23,22 +23,24 @@
 
 ## 接口与持久化
 
-| 接口 | 行为 |
-| --- | --- |
-| `POST /api/auth/register` | 注册普通用户并签发用户会话 |
-| `POST /api/auth/login` | 按角色校验账号与密码，签发独立会话 |
-| `POST /api/auth/profile` | 更新本人昵称并同步账号/业务资料 |
-| `POST /api/auth/password` | 校验原密码、更新哈希并撤销该用户全部会话 |
-| `POST /api/auth/logout` | 撤销指定角色当前会话并清除 Cookie |
-| `GET /api/bootstrap?role=user` | 返回公共目录初始化和当前用户身份、有限私有上下文 |
+| 接口                            | 行为                                                 |
+| ------------------------------- | ---------------------------------------------------- |
+| `POST /api/auth/register`       | 注册普通用户并签发用户会话                           |
+| `POST /api/auth/login`          | 按角色校验账号与密码，签发独立会话                   |
+| `POST /api/auth/profile`        | 更新本人昵称并同步账号/业务资料                      |
+| `POST /api/auth/password`       | 校验原密码、更新哈希并撤销该用户全部会话             |
+| `POST /api/auth/logout`         | 撤销指定角色当前会话并清除 Cookie                    |
+| `GET /api/bootstrap?role=user`  | 返回公共目录初始化和当前用户身份、有限私有上下文     |
 | `GET /api/bootstrap?role=admin` | 按有效员工身份初始化管理上下文；业务列表另用分页接口 |
-| `GET /api/state` | 固定 410，旧全量接口已退出 |
-| `POST /api/actions/:method` | 允许列表、角色校验、参数校验、归属校验后执行操作 |
-| `GET /api/health` | API 与 SQLite 连接健康检查 |
+| `GET /api/state`                | 固定 410，旧全量接口已退出                           |
+| `POST /api/actions/:method`     | 允许列表、角色校验、参数校验、归属校验后执行操作     |
+| `GET /api/health`               | API 与 SQLite 连接健康检查                           |
 
 数据库包括 `accounts`、`sessions`、`rate_limits` 和 `state`。当前业务数据仍以单份 JSON 状态存于 `state`，SQLite `BEGIN IMMEDIATE` 保证读、校验、写入串行化；这是单实例实现，尚未宣称支持高并发集群。
 
 Docker 后端仅开放内部 3001 端口，Nginx 对外监听本机 18086。数据卷为 `shopmate-ai_api_data`，挂载 `/app/data`；不得误删日常数据卷。前端构建不包含管理员密码，`.env` 和本地测试数据均被 Git 与 Docker 构建上下文忽略。
+
+<!-- prettier-ignore-start -->
 
 ## 认证首版验证记录
 
@@ -65,6 +67,8 @@ HTTP 用例验证了注册校验、账号重复与大小写唯一、密码哈希
 共享类型、API 契约和商品种子位于独立 `shared/domain/`，后端测试和运行不依赖前端安装。首次远端 CI 暴露过共享源码放在 Vue 目录引入的配置耦合，已通过该目录调整修复。
 
 首版 GitHub Actions 执行前后端验证、15 项完整浏览器回归及 4 项容器认证回归；当前流程已扩充传统电商回归。远端最终状态以对应提交的 Actions 结果为准。
+
+<!-- prettier-ignore-end -->
 
 ## 已知范围
 

@@ -29,7 +29,13 @@ services:
       AI_QUALITY_PROVIDER_HOST: 0.0.0.0
       AI_QUALITY_PROVIDER_PORT: "18103"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18103/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18103/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 5s
       timeout: 3s
       retries: 5

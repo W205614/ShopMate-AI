@@ -10,14 +10,14 @@
 
 标准 Dockerfile 支持构建参数 `ALPINE_MIRROR`，默认使用 Alpine 官方 CDN。本机遇到该 CDN 的 APK 索引 I/O 错误时，可在 `.env` 显式设置 `ALPINE_MIRROR=https://mirrors.aliyun.com/alpine`，再执行正常构建；该站列于 [Alpine 官方镜像列表](https://mirrors.alpinelinux.org/)。参数只替换源地址前缀，保留基础镜像对应发行版路径、包签名校验及安全更新，不自动切源或无限重试。CI 未配置该参数时仍使用默认 CDN。
 
-| 配置 | 用途 |
-| --- | --- |
-| `APP_PORT` | Docker 对外端口，默认 18086 |
-| `ADMIN_USERNAME`、`ADMIN_PASSWORD` | 首次管理员初始化及密码维护命令使用 |
-| `APP_ORIGINS` | 允许写入请求的访问源，多个地址用逗号分隔；更换端口时同步修改 |
-| `COOKIE_SECURE` | HTTPS 部署时设为 `true`，同时配置实际访问源 |
-| `BACKUP_PATH` | 主机备份目录，默认 `./backups`，独立于业务卷 |
-| `LOG_REQUESTS` | 默认记录脱敏请求 ID、路径、状态和耗时，容器日志轮转 |
+| 配置                               | 用途                                                         |
+| ---------------------------------- | ------------------------------------------------------------ |
+| `APP_PORT`                         | Docker 对外端口，默认 18086                                  |
+| `ADMIN_USERNAME`、`ADMIN_PASSWORD` | 首次管理员初始化及密码维护命令使用                           |
+| `APP_ORIGINS`                      | 允许写入请求的访问源，多个地址用逗号分隔；更换端口时同步修改 |
+| `COOKIE_SECURE`                    | HTTPS 部署时设为 `true`，同时配置实际访问源                  |
+| `BACKUP_PATH`                      | 主机备份目录，默认 `./backups`，独立于业务卷                 |
+| `LOG_REQUESTS`                     | 默认记录脱敏请求 ID、路径、状态和耗时，容器日志轮转          |
 
 Docker 默认只监听 `127.0.0.1`，后端没有主机映射端口。修改 `APP_ORIGINS` 不会自动开放外部监听，公开部署还需配置入口、HTTPS 和访问控制。`localhost` 与 `127.0.0.1` 的 Cookie 独立，体验双端时统一使用一种地址。
 
@@ -96,7 +96,9 @@ npm --prefix frontend run build
 npm --prefix frontend run test:e2e
 ```
 
-本地和 CI 都运行同一个全量格式检查。它使用仓库锁定的 Prettier，读取工作区内所有 Git 已跟踪和新增未忽略的 TypeScript、JavaScript、Vue 和 CSS 文件，跳过历史验收脚本 `docs/qa/stability-20261020/force-backup-due.mjs`。Windows 工作副本的 CRLF 换行只在内存中转换为 LF 后比较，其他排版差异照常报告。要修正单个文件，可在 `frontend/` 中运行 `npx prettier --write src/views/CreditsView.vue` 并替换为实际路径。
+首次使用格式检查前，安装前端开发依赖，并在 Python 3.13 环境中运行 `python -m pip install -r scripts/requirements-format.txt`。在仓库根目录运行 `npm --prefix frontend run format:check` 检查自有源码、当前文档和配置；追加 `-- --write` 可按相同范围修正格式。Prettier 处理 Web 源码、JSON、YAML、HTML、SVG 和 Markdown，Black 处理 Python；Dockerfile、Nginx 和工具控制文件检查行尾空白及文件末尾换行。Windows 工作副本的 CRLF 在比较时按 LF 处理。
+
+本地范围包含未暂存和未忽略的新文件，并显式包含已存在的本机 `compose.override.yaml`。CI 使用 `--tracked`，只验证版本库中的文件。历史报告、测试样例、运行数据、第三方素材文件和凭据不参与格式化，排除项见[格式排除清单](../.prettierignore)。
 
 生产依赖审计使用 `npm --prefix backend audit --omit=dev` 和 `npm --prefix frontend audit --omit=dev`。
 

@@ -3,9 +3,9 @@ import { openDatabase, writeDatabase } from "../src/database";
 import { createSeed } from "../../shared/domain/seed";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
-import { processSupportRun } from "../src/ai-support";
-import { ensureSupportSchema } from "../src/ai-schema";
-import { ensureKnowledgeSchema } from "../src/ai-knowledge";
+import { processSupportRun } from "../src/ai/ai-support";
+import { ensureSupportSchema } from "../src/ai/ai-schema";
+import { ensureKnowledgeSchema } from "../src/ai/ai-knowledge";
 
 it("never logs a model-supplied unknown tool name containing private text", async () => {
   vi.stubEnv("AI_ENABLED", "true");

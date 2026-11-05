@@ -1,5 +1,5 @@
 import { acquireProviderBudget } from "./ai-budget";
-import { integerSetting } from "./config";
+import { integerSetting } from "../config";
 /** Provider errors deliberately exclude HTTP bodies, URLs and credentials. */
 export class ProviderError extends Error {
   constructor(

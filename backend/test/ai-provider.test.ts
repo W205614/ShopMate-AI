@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { aiConfig, chat, embed, rerank, vision } from "../src/ai-provider";
+import { aiConfig, chat, embed, rerank, vision } from "../src/ai/ai-provider";
 
 afterEach(() => {
   vi.unstubAllGlobals();

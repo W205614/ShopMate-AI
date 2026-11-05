@@ -7,26 +7,26 @@ import type {
   Database,
   Message,
   Order,
-} from "../../shared/domain/types";
+} from "../../../shared/domain/types";
 import {
   readDatabase,
   queryRecord,
   transaction,
   writeDatabase,
-} from "./database";
-import { context, transact, userId, requireThat, now, id } from "./repository";
-import { findSession, HttpError } from "./auth";
+} from "../database";
+import { context, transact, userId, requireThat, now, id } from "../repository";
+import { findSession, HttpError } from "../auth";
 import {
   addCartChange,
   cancelOrderChange,
   requestAfterSaleChange,
-} from "./commerce";
-import { availableStock } from "./commerce-rules";
+} from "../commerce";
+import { availableStock } from "../commerce-rules";
 import { aiConfig, chat } from "./ai-provider";
 import { retrieveKnowledge, sourcesStillValid } from "./ai-knowledge";
 import { cancelSupportWork, ensureSupportSchema } from "./ai-schema";
-import { audit, enqueue } from "./runtime";
-import { releaseSnapshot, type DatabaseReadScope } from "./storage";
+import { audit, enqueue } from "../runtime";
+import { releaseSnapshot, type DatabaseReadScope } from "../storage";
 import { reserveConsultation, withProviderBudget } from "./ai-budget";
 import { renderGroundedAnswer, answerPresentationSchema } from "./ai-answer";
 

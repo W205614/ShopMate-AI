@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { ensureRuntimeSchema } from "./runtime";
+import { ensureRuntimeSchema } from "../runtime";
 
 export function ensureSupportSchema(sql: DatabaseSync) {
   ensureRuntimeSchema(sql);

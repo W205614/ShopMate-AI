@@ -4,9 +4,9 @@ import { openDatabase, writeDatabase, transaction } from "../src/database";
 import { createSeed } from "../../shared/domain/seed";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
-import { createSupportProposal, processSupportRun } from "../src/ai-support";
+import { createSupportProposal, processSupportRun } from "../src/ai/ai-support";
 import { insertStoredRecord } from "../src/storage";
-import { ensureSupportSchema } from "../src/ai-schema";
+import { ensureSupportSchema } from "../src/ai/ai-schema";
 
 let sql: DatabaseSync;
 const asUser = <T>(work: () => T, id = "u1") =>

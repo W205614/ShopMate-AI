@@ -22,7 +22,7 @@ it("password maintenance revokes sessions and records an atomic audit without cr
     sql.close();
     await promisify(execFile)(
       process.execPath,
-      ["--import", "tsx", resolve("src/admin.ts")],
+      ["--import", "tsx", resolve("src/admin-password.ts")],
       {
         cwd: resolve("."),
         env: {

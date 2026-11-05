@@ -12,7 +12,7 @@ import {
   recordBackupReplica,
   readBackupStatus,
   setBackupRunning,
-} from "../src/backup-state";
+} from "../src/backup/backup-state";
 
 let directory: string, database: string, pair: string, sql: DatabaseSync;
 beforeEach(() => {

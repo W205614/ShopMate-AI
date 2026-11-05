@@ -13,6 +13,9 @@ ShopMate-AI/
 ├── backend/
 │   ├── Dockerfile            API 镜像及 PDF 工具
 │   ├── src/                  HTTP、业务事务、SQLite、AI 与维护逻辑
+│   │   ├── ai/               客服会话、知识库、模型调用与文档工作进程
+│   │   ├── backup/           自动备份调度、状态与工作进程
+│   │   └── reconciliation/   财务核对与只读工作进程
 │   ├── scripts/              监控、隔离验收、造数和数据核验工具
 │   ├── test/                 单元/HTTP 测试及合成 AI 文档样例
 │   └── package*.json         后端依赖、锁文件与 npm 命令
@@ -52,9 +55,9 @@ ShopMate-AI/
 1. `backend/src/index.ts`：打开数据库、初始化管理员、启动 HTTP 服务、定时任务、AI 工作器和自动备份，并处理退出。
 2. `app.ts`、`read-routes.ts`：请求来源、认证、权限、参数校验、分领域读取及业务操作入口。相关规则在 `auth.ts`、`permissions.ts`、`validation.ts`。
 3. `repository.ts`、`database.ts`、`storage.ts`、`migration.ts`：请求上下文、事务、数据读写、关系存储与迁移；版本常量在 `versions.ts`。
-4. `commerce.ts`、`commerce-rules.ts`、`stock-availability.ts`：订单、库存及售后；`catalog.ts` 管商品分类，`marketing.ts` 管营销与会员，`operations.ts` 管采购、仓储及经营管理，`dashboard.ts` 汇总经营概览，`support.ts` 管规则与人工客服。`reconciliation.ts` 负责精确聚合与核对，`reconciliation-reader.ts`、`reconciliation-worker.ts` 将文件库核对放到独立只读进程。
-5. `ai-support.ts`、`ai-knowledge.ts`、`ai-provider.ts`、`ai-schema.ts`：AI 会话、提案与确认、文档检索、供应商调用和结构校验；文档工作进程入口为 `ai-document-worker.ts`。`ai-answer.ts` 从服务端证据生成事实文案，`ai-budget.ts` 管理北京时间每日配额及工作进程额度协议。
-6. `runtime.ts`、`jobs.ts` 管审计、命令结果和持久化任务；`diagnostics.ts` 管受限诊断；`maintenance.ts`、`automatic-backup.ts`、`backup-worker.ts`、`backup-state.ts` 管备份、恢复、子进程和备份状态。`admin.ts` 是管理员密码维护入口。
+4. `commerce.ts`、`commerce-rules.ts`、`stock-availability.ts`：订单、库存及售后；`catalog.ts` 管商品分类，`marketing.ts` 管营销与会员，`operations.ts` 管采购、仓储及经营管理，`dashboard.ts` 汇总经营概览，`support.ts` 管规则与人工客服。财务核对模块位于 `reconciliation/`，其中 `reconciliation.ts` 负责精确聚合与核对，`reconciliation-reader.ts`、`reconciliation-worker.ts` 将文件库核对放到独立只读进程。
+5. `ai/` 集中管理 AI 客服。`ai-support.ts`、`ai-knowledge.ts`、`ai-provider.ts`、`ai-schema.ts`：AI 会话、提案与确认、文档检索、供应商调用和结构校验；文档工作进程入口为 `ai-document-worker.ts`。`ai-answer.ts` 从服务端证据生成事实文案，`ai-budget.ts` 管理北京时间每日配额及工作进程额度协议。
+6. `runtime.ts`、`jobs.ts` 管审计、命令结果和持久化任务；`diagnostics.ts` 管受限诊断；维护命令在 `maintenance.ts`。`backup/` 下的 `automatic-backup.ts`、`backup-worker.ts`、`backup-state.ts` 管理自动备份调度、子进程和备份状态。`admin-password.ts` 是管理员密码维护入口。
 
 沿一个功能定位相关测试即可：后端在 `backend/test/`，前端逻辑测试与源码同目录，页面流程在 `frontend/e2e/`。日常验证命令见[开发与运维](development.md#验证命令)。
 

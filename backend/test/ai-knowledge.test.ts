@@ -6,8 +6,8 @@ import { createServer } from "node:http";
 import { spawnSync } from "node:child_process";
 import JSZip from "jszip";
 import sharp from "sharp";
-import { aiConfig } from "../src/ai-provider";
-import { reserveProviderRequest } from "../src/ai-budget";
+import { aiConfig } from "../src/ai/ai-provider";
+import { reserveProviderRequest } from "../src/ai/ai-budget";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { tokenHash } from "../src/auth";
 import { ensureRuntimeSchema } from "../src/runtime";
@@ -17,14 +17,14 @@ import {
   retrieveKnowledge,
   sourcesStillValid,
   startKnowledgeWorker,
-} from "../src/ai-knowledge";
+} from "../src/ai/ai-knowledge";
 import {
   tokenize,
   splitSections,
   cosineRank,
   mergeCosineRanks,
   parseDocument,
-} from "../src/ai-document-worker";
+} from "../src/ai/ai-document-worker";
 
 let sql: DatabaseSync,
   server: Server,

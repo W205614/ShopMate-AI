@@ -52,7 +52,7 @@ const report = { startedAt: new Date().toISOString(), mode, suite, providerKind,
   boundary: "Fixed synthetic cases, not real-user accuracy; matrix mode verifies contracts with fake providers." };
 report.models = Object.fromEntries(["LLM_MODEL_ID", "EMBEDDING_MODEL", "EMBEDDING_DIMENSION", "RERANKER_MODEL", "RERANKER_ENABLED"].map((key) => [key, env[key]]));
 report.sourceHashes = Object.fromEntries(await Promise.all([
-  "../src/ai-answer.ts", "../src/ai-support.ts", "../src/ai-provider.ts", "../src/ai-budget.ts", "./ai-quality.mjs", "./ai-quality-cases.mjs", "./ai-quality-holdout.mjs",
+  "../src/ai/ai-answer.ts", "../src/ai/ai-support.ts", "../src/ai/ai-provider.ts", "../src/ai/ai-budget.ts", "./ai-quality.mjs", "./ai-quality-cases.mjs", "./ai-quality-holdout.mjs",
 ].map(async (file) => [file, createHash("sha256").update(await readFile(new URL(file, import.meta.url))).digest("hex")])));
 const reportPath = process.env.AI_ACCEPTANCE_REPORT ?? `.delivery/ai-quality-${Date.now()}.json`;
 const selectedIds = process.env.AI_QUALITY_CASE_IDS?.split(",").filter(Boolean);

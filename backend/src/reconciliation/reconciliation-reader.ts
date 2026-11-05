@@ -1,7 +1,7 @@
 import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { DatabaseSync } from "node:sqlite";
-import { HttpError } from "./errors";
+import { HttpError } from "../errors";
 import { reconcile } from "./reconciliation";
 
 export function createReconciliationReader(sql: DatabaseSync) {

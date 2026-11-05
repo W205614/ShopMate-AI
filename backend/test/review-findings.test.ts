@@ -3,7 +3,7 @@ import { createApp } from "../src/app";
 import { createAccount } from "../src/auth";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { createSeed } from "../../shared/domain/seed";
-import { reconcile } from "../src/reconciliation";
+import { reconcile } from "../src/reconciliation/reconciliation";
 
 it("keyed review moderation loads its completed purchase rather than only pending orders", async () => {
   const sql = openDatabase(":memory:");

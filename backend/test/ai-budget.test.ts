@@ -9,8 +9,8 @@ import {
   reserveProviderRequest,
   resourceLimits,
   withProviderBudget,
-} from "../src/ai-budget";
-import { chat, embed, rerank, vision } from "../src/ai-provider";
+} from "../src/ai/ai-budget";
+import { chat, embed, rerank, vision } from "../src/ai/ai-provider";
 import { transaction } from "../src/database";
 
 afterEach(() => {

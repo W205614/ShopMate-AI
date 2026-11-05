@@ -14,7 +14,7 @@ import { readDatabase, queryPage, queryRecord, tableFor } from "./database";
 import { findSession, HttpError } from "./auth";
 import { collectionPermission, demand, permits } from "./permissions";
 import { availableStock, reservedStock } from "./commerce-rules";
-import { createReconciliationReader } from "./reconciliation-reader";
+import { createReconciliationReader } from "./reconciliation/reconciliation-reader";
 import type { Promotion, PurchaseOrder } from "../../shared/domain/operations";
 import { queryMemberSummary, type PageOptions } from "./storage";
 import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";

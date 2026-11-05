@@ -18,13 +18,13 @@ import { backupDatabase, inspectBackup } from "../src/maintenance";
 import {
   runAutomaticBackup,
   cancelAutomaticBackup,
-} from "../src/automatic-backup";
+} from "../src/backup/automatic-backup";
 import {
   ensureBackupState,
   recordBackupSuccess,
   automaticBackupDue,
   readBackupStatus,
-} from "../src/backup-state";
+} from "../src/backup/backup-state";
 
 let sql: DatabaseSync, directory: string, source: string, destination: string;
 let output: ReturnType<typeof vi.spyOn>, errors: ReturnType<typeof vi.spyOn>;

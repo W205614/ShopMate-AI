@@ -7,8 +7,8 @@ import { createSeed } from "../../shared/domain/seed";
 import { tokenHash } from "../src/auth";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
-import { processSupportRun } from "../src/ai-support";
-import { startKnowledgeWorker } from "../src/ai-knowledge";
+import { processSupportRun } from "../src/ai/ai-support";
+import { startKnowledgeWorker } from "../src/ai/ai-knowledge";
 
 let sql: DatabaseSync, server: Server, provider: Server, base: string;
 let stopKnowledge: (() => void) | undefined;

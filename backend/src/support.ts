@@ -1,11 +1,11 @@
 import type { ShopApi } from "../../shared/domain/api";
 import type { Message } from "../../shared/domain/types";
-import { aiConfig } from "./ai-provider";
-import { enqueueSupportRun } from "./ai-support";
+import { aiConfig } from "./ai/ai-provider";
+import { enqueueSupportRun } from "./ai/ai-support";
 import { availableStock } from "./commerce-rules";
-import { cancelSupportWork, ensureSupportSchema } from "./ai-schema";
+import { cancelSupportWork, ensureSupportSchema } from "./ai/ai-schema";
 import { context as requestContext } from "./repository";
-import { reserveNewConversation, resourceLimits } from "./ai-budget";
+import { reserveNewConversation, resourceLimits } from "./ai/ai-budget";
 import { HttpError } from "./errors";
 import {
   transact,

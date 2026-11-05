@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { openDatabase, transaction } from "../src/database";
-import { reconcile } from "../src/reconciliation";
-import { createReconciliationReader } from "../src/reconciliation-reader";
+import { reconcile } from "../src/reconciliation/reconciliation";
+import { createReconciliationReader } from "../src/reconciliation/reconciliation-reader";
 
 it("reports payment, refund, purchase and orphan differences with exact string amounts", () => {
   const sql = openDatabase(":memory:");

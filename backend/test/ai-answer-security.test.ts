@@ -8,14 +8,14 @@ import {
   processSupportRun,
   supportCommands,
   createSupportProposal,
-} from "../src/ai-support";
+} from "../src/ai/ai-support";
 import {
   handoffReply,
   clarificationReply,
   renderGroundedAnswer,
-} from "../src/ai-answer";
-import { reserveProviderRequest } from "../src/ai-budget";
-import { ensureKnowledgeSchema } from "../src/ai-knowledge";
+} from "../src/ai/ai-answer";
+import { reserveProviderRequest } from "../src/ai/ai-budget";
+import { ensureKnowledgeSchema } from "../src/ai/ai-knowledge";
 
 let sql: DatabaseSync;
 const asUser = <T>(work: () => T) =>

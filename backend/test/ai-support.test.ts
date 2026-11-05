@@ -10,9 +10,9 @@ import {
   executeSupportTool,
   processSupportRun,
   supportCommands,
-} from "../src/ai-support";
-import { ensureSupportSchema } from "../src/ai-schema";
-import { ensureKnowledgeSchema } from "../src/ai-knowledge";
+} from "../src/ai/ai-support";
+import { ensureSupportSchema } from "../src/ai/ai-schema";
+import { ensureKnowledgeSchema } from "../src/ai/ai-knowledge";
 
 let sql: DatabaseSync;
 const user = { id: "u1", name: "测试用户", role: "user" as const };

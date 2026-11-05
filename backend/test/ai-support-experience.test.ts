@@ -4,9 +4,9 @@ import { createSeed } from "../../shared/domain/seed";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
-import { ensureSupportSchema } from "../src/ai-schema";
-import { ensureKnowledgeSchema } from "../src/ai-knowledge";
-import { executeSupportTool, processSupportRun } from "../src/ai-support";
+import { ensureSupportSchema } from "../src/ai/ai-schema";
+import { ensureKnowledgeSchema } from "../src/ai/ai-knowledge";
+import { executeSupportTool, processSupportRun } from "../src/ai/ai-support";
 
 type Run = Parameters<typeof executeSupportTool>[1];
 let sql: DatabaseSync;

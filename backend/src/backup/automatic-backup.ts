@@ -3,7 +3,7 @@ import { fork, type ChildProcess } from "node:child_process";
 import { access, rm } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cleanBackupScratch } from "./maintenance";
+import { cleanBackupScratch } from "../maintenance";
 
 let active: ChildProcess | undefined,
   running = false;

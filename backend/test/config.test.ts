@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { integerSetting } from "../src/config";
-import { aiConfig } from "../src/ai-provider";
-import { knowledgeLimits } from "../src/ai-knowledge";
+import { aiConfig } from "../src/ai/ai-provider";
+import { knowledgeLimits } from "../src/ai/ai-knowledge";
 
 afterEach(() => vi.unstubAllEnvs());
 

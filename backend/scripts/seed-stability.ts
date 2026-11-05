@@ -7,7 +7,7 @@ import {
   transaction,
 } from "../src/database";
 import { ensureRuntimeSchema } from "../src/runtime";
-import { ensureKnowledgeSchema } from "../src/ai-knowledge";
+import { ensureKnowledgeSchema } from "../src/ai/ai-knowledge";
 const sql = openDatabase(process.env.DATABASE_PATH!);
 const users = 50;
 try {

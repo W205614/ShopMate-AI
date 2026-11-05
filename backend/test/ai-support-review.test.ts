@@ -12,8 +12,8 @@ import {
   executeSupportTool,
   processSupportRun,
   supportCommands,
-} from "../src/ai-support";
-import { ensureSupportSchema } from "../src/ai-schema";
+} from "../src/ai/ai-support";
+import { ensureSupportSchema } from "../src/ai/ai-schema";
 import { ensureRuntimeSchema } from "../src/runtime";
 import { createApp } from "../src/app";
 import { createAccount } from "../src/auth";

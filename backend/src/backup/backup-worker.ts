@@ -5,7 +5,7 @@ import {
   backupDatabase,
   pruneDailyBackups,
   copyBackupPair,
-} from "./maintenance";
+} from "../maintenance";
 
 const [source, destination, temporaryId, replicaDirectory] =
   process.argv.slice(2);

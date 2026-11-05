@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { findSession } from "./auth";
 import { demand } from "./permissions";
-import { readBackupStatus } from "./backup-state";
+import { readBackupStatus } from "./backup/backup-state";
 
 /** Counters are process-local and explicitly reset on restart. No request bodies are retained. */
 export function createRequestObserver(logRequests = false, limit = 64) {

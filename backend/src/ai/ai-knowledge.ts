@@ -6,12 +6,12 @@ import { fileURLToPath } from "node:url";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { findSession, HttpError } from "./auth";
-import { demand } from "./permissions";
-import { transaction } from "./database";
+import { findSession, HttpError } from "../auth";
+import { demand } from "../permissions";
+import { transaction } from "../database";
 import { aiConfig, embed, rerank } from "./ai-provider";
 import { reserveProviderRequest, withProviderBudget } from "./ai-budget";
-import { integerSetting } from "./config";
+import { integerSetting } from "../config";
 import {
   tokenize,
   splitSections,

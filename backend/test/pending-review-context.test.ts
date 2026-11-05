@@ -20,7 +20,9 @@ it("each order page carries all own review and after-sale eligibility context wi
     "admin",
   );
   sql
-    .prepare("UPDATE staff_access SET staff_role='warehouse' WHERE account_id=?")
+    .prepare(
+      "UPDATE staff_access SET staff_role='warehouse' WHERE account_id=?",
+    )
     .run(warehouse.id);
   const db = readDatabase(sql),
     template = createSeed().orders[0]!,

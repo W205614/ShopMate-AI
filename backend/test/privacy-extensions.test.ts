@@ -100,8 +100,18 @@ it("bootstrap and paginated reads isolate new member records and hide warehouse 
     writeDatabase(sql, db);
     for (const user of [undefined, ...users]) {
       const headers = user ? { Cookie: user.cookie } : undefined;
-      const bootstrap = await (await fetch(base + "/api/bootstrap", { headers })).json();
-      for (const collection of ["notifications", "pointsEntries", "suppliers", "purchaseOrders", "returnInspections", "auditEntries", "shippingRules"])
+      const bootstrap = await (
+        await fetch(base + "/api/bootstrap", { headers })
+      ).json();
+      for (const collection of [
+        "notifications",
+        "pointsEntries",
+        "suppliers",
+        "purchaseOrders",
+        "returnInspections",
+        "auditEntries",
+        "shippingRules",
+      ])
         expect(bootstrap.db[collection]).toEqual([]);
       if (user) {
         for (const collection of ["notifications", "pointsEntries"]) {

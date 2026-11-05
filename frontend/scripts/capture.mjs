@@ -16,7 +16,8 @@ const context = await browser.newContext({
   locale: "zh-CN",
   viewport: { width: 1440, height: 1000 },
 });
-if (!process.env.ADMIN_PASSWORD) throw new Error("Set ADMIN_PASSWORD before capturing authenticated pages");
+if (!process.env.ADMIN_PASSWORD)
+  throw new Error("Set ADMIN_PASSWORD before capturing authenticated pages");
 const page = await context.newPage();
 async function capture(path, name, fullPage = true) {
   await page.goto(path);
@@ -26,7 +27,11 @@ async function capture(path, name, fullPage = true) {
   await page.screenshot({ path: destination + name + ".png", fullPage });
 }
 await capture("/", "storefront-desktop");
-await page.screenshot({ path: destination + "storefront-desktop-fold.jpg", quality: 85, fullPage: false });
+await page.screenshot({
+  path: destination + "storefront-desktop-fold.jpg",
+  quality: 85,
+  fullPage: false,
+});
 await page.setViewportSize({ width: 768, height: 1024 });
 await capture("/", "storefront-tablet");
 await page.setViewportSize({ width: 390, height: 844 });
@@ -34,7 +39,9 @@ await capture("/", "storefront-mobile");
 await page.setViewportSize({ width: 1440, height: 1000 });
 await capture("/products/p01", "product");
 await page.goto("/admin/login");
-await page.getByLabel("账号", { exact: true }).fill(process.env.ADMIN_USERNAME || "admin");
+await page
+  .getByLabel("账号", { exact: true })
+  .fill(process.env.ADMIN_USERNAME || "admin");
 await page.getByLabel("密码", { exact: true }).fill(process.env.ADMIN_PASSWORD);
 await page.getByRole("button", { name: "登录", exact: true }).click();
 await page.waitForURL("**/admin");

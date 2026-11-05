@@ -17,8 +17,7 @@ test("列表和详情再次购买报告新增项数与件数，与购物车一�
     expect(response.ok(), await response.text()).toBe(true);
     return (await response.json()).result;
   };
-  const state = async () =>
-    (await readSnapshot(page.request, "user")).db;
+  const state = async () => (await readSnapshot(page.request, "user")).db;
   const before = await state();
   const ids = before.carts.map((c: { id: string }) => c.id);
   if (ids.length) await action("batchCart", { action: "remove", ids });

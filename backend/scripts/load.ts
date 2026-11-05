@@ -2,7 +2,10 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { BoundedRequestTimeline, analyzeBackupWindows } from "./load-observation";
+import {
+  BoundedRequestTimeline,
+  analyzeBackupWindows,
+} from "./load-observation";
 import { observeProductionLoad } from "./production-load-observer";
 const base = process.env.LOAD_BASE_URL ?? "",
   duration = Number(process.env.LOAD_SECONDS ?? "600"),
@@ -23,7 +26,9 @@ const digestContainer = process.env.LOAD_CONTAINER;
 const observeBackups = process.env.LOAD_OBSERVE_BACKUPS === "1";
 if (observeBackups && !digestContainer?.startsWith("shopmate-reliability-"))
   throw new Error("An isolated production-load container is required");
-const observer = observeBackups ? await observeProductionLoad(digestContainer!, base) : undefined;
+const observer = observeBackups
+  ? await observeProductionLoad(digestContainer!, base)
+  : undefined;
 const timeline = observeBackups ? new BoundedRequestTimeline() : undefined;
 let serverSource: unknown;
 if (digestContainer?.startsWith("shopmate-reliability-")) {
@@ -85,7 +90,10 @@ const resourceSamples: { at: string; stats: string }[] = [];
 const container = process.env.LOAD_CONTAINER;
 let resourceSampleRunning = false;
 const sample = () => {
-  if (container?.startsWith("shopmate-reliability-") && !resourceSampleRunning) {
+  if (
+    container?.startsWith("shopmate-reliability-") &&
+    !resourceSampleRunning
+  ) {
     resourceSampleRunning = true;
     execFile(
       "docker",
@@ -153,7 +161,12 @@ async function worker(index: number) {
       statusCounts.network = (statusCounts.network ?? 0) + 1;
     }
     histogram[Math.min(60000, Math.ceil(performance.now() - begin))]!++;
-    timeline?.record(beginAt, beginAt + performance.now() - begin, status, write);
+    timeline?.record(
+      beginAt,
+      beginAt + performance.now() - begin,
+      status,
+      write,
+    );
     requests++;
   }
 }
@@ -217,13 +230,26 @@ const report = {
     : undefined,
 };
 const observation = observer ? await observer.finish() : undefined;
-const backupWindows = observation && timeline ? analyzeBackupWindows(observation.events, timeline, {
-  loadStartedAt: start, loadEndedAt, clockPaddingMs: observation.clockPaddingMs,
-}) : undefined;
-const completeReport = { ...report, ...(observation ? { observation, backupWindows } : {}) };
+const backupWindows =
+  observation && timeline
+    ? analyzeBackupWindows(observation.events, timeline, {
+        loadStartedAt: start,
+        loadEndedAt,
+        clockPaddingMs: observation.clockPaddingMs,
+      })
+    : undefined;
+const completeReport = {
+  ...report,
+  ...(observation ? { observation, backupWindows } : {}),
+};
 const output = process.env.LOAD_REPORT ?? ".delivery/load.json";
 mkdirSync(dirname(output), { recursive: true });
 writeFileSync(output, JSON.stringify(completeReport, null, 2));
 console.log(JSON.stringify(completeReport));
-if (errors || report.p95Ms > 2000 || (observeBackups &&
-  (rejected || !backupWindows?.passed || observation!.failures.length))) process.exitCode = 1;
+if (
+  errors ||
+  report.p95Ms > 2000 ||
+  (observeBackups &&
+    (rejected || !backupWindows?.passed || observation!.failures.length))
+)
+  process.exitCode = 1;

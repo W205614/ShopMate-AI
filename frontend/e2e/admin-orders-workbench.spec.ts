@@ -90,7 +90,15 @@ test("订单四页数据支持收件人/商品/编号、状态和本地日期筛
   const address = (await state(page)).addresses.find(
     (a: { name: string }) => a.name === "运营定位收件人",
   );
-  await action(page, "adjustStock", "p05", "p05-s1", 50, 0, "订单分页夹具：提供31笔订单的预占库存");
+  await action(
+    page,
+    "adjustStock",
+    "p05",
+    "p05-s1",
+    50,
+    0,
+    "订单分页夹具：提供31笔订单的预占库存",
+  );
   const ids = [];
   for (let i = 0; i < 31; i++) ids.push(await createOrder(page, 1, address.id));
   await page.goto("/admin/orders?q=运营定位收件人&status=pending");

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { Product } from '../../domain/types'
-import { money } from '../../domain/types'
-defineProps<{ product: Product; compact?: boolean }>()
+import type { Product } from "../../domain/types";
+import { money } from "../../domain/types";
+defineProps<{ product: Product; compact?: boolean }>();
 </script>
 <template>
   <RouterLink

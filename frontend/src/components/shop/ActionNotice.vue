@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ error?: string; notice?: string }>()
+defineProps<{ error?: string; notice?: string }>();
 </script>
 <template>
   <p v-if="error" class="action-error" role="alert">{{ error }}</p>

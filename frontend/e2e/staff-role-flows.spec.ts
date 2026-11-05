@@ -302,7 +302,9 @@ for (const role of ["support", "warehouse", "finance"] as const) {
       expect(result.status).toBe("refunded");
       // All goods were returned after delivery; the original shipping fee stays
       // charged, including when earlier acceptance flows configured a fee.
-      expect(result.refundedAmount).toBe(result.total - (result.shippingFee ?? 0));
+      expect(result.refundedAmount).toBe(
+        result.total - (result.shippingFee ?? 0),
+      );
       expect(result.refundedAmount).toBe(sale.refundAmount);
       expect(result.shippingRefunded ?? 0).toBe(0);
       expect(errors).toEqual([]);

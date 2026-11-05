@@ -282,7 +282,9 @@ describe("operating commands and scoped reads", () => {
     writeDatabase(sql, db);
     const retired = await fetch(base + "/api/state?role=invalid");
     expect(retired.status).toBe(410);
-    expect(await retired.json()).toMatchObject({ code: "LEGACY_STATE_DISABLED" });
+    expect(await retired.json()).toMatchObject({
+      code: "LEGACY_STATE_DISABLED",
+    });
     const bootstrap = await fetch(base + "/api/bootstrap");
     expect(bootstrap.headers.get("X-Request-ID")).toBeTruthy();
     const state = await bootstrap.json();

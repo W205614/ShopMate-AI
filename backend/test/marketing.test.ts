@@ -29,7 +29,10 @@ async function snapshot(cookie = "", role = "user") {
 }
 beforeEach(async () => {
   sql = openDatabase(":memory:");
-  const app = await createApp(sql, { origins: ["http://localhost"], allowLegacyCommands: true });
+  const app = await createApp(sql, {
+    origins: ["http://localhost"],
+    allowLegacyCommands: true,
+  });
   server = app.listen(0, "127.0.0.1");
   await new Promise<void>((r) => server.on("listening", r));
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;

@@ -210,18 +210,39 @@ export async function observeProductionLoad(container: string, base: string) {
             ? { durationMs: value.durationMs }
             : {}),
           ...(value.bytes !== undefined ? { bytes: value.bytes } : {}),
-          ...(["backup", "copy", "verify", "publish", "retention", "replica"].includes(value.phase)
+          ...([
+            "backup",
+            "copy",
+            "verify",
+            "publish",
+            "retention",
+            "replica",
+          ].includes(value.phase)
             ? { phase: value.phase }
             : {}),
-          ...(typeof value.code === "string" && /^BACKUP_[A-Z_]+$/.test(value.code)
+          ...(typeof value.code === "string" &&
+          /^BACKUP_[A-Z_]+$/.test(value.code)
             ? { code: value.code }
             : {}),
           ...(value.phaseDurations && typeof value.phaseDurations === "object"
-            ? { phaseDurations: Object.fromEntries(
-                ["backup", "copy", "verify", "publish", "retention", "replica"]
-                  .filter((key) => Number.isFinite(value.phaseDurations[key]) && value.phaseDurations[key] >= 0)
-                  .map((key) => [key, value.phaseDurations[key]]),
-              ) }
+            ? {
+                phaseDurations: Object.fromEntries(
+                  [
+                    "backup",
+                    "copy",
+                    "verify",
+                    "publish",
+                    "retention",
+                    "replica",
+                  ]
+                    .filter(
+                      (key) =>
+                        Number.isFinite(value.phaseDurations[key]) &&
+                        value.phaseDurations[key] >= 0,
+                    )
+                    .map((key) => [key, value.phaseDurations[key]]),
+                ),
+              }
             : {}),
         });
       }

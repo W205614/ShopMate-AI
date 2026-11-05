@@ -169,9 +169,7 @@ async function request() {
           </p>
           <p v-if="order.afterSaleDays" class="secondary">
             本单确认收货后
-            {{
-              order.afterSaleDays
-            }}
+            {{ order.afterSaleDays }}
             天内可新申请售后（演示规则）；已受理申请继续处理。
           </p>
           <p v-if="order.refundedAmount" class="commerce-amount-note">

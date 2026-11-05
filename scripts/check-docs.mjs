@@ -4,10 +4,18 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
-  cwd: root,
-  encoding: "utf8",
-}).split("\0"))].filter(file => file.endsWith(".md") && existsSync(resolve(root, file)));
+const files = [
+  ...new Set(
+    execFileSync(
+      "git",
+      ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+      {
+        cwd: root,
+        encoding: "utf8",
+      },
+    ).split("\0"),
+  ),
+].filter((file) => file.endsWith(".md") && existsSync(resolve(root, file)));
 const missing = [];
 let checked = 0;
 for (const file of files) {
@@ -18,9 +26,18 @@ for (const file of files) {
   ];
   for (const [, raw] of links) {
     const target = raw.replace(/^<|>$/g, "").split(/[?#]/)[0];
-    if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("//")) continue;
+    if (
+      !target ||
+      /^[a-z][a-z0-9+.-]*:/i.test(target) ||
+      target.startsWith("//")
+    )
+      continue;
     checked++;
-    if (!existsSync(resolve(dirname(resolve(root, file)), decodeURIComponent(target)))) {
+    if (
+      !existsSync(
+        resolve(dirname(resolve(root, file)), decodeURIComponent(target)),
+      )
+    ) {
       missing.push({ file, target });
     }
   }

@@ -189,8 +189,12 @@ describe("bounded load and backup observation", () => {
     expect(result.backups[0].overlapWindow.stats.p95Ms).toBeLessThan(2000);
     expect(result.backups[0].overlapWindow.stats.p99Ms).toBe(6001);
     expect(result.passed).toBe(false);
-    expect(result.failures).toContain("Backup backup-a: overlap window P99 exceeds 5000ms");
-    expect(result.failures).toContain("Backup backup-a: context window P99 exceeds 5000ms");
+    expect(result.failures).toContain(
+      "Backup backup-a: overlap window P99 exceeds 5000ms",
+    );
+    expect(result.failures).toContain(
+      "Backup backup-a: context window P99 exceeds 5000ms",
+    );
   });
   it("requires full backup and context coverage inside load, plus a write in each measured window", () => {
     expect(

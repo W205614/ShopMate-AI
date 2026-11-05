@@ -62,9 +62,7 @@ test("补货增加指定 SKU 库存并写入采购流水，导出的是筛选后
   });
   await login(page);
   await page.goto("/admin/inventory");
-  await page
-    .getByPlaceholder("搜索商品、规格或变动编号 / 原因")
-    .fill("p03-s1");
+  await page.getByPlaceholder("搜索商品、规格或变动编号 / 原因").fill("p03-s1");
   await expect(page.locator(".el-table__body-wrapper tbody tr")).toHaveCount(1);
   const row = page.locator(".el-table__body-wrapper tbody tr").first();
   const before = Number(

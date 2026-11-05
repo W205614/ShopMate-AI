@@ -219,8 +219,7 @@ test("分类创建修改支持三种可解码图片，删除仍保护关联商�
     await expect(dialog).not.toBeVisible();
     await expect(page).not.toHaveURL(/detail=/);
     await page.reload();
-    const db = (await readSnapshot(page.request, "admin"))
-      .db;
+    const db = (await readSnapshot(page.request, "admin")).db;
     expect(
       db.categories.find((c: { name: string }) => c.name === "图片分类验收")
         .image,
@@ -248,8 +247,7 @@ test("商品列表数据缩减后校正末页而非显示空表", async ({ page 
   await page.getByRole("option", { name: "已上架", exact: true }).click();
   await page.locator(".el-pager li").filter({ hasText: /^3$/ }).click();
   await expect(page.locator(".el-table__body-wrapper tbody tr")).toHaveCount(3);
-  const db = (await readSnapshot(page.request, "admin"))
-    .db;
+  const db = (await readSnapshot(page.request, "admin")).db;
   for (const product of db.products
     .filter((p: { active: boolean }) => p.active)
     .slice(0, 3)) {
@@ -287,8 +285,7 @@ test("合法 1.6 MiB 商品图片可保存刷新，售价按元输入且保持�
   await page.reload();
   await page.getByPlaceholder("搜索商品名称").fill("静听 无线头戴耳机");
   await expect(page.locator(".el-table__body-wrapper")).toContainText("¥99.90");
-  const db = (await readSnapshot(page.request, "admin"))
-    .db;
+  const db = (await readSnapshot(page.request, "admin")).db;
   expect(
     db.products.find((p: { id: string }) => p.id === "p01").skus[0].price,
   ).toBe(9990);

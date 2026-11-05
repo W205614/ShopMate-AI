@@ -4,23 +4,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 // Scripts run under Node directly; no application build or credentials are needed.
 // @ts-expect-error Native mjs acceptance utilities are deliberately outside the TypeScript application.
-import {
-  createAcceptanceBudget,
-  createAcceptanceProxy,
-  providerUsage,
-} from "../scripts/ai-acceptance-provider.mjs";
+import * as acceptance from "../scripts/ai-acceptance-provider.mjs";
 // @ts-expect-error Native mjs acceptance contract.
-import {
+import * as quality from "../scripts/ai-quality-cases.mjs";
+// @ts-expect-error Protocol double used only by isolated acceptance.
+import { syntheticChat } from "../scripts/ai-quality-provider.mjs";
+// @ts-expect-error Separate native-mjs evaluation set.
+import { holdoutCases } from "../scripts/ai-quality-holdout.mjs";
+
+const { createAcceptanceBudget, createAcceptanceProxy, providerUsage } =
+  acceptance;
+const {
   qualityCases,
   evaluateQualityCase,
   summarizeQuality,
   budgetRecommendationCheck,
   answerHasAmount,
-} from "../scripts/ai-quality-cases.mjs";
-// @ts-expect-error Protocol double used only by isolated acceptance.
-import { syntheticChat } from "../scripts/ai-quality-provider.mjs";
-// @ts-expect-error Separate native-mjs evaluation set.
-import { holdoutCases } from "../scripts/ai-quality-holdout.mjs";
+} = quality;
 
 describe("quality acceptance evidence guards", () => {
   it("keeps independent task questions and reports refusal and resolution denominators honestly", () => {

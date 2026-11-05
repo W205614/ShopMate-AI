@@ -25,22 +25,20 @@ describe("AI provider protocol and failure boundaries", () => {
   });
   it("requires JSON output for tool-enabled support but keeps vision transcription in text mode", async () => {
     configure();
-    const fetcher = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            choices: [
-              {
-                message: {
-                  role: "assistant",
-                  content: '{"answer":"请补充订单"}',
-                },
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: '{"answer":"请补充订单"}',
               },
-            ],
-          }),
-        ),
-      );
+            },
+          ],
+        }),
+      ),
+    );
     vi.stubGlobal("fetch", fetcher);
     await chat(
       [{ role: "system", content: "Return JSON" }],

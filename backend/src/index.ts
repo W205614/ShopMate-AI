@@ -6,7 +6,10 @@ import { expirePendingOrders } from "./commerce";
 import { writeFileSync, rmSync } from "node:fs";
 import { ensureRuntimeSchema } from "./runtime";
 import { runDueJobs, ensureRecurringJobs } from "./jobs";
-import { runAutomaticBackup, cancelAutomaticBackup } from "./backup/automatic-backup";
+import {
+  runAutomaticBackup,
+  cancelAutomaticBackup,
+} from "./backup/automatic-backup";
 import { resolve } from "node:path";
 import { startSupportWorker } from "./ai/ai-support";
 import { startKnowledgeWorker, knowledgeLimits } from "./ai/ai-knowledge";

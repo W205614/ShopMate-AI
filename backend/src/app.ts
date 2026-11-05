@@ -33,7 +33,10 @@ import { commerceApi } from "./commerce";
 import { catalogApi } from "./catalog";
 import { supportApi } from "./support";
 import { registerSupportRoutes, supportCommands } from "./ai/ai-support";
-import { ensureKnowledgeSchema, registerKnowledgeRoutes } from "./ai/ai-knowledge";
+import {
+  ensureKnowledgeSchema,
+  registerKnowledgeRoutes,
+} from "./ai/ai-knowledge";
 import { ensureRuntimeSchema, audit } from "./runtime";
 import { demand, methodPermission, isStaffRole } from "./permissions";
 import { operationsApi } from "./operations";
@@ -264,7 +267,9 @@ export async function createApp(
     if (!account || !valid) throw new HttpError(401, "账号或密码错误");
     if (account.role === "admin") {
       const access = sql
-        .prepare("SELECT active,staff_role FROM staff_access WHERE account_id=?")
+        .prepare(
+          "SELECT active,staff_role FROM staff_access WHERE account_id=?",
+        )
         .get(account.id);
       if (!access || access.active !== 1 || !isStaffRole(access.staff_role))
         throw new HttpError(403, "员工权限不可用，请联系店主");
@@ -286,9 +291,7 @@ export async function createApp(
       id: account.id,
       name: account.name,
       role: account.role,
-      ...(account.role === "admin"
-        ? { staffRole: access!.staff_role }
-        : {}),
+      ...(account.role === "admin" ? { staffRole: access!.staff_role } : {}),
     });
   });
   app.post("/api/auth/logout", (req, res) => {

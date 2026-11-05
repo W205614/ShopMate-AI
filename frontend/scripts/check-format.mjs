@@ -3,39 +3,47 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { check, resolveConfig } from "prettier";
 
-const root = fileURLToPath(new URL("../../", import.meta.url));
-process.chdir(root);
+process.chdir(fileURLToPath(new URL("../../", import.meta.url)));
 
-function gitPaths(args) {
-  return execFileSync("git", args, { encoding: "utf8" })
-    .split("\0")
-    .filter(Boolean);
-}
+const archivedScript = "docs/qa/stability-20261020/force-backup-due.mjs";
+const paths = execFileSync(
+  "git",
+  [
+    "ls-files",
+    "--cached",
+    "--others",
+    "--exclude-standard",
+    "--deduplicate",
+    "-z",
+  ],
+  { encoding: "utf8" },
+).split("\0");
 
-const base = process.argv[2] ?? "HEAD";
-// GitHub reports an all-zero base on the first push of a branch.
-const tracked = /^0+$/.test(base)
-  ? gitPaths(["ls-files", "--cached", "-z"])
-  : gitPaths(["diff", "--name-only", "--diff-filter=ACMRT", "-z", base, "--"]);
-const untracked = gitPaths([
-  "ls-files",
-  "--others",
-  "--exclude-standard",
-  "-z",
-]);
-const files = [...new Set([...tracked, ...untracked])].filter((path) =>
-  /^(backend|frontend|shared|scripts)\/.*\.(?:[cm]?[jt]sx?|vue|css)$/.test(
-    path,
-  ),
-);
+let checked = 0;
+for (const filepath of paths) {
+  if (
+    filepath === archivedScript ||
+    !/\.(?:[cm]?[jt]sx?|vue|css)$/.test(filepath)
+  )
+    continue;
 
-for (const filepath of files) {
-  const source = await readFile(filepath, "utf8");
+  let source;
+  try {
+    source = await readFile(filepath, "utf8");
+  } catch (error) {
+    // A tracked file deleted from the working tree can still be in the index.
+    if (error.code === "ENOENT") continue;
+    throw error;
+  }
+
   const options = await resolveConfig(filepath);
-  if (!(await check(source, { ...options, filepath }))) {
+  if (
+    !(await check(source.replaceAll("\r\n", "\n"), { ...options, filepath }))
+  ) {
     console.error(filepath);
     process.exitCode = 1;
   }
+  checked++;
 }
 
-console.log(`Prettier checked ${files.length} changed source files.`);
+console.log(`Prettier checked ${checked} source files.`);

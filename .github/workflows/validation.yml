@@ -13,8 +13,6 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Check documentation links
         working-directory: .
         run: node scripts/check-docs.mjs
@@ -43,10 +41,8 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
         working-directory: backend
       - run: npm run typecheck
-      - name: Check formatting of changed source files
-        env:
-          FORMAT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: npm run format:check -- "$FORMAT_BASE"
+      - name: Check repository source formatting
+        run: npm run format:check
       - run: npm run lint
       - run: npm test
       - run: npm run build

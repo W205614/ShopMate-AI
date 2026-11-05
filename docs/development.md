@@ -96,7 +96,7 @@ npm --prefix frontend run build
 npm --prefix frontend run test:e2e
 ```
 
-格式检查复用前端锁文件中的 Prettier 和根目录配置，检查 `frontend/`、`backend/`、`shared/`、`scripts/` 内本次变更的 TypeScript、JavaScript、Vue 和 CSS。默认相对 `HEAD` 检查暂存、未暂存及新增文件；检查整个分支时可传入分支起点，例如 `npm --prefix frontend run format:check -- origin/main`。CI 针对 PR 或推送的完整改动运行相同检查。要修正一个文件，可在 `frontend/` 中运行 `npx prettier --write src/views/CreditsView.vue` 并替换为实际路径。
+本地和 CI 都运行同一个全量格式检查。它使用仓库锁定的 Prettier，读取工作区内所有 Git 已跟踪和新增未忽略的 TypeScript、JavaScript、Vue 和 CSS 文件，跳过历史验收脚本 `docs/qa/stability-20261020/force-backup-due.mjs`。Windows 工作副本的 CRLF 换行只在内存中转换为 LF 后比较，其他排版差异照常报告。要修正单个文件，可在 `frontend/` 中运行 `npx prettier --write src/views/CreditsView.vue` 并替换为实际路径。
 
 生产依赖审计使用 `npm --prefix backend audit --omit=dev` 和 `npm --prefix frontend audit --omit=dev`。
 

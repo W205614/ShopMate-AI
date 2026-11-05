@@ -26,7 +26,7 @@ ShopMate-AI/
 │   ├── domain/               两端共享类型、API 契约、规则辅助和演示种子
 │   └── testing/              通过受限公开 API 组装验收快照的辅助代码
 ├── deploy/                   Nginx 配置与独立验收 Compose 覆盖文件
-├── scripts/                  仓库维护检查（当前为文档链接校验）
+├── scripts/                  仓库检查与宿主机维护脚本
 ├── docs/
 │   ├── README.md             当前文档、验收报告与历史记录导航
 │   ├── archive/              已完成阶段的交付和设计记录

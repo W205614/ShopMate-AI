@@ -70,9 +70,20 @@ function normalized(sql) {
   return { db, meta };
 }
 function identity(sql) {
+  // API startup adds these flags to legacy tables without changing their prior semantics.
   return {
-    accounts: sql.prepare("SELECT * FROM accounts ORDER BY id").all(),
-    sessions: sql.prepare("SELECT * FROM sessions ORDER BY token_hash").all(),
+    accounts: sql
+      .prepare("SELECT * FROM accounts ORDER BY id")
+      .all()
+      .map((row) =>
+        Object.hasOwn(row, "active") ? row : { ...row, active: 1 },
+      ),
+    sessions: sql
+      .prepare("SELECT * FROM sessions ORDER BY token_hash")
+      .all()
+      .map((row) =>
+        Object.hasOwn(row, "mfa_verified") ? row : { ...row, mfa_verified: 0 },
+      ),
   };
 }
 function originalsPreserved(original, actual, key) {

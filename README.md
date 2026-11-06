@@ -66,13 +66,13 @@ docker compose ps
 | 图片与恢复           | 本地/S3 存储、显式迁移、快照与图片恢复集、远端上传下载校验        | [存储与备份](docs/integrations.md#图片存储与远端备份) |
 | 经营与运维           | 商家和协议管理、HTTPS、只读监控、告警配置、维护发布与恢复         | [生产部署](docs/production.md)                        |
 
-自动化协议及本地服务验证不等于真实商户或云服务已验收。真实联调按[验收清单](docs/integrations.md#本地验证与实网验收)单独记录；后台“接入状态”只报告当前配置和运行数据。首次运行继续使用下面的演示流程，生产环境使用独立 `.env.production` 和生产 Compose，不改变现有本机备份配置。
+本地协议与功能验证已完成，真实平台接入按[验收清单](docs/integrations.md#本地验证与实网验收)进行。后台“接入状态”展示配置和运行数据。首次运行使用下面的演示流程；生产环境使用独立 `.env.production` 和生产 Compose，本机备份配置单独保留。
 
-入口镜像的原始扫描保留已知依赖问题；[HTTPS 入口安全评估](docs/security/production-edge-vex.md)说明固定配置的执行路径证据、临时 VEX 门禁及适用边界，不代表镜像原始扫描零高危。
+Caddy 入口的已知依赖漏洞、固定配置下的 OpenVEX 评估及升级条件见[HTTPS 入口安全评估](docs/security/production-edge-vex.md)。
 
 微信 H5 支付链接遵循官方五分钟有效期；到期后先查单，再按原支付单号恢复链接，跳转前重新确认状态，详见[H5 链接刷新与限制](docs/integrations.md#h5-支付链接刷新)。
 
-本轮实现、失败修复、本地验证和待实网项目见[单店生产版验收报告](docs/production-acceptance-20261106.md)。报告标明候选源码、测试条件和实际限制，不将本地协议测试作为已上线证明。
+功能实现与初次本地验收见[单店生产版验收报告](docs/production-acceptance-20261106.md)；后续修复、发布核验和恢复记录见[最新交付记录](docs/release-20261106.md)。
 
 ## 第一次体验
 
@@ -90,7 +90,7 @@ docker compose ps
 frontend/    Vue 商城与运营后台、浏览器测试
 backend/     Express API、SQLite 事务、后台任务与后端测试
 shared/      前后端共用的类型、API 契约和测试辅助代码
-deploy/      Nginx 配置和专项验收用的 Compose 覆盖文件
+deploy/      HTTPS 与 Nginx 配置、生产和验收编排、监控模板
 scripts/     仓库检查与宿主机维护脚本
 docs/        开发说明、业务规则、验收报告和历史证据
 .github/     GitHub Actions 验证流程

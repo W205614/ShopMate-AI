@@ -1,6 +1,6 @@
 # 单店生产部署与恢复
 
-本指南对应 Linux、Docker Compose、单 API、单 SQLite 数据库。生产配置独立于本机演示配置；所有命令从仓库根目录运行。请先读[供应商接入指南](integrations.md)。代码和协议测试通过，不代表商户产品、云账号和公网接收端已经验收。
+本指南对应 Linux、Docker Compose、单 API、单 SQLite 数据库。生产配置独立于本机演示配置；所有命令从仓库根目录运行。请先读[供应商接入指南](integrations.md)。商户产品、云账号和公网接收端按接入清单完成实网验收。
 
 ## 准备配置与目录
 
@@ -48,7 +48,7 @@ bash scripts/production-release.sh .env.production
 
 镜像未下载时预检会失败；发布脚本先校验文件配置，缺少指定镜像时拉取，再检查提交标签。已通过 `docker load` 导入的提交镜像直接复用。脚本写入维护标记，探测共享数据卷中的数据库；旧 API 已停止或容器已移除但数据库仍在时，也先执行升级前一致备份及校验，再向旧 API 发送 SIGTERM 排空，启动新镜像并等待健康。备份使用待发布镜像的一次性 CLI 容器读取共享数据卷，兼容旧镜像尚未包含图片备份命令的情况；该命令不启动 API，也不迁移源库。API 启动负责增量迁移；失败不自动切回旧程序、不清除维护标记，也不删除数据卷。
 
-正常发布和 `--resume` 都在解除维护前执行运行核验：API/Web 各一个运行且健康的容器，实际镜像 ID 与配置镜像一致，提交标签等于 `VCS_REF`，API 处于生产模式。`--resume` 还要求现有维护标记属于目标提交，不能仅凭旧服务健康解除维护。最后公网健康必须返回 `status=ok` 的 JSON；失败会恢复维护标记。只读人工核验可用 `node scripts/production-preflight.mjs .env.production --runtime`。`--skip-files`、`--skip-docker` 输出中会标出跳过项，不能作为发布验收；`--runtime` 不允许跳过 Docker 检查。
+正常发布和 `--resume` 都在解除维护前执行运行核验：API/Web 各一个运行且健康的容器，实际镜像 ID 与配置镜像一致，提交标签等于 `VCS_REF`，API 处于生产模式。`--resume` 要求现有维护标记属于目标提交，并重新核验目标服务后解除维护。最后公网健康必须返回 `status=ok` 的 JSON；失败会恢复维护标记。只读人工核验可用 `node scripts/production-preflight.mjs .env.production --runtime`。`--skip-files`、`--skip-docker` 输出中会标出跳过项，不能作为发布验收；`--runtime` 不允许跳过 Docker 检查。
 
 此编排始终显式指定 `deploy/compose.production.yaml`，不加载本机 `compose.override.yaml`，也不修改本机 `.env`。当前 Windows 本机关闭自动备份的设置继续保留。
 
@@ -93,25 +93,25 @@ docker compose --env-file .env.production -f deploy/compose.production.yaml --pr
 
 确认目标镜像与数据修复后，可使用原发布配置执行 `bash scripts/production-release.sh .env.production --resume`：核对维护提交、实际运行镜像和健康，保留维护结束记录，再核对公网健康。该操作不启动目标镜像、不自动恢复数据库或重新执行迁移；旧镜像仍在运行时应先完成正确部署，不能用恢复参数绕过运行核验。
 
-单机仍存在宿主机故障停服边界。容量和恢复耗时以对应提交、资源、数据量及本轮验收记录为准，不从一次健康检查推导长期可用性。
+单机仍存在宿主机故障停服边界。容量和恢复耗时见对应提交、资源及数据规模下的验收记录。
 
 ## 上线核对
 
-1. 记录待发布的完整提交、对应 CI run 和实际镜像 ID；区分演示体验、生产部署和历史验收，不能用另一次同标签重构建代替已验镜像。
+1. 记录待发布的完整提交、对应 CI run 和实际镜像 ID；区分演示体验、生产部署和历史验收，部署使用该次 CI 验证的不可变镜像。
 2. 核对域名、代理网段、密钥权限、商户身份、付款产品与至少一种账号验证渠道；启用短信时验证与交易通知模板都必须配置。供应商控制台权限和回调域名按[接入指南](integrations.md)实测。
 3. 更新商家主体、客服、退货地址及协议版本；用真实商品库存配置经营规则。历史演示订单和财务记录保持模式边界。
 4. 验证升级前数据库、图片恢复集和原加密密钥可用，明确数据版本和恢复目标；将外部支付未结账、未知退款列入发布交接。
 5. 通过发布脚本执行维护、备份、排空、启动和运行核验；核对公网健康、登录/MFA、订单读取及当前接入状态。首轮真实渠道联调单独记录扣款、通知、退款、物流和收件结果。
 6. 检查内部监控只读访问、任务积压、备份和告警接收；真实远端副本及跨主机恢复必须另行演练。将完成项、失败、回退前提和最终运行或停止状态写入发布记录。
 
-本轮交付变更和待补提交证据见[2026-11-06 发布记录](release-20261106.md)。历史结果见[文档验收导航](README.md#验收报告与证据)，漏洞报告流程见[SECURITY](../SECURITY.md)。
+本轮交付变更和发布核验入口见[2026-11-06 发布记录](release-20261106.md)。历史结果见[文档验收导航](README.md#验收报告与证据)，漏洞报告流程见[SECURITY](../SECURITY.md)。
 
 ## 开发验证入口
 
 容器安全检查保留完整原始扫描。HTTPS 入口的一项依赖漏洞仅在镜像、配置和有效模块检查通过后使用受限 OpenVEX；[入口安全评估与复跑说明](security/production-edge-vex.md)列出源码证据、当前原始扫描结果和失效条件。API、Web 的 HIGH/CRITICAL 门禁保持原规则。
 
-账号、支付、回调、存储等确定性 HTTP／协议验证进入现有后端测试；`deploy/compose.external-acceptance.yaml` 用独立的 18125/18126/18127 端口提供 Mailpit SMTP、邮件 API 和 Adobe S3Mock。后端设置 `MAILPIT_SMTP_PORT=18125`、`MAILPIT_API_URL=http://127.0.0.1:18126`、`S3MOCK_ENDPOINT=http://127.0.0.1:18127` 后运行本地服务测试。未提供这些变量时相关用例会跳过，不能当成真实适配器已验收。
+账号、支付、回调、存储等确定性 HTTP／协议验证进入现有后端测试；`deploy/compose.external-acceptance.yaml` 用独立的 18125/18126/18127 端口提供 Mailpit SMTP、邮件 API 和 Adobe S3Mock。后端设置 `MAILPIT_SMTP_PORT=18125`、`MAILPIT_API_URL=http://127.0.0.1:18126`、`S3MOCK_ENDPOINT=http://127.0.0.1:18127` 后运行本地服务测试。未提供这些变量时相关用例会跳过；完成适配器验收需启动上述服务并补跑。
 
 生产浏览器验证先构建 `frontend/dist`，再在 `frontend/` 执行 `npx playwright test --config playwright.production.config.ts`。专用配置启动仅监听回环的 HTTPS 内存数据库夹具，使用合成身份、密钥和边界服务，不读取实际 `.env`；仅此测试配置允许自签名证书。普通浏览器套件不运行这些生产夹具用例。
 
-容量回归沿用[稳定性专项的隔离与造数流程](stability-hardening.md#复跑)。新增 `STABILITY_PROFILE=production-baseline` 仅选择一档 20 并发、600 秒、无额外思考时间；未设置时保留原完整阶段，不能同时开启 `STABILITY_SMOKE`。仍需独立 `shopmate-reliability-*` 项目、1809x 端口、万笔历史订单和 50 个合成工作账号，并核对日志、资源、备份窗口及只读守恒结果。该负载使用模拟交易与隔离故障模型，不能称为真实支付渠道吞吐。
+容量回归沿用[稳定性专项的隔离与造数流程](stability-hardening.md#复跑)。新增 `STABILITY_PROFILE=production-baseline` 仅选择一档 20 并发、600 秒、无额外思考时间；未设置时保留原完整阶段，不能同时开启 `STABILITY_SMOKE`。仍需独立 `shopmate-reliability-*` 项目、1809x 端口、万笔历史订单和 50 个合成工作账号，并核对日志、资源、备份窗口及只读守恒结果。该负载使用模拟交易与隔离故障模型，结果按此请求组成和部署环境记录。

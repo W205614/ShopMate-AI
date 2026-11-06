@@ -142,6 +142,6 @@ Windows 宿主机的 `scripts/retain_latest_backup.py` 验证备份后保留最�
 | `.delivery/`                                                                                             | 本地交付过程材料，已忽略；其中备份、回滚和失败证据需核对后分别处理                                                         |
 | `docs/qa/`、`docs/screenshots/`、`backend/test/fixtures/ai/`                                             | 已跟踪的报告证据、界面图片和合成测试输入，继续保留                                                                         |
 
-“未被 Git 跟踪”或“名称像临时文件”不等于可删除。优先清理确认可重建的构建/测试输出；数据库、环境配置、备份、回滚材料和报告引用文件需要先核对用途与引用。后续新增当前说明放在 `docs/`，已完成阶段的记录放在 `docs/archive/`，并更新[文档导航](README.md)。
+本地清理以可重建的构建和测试输出为主；数据库、环境配置、备份、回滚材料和报告引用文件需要先核对用途与引用。后续新增当前说明放在 `docs/`，已完成阶段的记录放在 `docs/archive/`，并更新[文档导航](README.md)。
 
 2026-10-20 结构整理时，清理了本地 `frontend/dist/`、`test-results/`、`test-results-container/`、`test-results-operations/` 四个生成目录，共 139 个文件、17,389,289 字节。清理前已打包 ZIP 并逐文件验证 SHA-256；归档和结果保存在被忽略的 `.delivery/structure-cleanup-20261020/`，其中 `result.json` 记录归档摘要、删除范围、受保护文件哈希及运行状态。该本地凭证不随仓库分发。

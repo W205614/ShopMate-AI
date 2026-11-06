@@ -58,7 +58,7 @@
 
 ## 配置检查与故障定位命令
 
-以下命令从仓库根目录执行，均显式使用独立生产配置。预检检查已启用渠道、密钥文件、目录权限和镜像版本，不会创建交易或发送短信。启动时还会校验密钥格式及具体适配器配置；本地预检通过不能替代平台权限和实网联调。
+以下命令从仓库根目录执行，均显式使用独立生产配置。预检检查已启用渠道、密钥文件、目录权限和镜像版本，不会创建交易或发送短信。启动时还会校验密钥格式及具体适配器配置；平台权限与实际收发结果在实网联调时核验。
 
 ```sh
 node scripts/production-preflight.mjs .env.production
@@ -87,7 +87,7 @@ SMTP 使用 `SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURE`、`SMTP_FROM`，需要认�
 
 模板变量配置为“供应商模板变量名 → 项目字段名”。验证码默认 `SMS_TEMPLATE_VARIABLES_VERIFICATION={"code":"code"}`；订单通知默认 `SMS_TEMPLATE_VARIABLES_TRANSACTION={"orderId":"orderId"}`。模板参数更名时调整 JSON 映射，缺失字段会明确失败。不要填写营销短信模板作为验证码模板。
 
-验证码五分钟有效、六十秒发送间隔、最多五次校验；另有 IP、联系方式和全局额度。`EMAIL_DAILY_LIMIT` 默认 500，`SMS_DAILY_LIMIT` 默认 100，是本地发送尝试上限，失败也计数，不代表供应商余额或送达保证。后台通知区分等待、发送中、已提交、送达未知及失败；重试未知结果时需要确认可能重复送达。
+验证码五分钟有效、六十秒发送间隔、最多五次校验；另有 IP、联系方式和全局额度。`EMAIL_DAILY_LIMIT` 默认 500，`SMS_DAILY_LIMIT` 默认 100，限制本地发送尝试次数，失败也计数；供应商余额和实际送达状态分别查询。后台通知区分等待、发送中、已提交、送达未知及失败；重试未知结果时需要确认可能重复送达。
 
 生产用户验证邮箱或手机之一后注册，已有账号下单前补绑定；找回密码仅使用已经验证的联系方式。联系方式更换需要当前密码及新联系方式验证。管理登录密码通过后还需 TOTP，首次设置时保存恢复码。遗失全部验证方式时由有部署访问权的维护者停机运行：
 
@@ -123,7 +123,7 @@ node --import tsx src/production/remote-backup.ts assets-copy /app/data/shopmate
 
 需要将历史内置／data 图片迁入独立文件存储时，停机后显式运行 `assets-import-legacy <离线数据库> <原frontend/public/images目录>`；不要将内置图片目录当成新资产目录。知识文档继续保存在 SQLite，原文件访问仍按客服管理权限控制。
 
-远端备份使用 `BACKUP_S3_BUCKET`（省略时使用 `S3_BUCKET`）、`BACKUP_S3_PREFIX` 和同组 S3 连接配置。`BACKUP_S3_ENABLED=false` 是默认值，设为 `true` 后自动备份在本地验证成功后额外上传；上传失败会保留本地恢复点并报告失败，不伪装成远端成功。手动上传只接受通过原维护校验的快照，包含对应图片和摘要，返回 `bundleKey`；下载必须使用新目录：
+远端备份使用 `BACKUP_S3_BUCKET`（省略时使用 `S3_BUCKET`）、`BACKUP_S3_PREFIX` 和同组 S3 连接配置。`BACKUP_S3_ENABLED=false` 是默认值，设为 `true` 后自动备份在本地验证成功后额外上传；上传失败会保留本地恢复点，并记录远端失败状态。手动上传只接受通过原维护校验的快照，包含对应图片和摘要，返回 `bundleKey`；下载必须使用新目录：
 
 ```sh
 node --import tsx src/production/remote-backup.ts backup-local /app/data/shopmate.sqlite /app/backups/新的快照.sqlite manual
@@ -133,11 +133,11 @@ CONFIRM_RESTORE=STOPPED_AND_BACKED_UP node --import tsx src/production/remote-ba
 CONFIRM_RESTORE=STOPPED_AND_BACKED_UP node --import tsx src/production/remote-backup.ts restore-local /app/backups/已验证快照.sqlite /app/data/新的离线数据库.sqlite /app/新的资产目录
 ```
 
-这些是容器内路径示例。确认目标数据库已停机并保留原恢复资产后，显式设置 `CONFIRM_RESTORE=STOPPED_AND_BACKED_UP` 才能执行 restore／restore-local；不能对运行库使用 restore。恢复后先校验数据、图片、支付与退款在途状态、MFA 和幂等结果，再挂载到服务；云端“上传成功”不能替代一次实际恢复。原加密密钥及商户配置也需要保留。
+这些是容器内路径示例。确认目标数据库已停机并保留原恢复资产后，显式设置 `CONFIRM_RESTORE=STOPPED_AND_BACKED_UP` 才能执行 restore／restore-local；不能对运行库使用 restore。恢复后先校验数据、图片、支付与退款在途状态、MFA 和幂等结果，再挂载到服务；远端上传完成后，按下方清单演练下载与恢复。原加密密钥及商户配置也需要保留。
 
 ## 本地验证与实网验收
 
-常规测试不会读取实际 `.env` 发起付费服务。确定性协议服务验证 SDK 请求、签名通知、重试和故障状态；Mailpit 接收真实 SMTP，Adobe S3Mock 验证对象与备份恢复。它们不能证明真实商户产品已开通或第三方账号可用。
+常规测试不会读取实际 `.env` 发起付费服务。确定性协议服务验证 SDK 请求、签名通知、重试和故障状态；Mailpit 接收真实 SMTP，Adobe S3Mock 验证对象与备份恢复。商户产品权限和真实账号可用性在实网联调中核验。
 
 接入自己的账号后，至少逐项保存以下证据：
 
@@ -147,4 +147,4 @@ CONFIRM_RESTORE=STOPPED_AND_BACKED_UP node --import tsx src/production/remote-ba
 4. 图片上传读取、历史对象迁移、远端快照下载与新路径恢复。
 5. HTTPS、真实客户端 IP、监控故障与恢复消息送达，内部路径不能从公网访问。
 
-未完成项应继续标记“实网未验收”，不能通过修改能力状态文案认定已上线。
+逐项记录实网验收结果，待完成项标记为“实网未验收”。

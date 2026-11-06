@@ -1,12 +1,12 @@
 # HTTPS 入口漏洞的配置评估与 VEX 门禁
 
-评估日期：2026-11-06。适用对象是本仓库指定的 ShopMate 生产入口配置，不是通用 Caddy 镜像。下面先保留源码路径评估，再说明 CI 如何在配置 guard 通过后消费临时 OpenVEX；原始完整扫描始终单独保留。
+评估日期：2026-11-06。适用范围为本仓库指定的 ShopMate 生产入口配置。下面先保留源码路径评估，再说明 CI 如何在配置 guard 通过后消费临时 OpenVEX；原始完整扫描始终单独保留。
 
 ## Conclusion
 
-The reviewed configuration provides evidence for a profile-scoped OpenVEX `not_affected` statement with `vulnerable_code_not_in_execute_path`. The vulnerable library remains present. Keep the original finding and raw scan; do not call the component patched, absent, or globally safe.
+The reviewed configuration provides evidence for a profile-scoped OpenVEX `not_affected` statement with `vulnerable_code_not_in_execute_path`. The vulnerable library is present and unpatched; the raw finding is retained alongside this configuration assessment.
 
-The statement must identify the deployed application profile, bind the exact image digest and configuration, and be invalidated on configuration/image/module/start-command changes. Applying an image-wide `not_affected` statement would overstate this review: the same official image can activate the vulnerable ACME server with a different configuration.
+The statement binds the deployed application profile to its exact image digest and configuration. Changes to the image, modules, configuration or start command require review; another profile can enable the vulnerable ACME server.
 
 ## Observed artifact and effective configuration
 
@@ -40,17 +40,17 @@ The statement must identify the deployed application profile, bind the exact ima
 
 Use [OpenVEX's defined justification](https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md#status-justifications), with an impact statement documenting this profile. Identify the profile separately from the general image and list the image/library as subcomponents if supported by the consumer.
 
-Before applying the statement, check the exact image digest, expected Caddyfile hash, production domain inputs, default explicit config command, `admin.disabled=true`, and the effective adapted module/issuer allowlist. Preserve the raw scan. Any image override, custom module, ACME server/internal PKI enablement, admin activation, additional config import, changed command or changed hash requires fresh review. Merely pinning a Caddy version or matching the CVE/library name is insufficient.
+Before applying the statement, check the exact image digest, expected Caddyfile hash, production domain inputs, default explicit config command, `admin.disabled=true`, and the effective adapted module/issuer allowlist. Preserve the raw scan. Any image override, custom module, ACME server/internal PKI enablement, admin activation, additional config import, changed command or changed hash requires fresh review. VEX generation therefore checks the complete effective profile, including both the image and its enabled modules.
 
-This is source-path and effective-configuration analysis. It is not a proof about arbitrary Caddy configurations, a supplier-issued VEX, or an exploit stress test. No crafted high-CPU payload was executed.
+The review consists of source-path analysis and effective-configuration checks. It uses a project-generated VEX statement and did not execute a crafted high-CPU payload.
 
 ## 当前实现与复跑
 
 [`production-edge-vex.mjs`](../../scripts/production-edge-vex.mjs) 锁定上述镜像摘要、Caddyfile 原始 SHA256、生产 Compose 原始 SHA256 `927d0b198676c0bf2e5b4c2446773e397e2c38ee3b8f364eac783b8256406b61`，并检查只读配置挂载、受限环境变量、镜像默认启动命令和 Compose 命令覆盖。启动命令必须显式包含 `--config /etc/caddy/Caddyfile`，不能使用 `--resume`。
 
-脚本随后使用实际固定镜像执行无网络、只读的 `caddy adapt`，检查 app、handler、issuer 白名单和 `admin off`，并比对完整有效配置的规范化摘要；仅允许替换已经验证的域名和 ACME 邮箱参数。配置、镜像、命令或 Compose 发生变化就失败，必须重新核实代码路径和配置后更新评估。不要只修改哈希绕过检查。
+脚本随后使用实际固定镜像执行无网络、只读的 `caddy adapt`，检查 app、handler、issuer 白名单和 `admin off`，并比对完整有效配置的规范化摘要；仅允许替换已经验证的域名和 ACME 邮箱参数。配置、镜像、命令或 Compose 发生变化就失败，需重新核实代码路径和配置后更新评估。
 
-适用 VEX 仅在全部检查通过后写入一个新的临时路径；仓库没有可直接用于任意 Caddy 配置的静态适用 VEX。声明限定为 `CVE-2026-116587`、固定 OCI 镜像摘要及 `github.com/go-jose/go-jose/v3@v3.0.5` 子组件。OCI PURL 无法表达运行配置，因此必须始终由 guard 控制生成及后续消费；不要把生成文件挪用到其他部署。
+guard 通过后，在新的临时路径生成适用于该部署配置的 VEX。声明限定为 `CVE-2026-116587`、固定 OCI 镜像摘要及 `github.com/go-jose/go-jose/v3@v3.0.5` 子组件。OCI PURL 无法表达运行配置，因此必须始终由 guard 控制生成及后续消费；生成文件与通过 guard 的部署配置共同使用。
 
 以下命令从仓库根目录执行。先安装 Docker Compose、Node.js 24 和 Trivy 0.76.2；拉取固定 Caddy 镜像。只生成配置评估，不启动商城或申请证书：
 
@@ -77,8 +77,8 @@ CI 保留 API、Web 原有 HIGH/CRITICAL 门禁及完整原始扫描。仅 edge 
 | 完整原始扫描                    |    1 |        0 |      2 |       3 |
 | guard 通过后应用 VEX 的完整扫描 |    0 |        0 |      2 |       3 |
 
-原始扫描仍有 1 个 HIGH，不能称为“原始扫描零高危”。VEX 仅依据当前配置将这一项标为执行路径不可达；库本身未修补，另外 2 个 MEDIUM 和 3 个 UNKNOWN 也没有被隐藏或宣称解决。
+原始扫描包含 1 个 HIGH、2 个 MEDIUM 和 3 个 UNKNOWN。VEX 按固定配置将该 HIGH 标记为执行路径不可达；依赖本身仍未修补，MEDIUM 和 UNKNOWN 原样保留。
 
-最小回归的 3 个用例通过，包含真实离线适配输出及镜像、配置、命令、挂载、管理接口、PKI、ACME 服务端、内部 issuer 和有效配置变化的拒绝场景。实际使用 Trivy 原生匹配验证：正确镜像与子组件的 HIGH 门禁退出码为 0；将子组件版本改为 v3.0.4，或将 OCI 镜像摘要改为另一摘要，均保留目标 HIGH，门禁退出码为 1。不是自己删除 JSON 条目后得出的结果。
+最小回归的 3 个用例通过，包含真实离线适配输出及镜像、配置、命令、挂载、管理接口、PKI、ACME 服务端、内部 issuer 和有效配置变化的拒绝场景。实际使用 Trivy 原生匹配验证：正确镜像与子组件的 HIGH 门禁退出码为 0；将子组件版本改为 v3.0.4，或将 OCI 镜像摘要改为另一摘要，均保留目标 HIGH，门禁退出码为 1。结果由 Trivy 原生 VEX 匹配产生。
 
-未运行高 CPU 攻击载荷；未进行真实公网证书签发。该结论是项目配置评估，不是上游供应商的修复或保证。后续上游修复、镜像或配置更新仍需重新扫描和复核。
+公网证书签发待实网联调；上游依赖、镜像或配置更新后重新扫描和复核。

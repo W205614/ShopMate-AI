@@ -1,6 +1,6 @@
 # HTTP 接口总览
 
-本文按调用方提供定位入口，不复制全部字段定义。准确输入、返回值及状态取 `shared/domain/`、服务端路由与对应测试为准；前端调用见 `frontend/src/services/`。[认证](authentication.md)、[经营规则](commerce-v4.md)、[AI 接入](ai-support.md)和[供应商指南](integrations.md)包含专项说明。
+本文按调用方整理接口入口。准确输入、返回值及状态取 `shared/domain/`、服务端路由与对应测试为准；前端调用见 `frontend/src/services/`。[认证](authentication.md)、[经营规则](commerce-v4.md)、[AI 接入](ai-support.md)和[供应商指南](integrations.md)包含专项说明。
 
 ## 通用约定
 
@@ -53,7 +53,7 @@
 | `/api/admin/notifications`、`/api/admin/shipments/:id/retry`                             | 通知、物流投递失败恢复；送达未知的通知需确认可能重发   |
 | `POST /api/assets`；`GET /api/assets/:id`                                                | 服务端验证后的图片上传与读取                           |
 | `POST /api/admin/merchant`                                                               | 经营主体、客服、退货地址、协议内容和版本；设置权限     |
-| `GET /api/admin/production/status`、`/api/admin/integrations/external`                   | 配置能力、运行计数及异常状态，不表示供应商实网验收通过 |
+| `GET /api/admin/production/status`、`/api/admin/integrations/external`                   | 已配置能力、运行计数和异常状态；实网结果另行验收       |
 
 真实支付退款的字段、退款关闭后的新单规则、H5 链接有效期与查询恢复见[资金操作说明](integrations.md#支付退款与渠道对账怎么操作)。
 

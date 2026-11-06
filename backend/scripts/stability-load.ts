@@ -19,14 +19,23 @@ if (
 )
   throw new Error("Explicit isolated stability deployment required");
 const smoke = process.env.STABILITY_SMOKE === "1";
-const phases = smoke
-  ? [{ concurrency: 5, seconds: 120, paceMs: 500 }]
-  : [
-      { concurrency: 5, seconds: 600, paceMs: 0 },
-      { concurrency: 20, seconds: 600, paceMs: 0 },
-      { concurrency: 50, seconds: 600, paceMs: 0 },
-      { concurrency: 20, seconds: 5400, paceMs: 500 },
-    ];
+const profile = process.env.STABILITY_PROFILE ?? "full";
+if (
+  !["full", "production-baseline"].includes(profile) ||
+  (smoke && profile !== "full")
+)
+  throw new Error("Unsupported or conflicting stability profile");
+const phases =
+  profile === "production-baseline"
+    ? [{ concurrency: 20, seconds: 600, paceMs: 0 }]
+    : smoke
+      ? [{ concurrency: 5, seconds: 120, paceMs: 500 }]
+      : [
+          { concurrency: 5, seconds: 600, paceMs: 0 },
+          { concurrency: 20, seconds: 600, paceMs: 0 },
+          { concurrency: 50, seconds: 600, paceMs: 0 },
+          { concurrency: 20, seconds: 5400, paceMs: 500 },
+        ];
 const reportPath = process.env.LOAD_REPORT ?? ".delivery/stability/load.json";
 const containerNames = {
   api: container,
@@ -621,12 +630,18 @@ const passed =
 const report = {
   schema: 1,
   smoke,
+  profile,
   passed,
-  sourceCommit: imageRevision,
+  sourceCommit: /^[a-f0-9]{40}$/.test(imageRevision) ? imageRevision : null,
+  sourceRevisionLabel: imageRevision,
+  actualGitHead: process.env.LOAD_GIT_HEAD ?? null,
   startedAt: new Date(startedAt).toISOString(),
   endedAt: new Date(endedAt).toISOString(),
   elapsedSeconds: (endedAt - startedAt) / 1000,
-  arrivalPace: "capacity phases closed-loop; endurance phase 500ms think time",
+  arrivalPace:
+    profile === "production-baseline"
+      ? "single closed-loop capacity phase; no additional think time"
+      : "capacity phases closed-loop; endurance phase 500ms think time",
   workload:
     "70% reads;20% cart/quote;10% transaction state-machine iterations (extra detail reads counted separately)",
   ...requestStats,

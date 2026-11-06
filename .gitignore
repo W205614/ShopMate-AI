@@ -10,6 +10,7 @@ frontend/playwright-report/
 .env
 .env.*
 !.env.example
+!.env.production.example
 *.log
 *.tsbuildinfo
 backend/data/

@@ -1,0 +1,104 @@
+name: shopmate-production
+services:
+  api:
+    image: ${API_IMAGE:?Set a validated API_IMAGE}
+    env_file: ${PRODUCTION_ENV_FILE:-../.env.production}
+    environment:
+      SHOP_MODE: production
+      HOST: 0.0.0.0
+      PORT: "3001"
+      DATABASE_PATH: /app/data/shopmate.sqlite
+      ASSET_DIR: /app/assets
+      BACKUP_DIR: /app/backups
+      APP_ORIGINS: ${PUBLIC_URL:?Set PUBLIC_URL}
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "true"
+      VCS_REF: ${VCS_REF:?Set the validated full commit SHA}
+    volumes:
+      - data:/app/data
+      - ${ASSET_PATH:?Set ASSET_PATH}:/app/assets
+      - ${BACKUP_PATH:?Set BACKUP_PATH}:/app/backups
+      - ${SECRETS_PATH:?Set SECRETS_PATH}:/run/secrets:ro
+    networks: [backend, egress]
+    stop_grace_period: 25s
+    mem_limit: 1g
+    pids_limit: 128
+    restart: unless-stopped
+    logging: &logging
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
+  web:
+    image: ${WEB_IMAGE:?Set a validated WEB_IMAGE}
+    environment:
+      CADDY_IP: ${CADDY_IP:-10.254.86.2}
+    volumes:
+      - ./nginx.production.conf.template:/etc/nginx/templates/default.conf.template:ro
+    networks: [proxy, backend]
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+  edge:
+    image: ${CADDY_IMAGE:-caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3}
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ${PRODUCTION_STATE_PATH:?Set PRODUCTION_STATE_PATH}/maintenance:/srv/maintenance:ro
+    networks:
+      proxy:
+        ipv4_address: ${CADDY_IP:-10.254.86.2}
+      egress: {}
+    depends_on:
+      web: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.16.0}
+    profiles: [observability]
+    user: "1000:1000"
+    command:
+      [
+        "--config.file=/etc/prometheus/prometheus.yml",
+        "--storage.tsdb.retention.time=7d",
+      ]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ${SECRETS_PATH:?Set SECRETS_PATH}/monitor-token:/run/secrets/monitor-token:ro
+      - ${PRODUCTION_STATE_PATH:?Set PRODUCTION_STATE_PATH}/prometheus:/prometheus
+    networks: [backend]
+    restart: unless-stopped
+    logging: *logging
+  alertmanager:
+    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.34.2}
+    profiles: [observability]
+    user: "1000:1000"
+    command:
+      [
+        "--config.file=/etc/alertmanager/alertmanager.yml",
+        "--storage.path=/alertmanager",
+      ]
+    volumes:
+      - ${ALERTMANAGER_CONFIG_PATH:-./observability/alertmanager.yml}:/etc/alertmanager/alertmanager.yml:ro
+      - ${PRODUCTION_STATE_PATH:?Set PRODUCTION_STATE_PATH}/alertmanager:/alertmanager
+    networks: [backend, egress]
+    restart: unless-stopped
+    logging: *logging
+networks:
+  backend: { internal: true }
+  proxy:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${PROXY_SUBNET:-10.254.86.0/24}
+          ip_range: ${PROXY_DYNAMIC_RANGE:-10.254.86.128/25}
+  egress: {}
+volumes:
+  data:
+  caddy_data:
+  caddy_config:

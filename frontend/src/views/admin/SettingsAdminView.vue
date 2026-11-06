@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useCommerceMode } from "../../services/commerceMode";
+const { production } = useCommerceMode();
 import { computed, reactive, ref, watch } from "vue";
 import { useShop } from "../../stores/shop";
 import { api, refreshState } from "../../services/api";
@@ -57,7 +59,7 @@ async function save() {
 <template>
   <div class="admin-page-head">
     <div>
-      <h1>演示设置</h1>
+      <h1>{{ production ? "商城设置" : "演示设置" }}</h1>
       <p>调整商城信息，了解本次演示的运行范围。</p>
     </div>
     <el-tag effect="plain">数据版本 {{ shop.db.version }}</el-tag>
@@ -121,7 +123,11 @@ async function save() {
       </dd>
       <dt>交易流程</dt>
       <dd>
-        付款、退款、物流和采购支出均为模拟操作，不产生真实扣款或物流运单。
+        {{
+          production
+            ? "支付、退款与物流接入状态请前往生产接入页面核对。采购支出为人工记账，不会自动转账。"
+            : "付款、退款、物流和采购支出均为模拟操作，不产生真实扣款或物流运单。"
+        }}
       </dd>
       <dt>客服能力</dt>
       <dd>

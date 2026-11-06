@@ -36,7 +36,7 @@
 | `POST /api/actions/:method`     | 允许列表、角色校验、参数校验、归属校验后执行操作     |
 | `GET /api/health`               | API 与 SQLite 连接健康检查                           |
 
-数据库包括 `accounts`、`sessions`、`rate_limits` 和 `state`。当前业务数据仍以单份 JSON 状态存于 `state`，SQLite `BEGIN IMMEDIATE` 保证读、校验、写入串行化；这是单实例实现，尚未宣称支持高并发集群。
+首版数据库包括 `accounts`、`sessions`、`rate_limits` 和 `state`。当前业务数据已迁移到分领域 `biz_*` 表及关系投影，原 `state` 只保留迁移证据；SQLite `BEGIN IMMEDIATE` 保证业务写入的事务边界，详见[当前存储规则](reliability.md#存储和并发规则)。运行形态仍为单实例。
 
 Docker 后端仅开放内部 3001 端口，Nginx 对外监听本机 18086。数据卷为 `shopmate-ai_api_data`，挂载 `/app/data`；不得误删日常数据卷。前端构建不包含管理员密码，`.env` 和本地测试数据均被 Git 与 Docker 构建上下文忽略。
 
@@ -70,11 +70,11 @@ HTTP 用例验证了注册校验、账号重复与大小写唯一、密码哈希
 
 <!-- prettier-ignore-end -->
 
-## 已知范围
+## 当前扩展与首版边界
 
-未实现邮箱/短信所有权校验、用户找回密码、多因素认证和完整风控。默认 HTTP 配置用于本机；公网部署需 HTTPS、Secure Cookie、实际 Origin、备份与运行监控。Nginx 未信任外部转发地址，当前按 API 连接来源进行的 IP 限流会由代理后用户共享；公网扩展前应配置可信代理和独立流量限制。
+独立生产模式已经增加邮箱／短信验证、找回密码、管理 TOTP MFA、恢复码、会话撤销、资料导出及注销，入口和配置见[账号与通知](integrations.md#邮件短信与账号验证)。默认 HTTP 演示配置仅供本机，生产配置由 HTTPS Caddy 入口和仅信任该入口的 Nginx 代理组成；已有普通演示编排不承担公网真实 IP 信任配置。
 
-管理员恢复演示数据会重置所有用户的业务数据并保留账号，页面已明确提示；不提供公开删库接口。管理员密码维护命令仅在可访问部署环境的终端执行。
+演示数据恢复仅在演示模式且显式开放时可用，会重置所有用户的业务数据并保留账号；生产模式拒绝该操作。管理员密码和 MFA 离线维护命令仅在可访问部署环境、满足对应停机要求的终端执行。
 
 实现参考：[Node.js crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html)、[Node.js SQLite](https://nodejs.org/docs/latest-v24.x/api/sqlite.html)、[OWASP 会话管理](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)。
 

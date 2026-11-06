@@ -1,0 +1,60 @@
+groups:
+  - name: shopmate
+    rules:
+      - alert: ShopMateUnavailable
+        expr: up{job="shopmate"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "ShopMate API metrics unavailable" }
+      - alert: ShopMatePaymentReview
+        expr: shopmate_production_state{kind="paymentsUnknown"} > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Payment requires channel verification" }
+      - alert: ShopMateRefundPending
+        expr: shopmate_production_state{kind="refundsPending"} > 0
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          { summary: "Refund remains pending; check the channel status" }
+      - alert: ShopMateNotificationFailure
+        expr: shopmate_production_state{kind=~"notificationsFailed|notificationsUnknown"} > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Notification delivery failed" }
+      - alert: ShopMateJobFailure
+        expr: shopmate_production_state{kind="jobsFailed"} > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Background job failed" }
+      - alert: ShopMateJobStalled
+        expr: shopmate_production_state{kind="jobsOldestWaitingSeconds"} > 300
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Background job queue is overdue" }
+      - alert: ShopMatePaymentWebhookFailure
+        expr: shopmate_production_state{kind="webhooksFailed"} > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "A verified payment callback needs recovery" }
+      - alert: ShopMateReconciliationDifference
+        expr: shopmate_production_state{kind="reconciliationDifferences"} > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Channel reconciliation needs manual review" }
+      - alert: ShopMateBackupFailure
+        expr: shopmate_production_state{kind="backupFailed"} > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "The latest backup attempt failed" }
+      - alert: ShopMateBackupStale
+        expr: (time() - shopmate_production_state{kind="backupLastSuccessTimestamp"} > 82800) and on() (shopmate_production_state{kind="backupEnabled"} == 1)
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "No verified local backup within 23 hours" }
+      - alert: ShopMateRemoteBackupStale
+        expr: (time() - shopmate_production_state{kind="remoteBackupLastSnapshotTimestamp"} > 82800) and on() (shopmate_production_state{kind="remoteBackupEnabled"} == 1)
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          { summary: "No verified remote recovery point within 23 hours" }

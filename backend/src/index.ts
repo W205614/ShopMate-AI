@@ -1,4 +1,16 @@
 import { openDatabase } from "./database";
+import { productionConfig, secret } from "./production/config";
+import {
+  ensureAccountSchema,
+  cleanupAccountChallenges,
+} from "./production/accounts";
+import {
+  ensureExternalSchema,
+  validateExternalConfig,
+  runExternalJobs,
+} from "./production/external";
+import { paymentOptions, PaymentService } from "./production/payments";
+import { recordRemoteBackup } from "./backup/backup-state";
 import { createApp } from "./app";
 import { createAccount } from "./auth";
 import { registerSchema } from "./validation";
@@ -28,8 +40,13 @@ aiConfig();
 resourceLimits();
 knowledgeLimits();
 const databasePath = process.env.DATABASE_PATH ?? "data/shopmate.sqlite";
+productionConfig();
+validateExternalConfig();
+const configuredPayments = paymentOptions();
 const sql = openDatabase(databasePath);
 ensureRuntimeSchema(sql);
+ensureAccountSchema(sql);
+ensureExternalSchema(sql);
 ensureBackupState(sql);
 ensureRecurringJobs(sql);
 writeFileSync(
@@ -47,7 +64,7 @@ const expiryTimer = setInterval(() => {
 expiryTimer.unref();
 if (!sql.prepare("SELECT id FROM accounts WHERE role='admin'").get()) {
   const username = process.env.ADMIN_USERNAME ?? "admin";
-  const password = process.env.ADMIN_PASSWORD;
+  const password = secret("ADMIN_PASSWORD");
   if (!password)
     throw new Error(
       "首次启动必须设置 ADMIN_PASSWORD（10–128 位，包含字母和数字）",
@@ -71,7 +88,39 @@ const app = await createApp(sql, {
   logRequests: process.env.LOG_REQUESTS === "true",
   afterSaleDays: Number(process.env.AFTER_SALE_DAYS ?? "7"),
   allowLegacyCommands: process.env.ALLOW_LEGACY_COMMANDS === "true",
+  payments: configuredPayments,
 });
+const paymentService = app.locals.payments as PaymentService;
+let productionWork: Promise<unknown> | undefined;
+const productionTimer = setInterval(() => {
+  if (productionWork) return;
+  productionWork = Promise.all([paymentService.runDue(), runExternalJobs(sql)])
+    .catch(() =>
+      console.error(
+        JSON.stringify({
+          event: "production_jobs_failed",
+          code: "PRODUCTION_JOBS_FAILED",
+        }),
+      ),
+    )
+    .finally(() => {
+      productionWork = undefined;
+    });
+}, 1000);
+productionTimer.unref();
+const challengeTimer = setInterval(() => {
+  try {
+    cleanupAccountChallenges(sql);
+  } catch {
+    console.error(
+      JSON.stringify({
+        event: "challenge_cleanup_failed",
+        code: "CHALLENGE_CLEANUP_FAILED",
+      }),
+    );
+  }
+}, 60_000);
+challengeTimer.unref();
 const stopSupportWorker = startSupportWorker(sql);
 const stopKnowledgeWorker = startKnowledgeWorker(sql);
 const server = app.listen(
@@ -101,6 +150,7 @@ const backupTimer = setInterval(() => {
         replicaDirectory: process.env.BACKUP_REPLICA_DIR,
         onReplicaCreated: (copiedAt, snapshotAt) =>
           recordBackupReplica(sql, copiedAt, snapshotAt),
+        onRemoteCreated: (point) => recordRemoteBackup(sql, point),
       },
     )
       .catch((error) => {
@@ -130,6 +180,8 @@ function shutdown() {
   app.locals.draining = true;
   clearInterval(expiryTimer);
   clearInterval(backupTimer);
+  clearInterval(productionTimer);
+  clearInterval(challengeTimer);
   const deadline = setTimeout(() => {
     server.closeAllConnections();
     cancelAutomaticBackup();
@@ -140,6 +192,8 @@ function shutdown() {
     await stopSupportWorker();
     await stopKnowledgeWorker();
     await backupInProgress;
+    await productionWork;
+    await paymentService.drain();
     sql.close();
     rmSync(databasePath + ".running", { force: true });
     clearTimeout(deadline);

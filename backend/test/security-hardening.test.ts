@@ -79,7 +79,9 @@ it("creates explicit owner access atomically and fails closed after authorizatio
         .get(owner.id),
     ).toEqual({ staff_role: "owner", active: 1 });
     sql
-      .prepare("INSERT INTO sessions VALUES(?,?,?)")
+      .prepare(
+        "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES(?,?,?)",
+      )
       .run(tokenHash("test-session"), owner.id, Date.now() + 60000);
     const req = {
       headers: { cookie: "shopmate_admin=test-session" },
@@ -130,7 +132,9 @@ it("migrates identifiable historical owners once without promoting missing emplo
   try {
     ensureRuntimeSchema(sql);
     const legacyId = crypto.randomUUID(),
-      insert = sql.prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)");
+      insert = sql.prepare(
+        "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)",
+      );
     insert.run(legacyId, "legacyowner", "历史店主", "admin", "unused", 1);
     insert.run("staff-lost", "loststaff", "权限损坏员工", "admin", "unused", 2);
     migrateLegacyAdminAccess(sql);

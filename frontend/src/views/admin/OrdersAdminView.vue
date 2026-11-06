@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useCommerceMode } from "../../services/commerceMode";
+const { production } = useCommerceMode();
 import { computed, ref, reactive } from "vue";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
@@ -97,6 +99,8 @@ function view(o: Order) {
 function shipping(o: Order) {
   if (busy.value || !canShip(o)) return;
   form.id = o.id;
+  form.carrier =
+    o.transactionMode === "production" ? "顺丰速运" : "顺丰速运（模拟）";
   form.tracking = "";
   ship.value = true;
 }
@@ -108,7 +112,7 @@ async function submit() {
   if (
     await run(
       () => api.shipOrder(form.id, form.carrier, form.tracking),
-      "模拟发货已完成",
+      production.value ? "发货信息已登记" : "模拟发货已完成",
     )
   )
     ship.value = false;
@@ -120,7 +124,9 @@ async function submit() {
       <h1>订单管理</h1>
       <p>从付款到收货，跟进每一笔订单。</p>
     </div>
-    <el-tag effect="plain">物流为模拟信息</el-tag>
+    <el-tag effect="plain">{{
+      production ? "请登记真实运单" : "物流为模拟信息"
+    }}</el-tag>
   </div>
   <section class="admin-panel">
     <div class="admin-toolbar">
@@ -380,13 +386,17 @@ async function submit() {
     ></el-dialog
   ><el-dialog
     v-model="ship"
-    title="模拟发货"
+    :title="production ? '登记发货' : '模拟发货'"
     width="480px"
     :close-on-click-modal="!pending"
     :close-on-press-escape="!pending"
     :show-close="!pending"
     ><el-alert
-      title="仅更新演示状态，不会向物流公司创建运单。"
+      :title="
+        production
+          ? '请在线下完成寄件，再录入实际承运商与单号。'
+          : '仅更新演示状态，不会向物流公司创建运单。'
+      "
       type="info"
       :closable="false"
     /><el-form label-position="top" :disabled="busy" @submit.prevent="submit"
@@ -395,7 +405,9 @@ async function submit() {
       ><el-form-item label="物流单号" required
         ><el-input
           v-model="form.tracking"
-          placeholder="输入演示物流单号" /></el-form-item></el-form
+          :placeholder="
+            production ? '输入实际物流单号' : '输入演示物流单号'
+          " /></el-form-item></el-form
     ><template #footer
       ><el-button :disabled="pending" @click="ship = false">取消</el-button
       ><el-button
@@ -403,7 +415,7 @@ async function submit() {
         :loading="pending"
         :disabled="busy"
         @click="submit"
-        >确认模拟发货</el-button
+        >{{ production ? "确认登记发货" : "确认模拟发货" }}</el-button
       ></template
     ></el-dialog
   >

@@ -36,6 +36,7 @@ export interface BackupManifest {
     accounts: string;
     sessions: string;
     ai?: string;
+    production?: string;
   };
 }
 /** Document BLOBs can make snapshots large; never load the SQLite file into memory. */
@@ -54,7 +55,11 @@ function fileSha256(path: string) {
 }
 
 /** Include durable AI state, excluding FTS virtual tables and their derived shadow tables. */
-function aiSnapshotDetails(sql: DatabaseSync, counts: Record<string, number>) {
+function aiSnapshotDetails(
+  sql: DatabaseSync,
+  counts: Record<string, number>,
+  pattern = /^(?:ai_|support_|knowledge_)[a-zA-Z0-9_]+$/,
+) {
   const tables = (
     sql.prepare("PRAGMA main.table_list").all() as {
       schema: string;
@@ -66,7 +71,7 @@ function aiSnapshotDetails(sql: DatabaseSync, counts: Record<string, number>) {
       (table) =>
         table.schema === "main" &&
         table.type === "table" &&
-        /^(?:ai_|support_|knowledge_)[a-zA-Z0-9_]+$/.test(table.name),
+        pattern.test(table.name),
     )
     .sort((a, b) => a.name.localeCompare(b.name, "en"));
   if (!tables.length) return undefined;
@@ -150,7 +155,11 @@ function hashRowArray(
   return count;
 }
 
-function snapshotDetails(path: string, includeAi = true) {
+function snapshotDetails(
+  path: string,
+  includeAi = true,
+  includeProduction = true,
+) {
   const sql = new DatabaseSync(path, { readOnly: true });
   try {
     const integrity = sql.prepare("PRAGMA integrity_check").all();
@@ -210,6 +219,13 @@ function snapshotDetails(path: string, includeAi = true) {
       sql.prepare("SELECT * FROM sessions ORDER BY token_hash").iterate(),
     );
     const ai = includeAi ? aiSnapshotDetails(sql, counts) : undefined;
+    const production = includeProduction
+      ? aiSnapshotDetails(
+          sql,
+          counts,
+          /^(?:production_[a-zA-Z0-9_]+|external_[a-zA-Z0-9_]+|verified_contacts|verification_challenges|account_mfa|mfa_recovery_codes|mfa_challenges|merchant_profile|merchant_policy_versions|policy_consents|account_requests)$/,
+        )
+      : undefined;
     return {
       schemaVersion: meta?.schema_version ?? 0,
       businessVersion: meta?.version ?? Number(legacyState!.version),
@@ -220,6 +236,7 @@ function snapshotDetails(path: string, includeAi = true) {
         accounts: accounts.digest("hex"),
         sessions: sessions.digest("hex"),
         ...(ai ? { ai } : {}),
+        ...(production ? { production } : {}),
       },
     };
   } finally {
@@ -254,7 +271,11 @@ export function inspectBackup(
     if (fileSha256(staged) !== manifest.sha256)
       throw new Error("备份校验和不匹配");
     // Format 1 manifests created before AI support have neither its digest nor counts.
-    const details = snapshotDetails(staged, manifest.digests.ai !== undefined);
+    const details = snapshotDetails(
+      staged,
+      manifest.digests.ai !== undefined,
+      manifest.digests.production !== undefined,
+    );
     for (const key of [
       "schemaVersion",
       "businessVersion",
@@ -483,7 +504,7 @@ export async function restoreBackup(
   if (existsSync(`${to}.running`))
     throw new Error("检测到运行标记，停止服务并核实离线状态后再恢复");
   const manifest = inspectBackup(from);
-  if (manifest.schemaVersion > 1 || manifest.businessVersion > 4)
+  if (manifest.schemaVersion > 1 || manifest.businessVersion > 5)
     throw new Error("备份版本高于当前程序支持范围");
   mkdirSync(dirname(to), { recursive: true });
   let previousBackup: string | undefined;

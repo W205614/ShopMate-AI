@@ -32,7 +32,7 @@ export type ReplyKind = "clarify" | "grounded" | "handoff";
 export const clarificationReply =
   "请补充具体商品、规格、数量，或本人订单及售后原因和商品明细。信息完整后才能核对事实或生成待确认卡片；也可以转人工。";
 export const handoffReply =
-  "目前无法从已发布资料或本人业务记录确认答案，请补充具体商品、规格或订单，或转人工核实。支付、物流和退款均为模拟。";
+  "目前无法从已发布资料或本人业务记录确认答案，请补充具体商品、规格或订单，或转人工核实。";
 const yuan = (cents: number) =>
   `${BigInt(cents) / 100n}.${String(BigInt(cents) % 100n).padStart(2, "0")}元`;
 const orderStatuses: Record<string, string> = {
@@ -49,7 +49,7 @@ const saleStatuses: Record<string, string> = {
   rejected: "审核拒绝",
   returning: "退货途中",
   received: "退货已接收",
-  refunded: "已模拟退款",
+  refunded: "已退款",
   cancelled: "已撤销",
 };
 export function renderGroundedAnswer(input: {
@@ -64,6 +64,8 @@ export function renderGroundedAnswer(input: {
   }[];
   order?: {
     id: string;
+    transactionMode?: "demo" | "production";
+    cancelRequested?: boolean;
     status: string;
     total: number;
     createdAtDisplay?: string;
@@ -186,15 +188,19 @@ export function renderGroundedAnswer(input: {
     );
     if (order.status === "pending" && order.expiresAtDisplay)
       facts.push(`付款期限${order.expiresAtDisplay}。`);
+    if (order.status === "pending" && order.cancelRequested)
+      facts.push("取消申请正在确认渠道关单结果，订单尚未关闭。");
     for (const item of order.items)
       facts.push(
         `${item.name}／${item.skuName}，购买${item.quantity}件，已退${item.refundedQuantity}件，商品实付${yuan(item.total)}。`,
       );
     if (["pending", "paid"].includes(order.status))
-      facts.push("模拟物流尚未发货，无签收记录。");
+      facts.push(
+        `${order.transactionMode === "production" ? "" : "模拟"}物流尚未发货，无签收记录。`,
+      );
     else if (order.carrier || order.tracking)
       facts.push(
-        `模拟物流：${order.carrier ?? ""} ${order.tracking ?? ""}，实际进度请核对订单详情。`,
+        `${order.transactionMode === "production" ? "" : "模拟"}物流：${order.carrier ?? ""} ${order.tracking ?? ""}，实际进度请核对订单详情。`,
       );
     for (const sale of input.afterSales)
       facts.push(

@@ -18,10 +18,14 @@ describe("offline migration rehearsal", () => {
       CREATE TABLE state(id INTEGER PRIMARY KEY,data TEXT);`);
     sql.prepare("INSERT INTO state VALUES(1,?)").run(JSON.stringify(seed));
     sql
-      .prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)")
+      .prepare(
+        "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)",
+      )
       .run("u1", "lin", "林小满", "user", "kept-password-hash", 1);
     sql
-      .prepare("INSERT INTO sessions VALUES(?,?,?)")
+      .prepare(
+        "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES(?,?,?)",
+      )
       .run("kept-token-hash", "u1", Date.now() + 86400000);
     sql.close();
     try {
@@ -31,7 +35,26 @@ describe("offline migration rehearsal", () => {
       expect(report.before.counts.orders).toBe(seed.orders.length);
       expect(report.after.orderTotal).toBe(report.before.orderTotal);
       expect(report.after.stockTotal).toBe(report.before.stockTotal);
-      expect(report.after.version).toBe(4);
+      expect(report.after.version).toBe(5);
+      const migrated = new DatabaseSync(
+        join(dir, "rehearsal", "migrated.sqlite"),
+        { readOnly: true },
+      );
+      try {
+        expect(
+          migrated.prepare("SELECT active FROM accounts WHERE id='u1'").get()
+            ?.active,
+        ).toBe(1);
+        expect(
+          migrated
+            .prepare(
+              "SELECT mfa_verified FROM sessions WHERE token_hash='kept-token-hash'",
+            )
+            .get()?.mfa_verified,
+        ).toBe(0);
+      } finally {
+        migrated.close();
+      }
       await expect(
         rehearseMigration(source, join(dir, "rehearsal")),
       ).rejects.toThrow("已存在");

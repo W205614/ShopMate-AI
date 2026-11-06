@@ -136,10 +136,14 @@ describe("bounded backup snapshots", () => {
       sql = openDatabase(":memory:");
     try {
       sql
-        .prepare("INSERT INTO accounts VALUES (?,?,?,?,?,?)")
+        .prepare(
+          "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES (?,?,?,?,?,?)",
+        )
         .run("u1", "member", "中文用户", "user", "test-hash", 1);
       sql
-        .prepare("INSERT INTO sessions VALUES (?,?,?)")
+        .prepare(
+          "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES (?,?,?)",
+        )
         .run("session", "u1", Date.now() + 60000);
       const expected = createHash("sha256");
       for (const { name } of sql

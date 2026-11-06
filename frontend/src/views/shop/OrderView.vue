@@ -15,6 +15,9 @@ import { useAction } from "../../components/shop/useAction";
 import { reviewWriteReason } from "../../domain/reviewWriteState";
 import "../../styles/commerce-flow.css";
 import { eventLabel } from "../../components/shop/commerceLabels";
+import ShipmentTracking from "../../components/production/ShipmentTracking.vue";
+import { useCommerceMode } from "../../services/commerceMode";
+const { production } = useCommerceMode();
 const shop = useShop(),
   route = useRoute(),
   order = computed(() => shop.myOrders.find((o) => o.id === route.params.id)),
@@ -88,7 +91,12 @@ function confirm() {
 }
 async function cancel() {
   if (order.value && window.confirm("确认取消这笔待付款订单？"))
-    await run(() => api.cancelOrder(order.value!.id), "订单已取消");
+    await run(
+      () => api.cancelOrder(order.value!.id),
+      order.value.paymentHold
+        ? "正在确认渠道关单，确认后释放库存；若已付款，请按售后流程处理。"
+        : "订单已取消",
+    );
 }
 async function request() {
   if (
@@ -124,7 +132,11 @@ async function request() {
       v-if="order.status === 'pending' && order.expiresAt"
       class="action-notice"
     >
-      请在 {{ dateTime(order.expiresAt) }} 前完成模拟付款，超时自动取消。
+      请在 {{ dateTime(order.expiresAt) }} 前完成{{
+        order.transactionMode === "production"
+          ? "付款。超时后核对渠道关单结果。"
+          : "模拟付款，超时自动取消。"
+      }}
     </p>
     <p v-if="order.cancelReason" class="secondary">
       关闭原因：{{ order.cancelReason }}
@@ -210,12 +222,24 @@ async function request() {
           <p>{{ order.address.region }} {{ order.address.detail }}</p>
         </section>
         <section v-if="order.carrier" class="checkout-section">
-          <h2>模拟物流</h2>
+          <h2>
+            {{
+              order.transactionMode === "production" ? "物流信息" : "模拟物流"
+            }}
+          </h2>
           <p>{{ order.carrier }} · {{ order.tracking }}</p>
           <p class="secondary">
             {{ order.shippedAt ? dateTime(order.shippedAt) : "" }}
-            已模拟发货。本页面不提供真实物流轨迹。
+            {{
+              order.transactionMode === "production"
+                ? "已登记实际运单。"
+                : "已模拟发货。本页面不提供真实物流轨迹。"
+            }}
           </p>
+          <ShipmentTracking
+            v-if="order.transactionMode === 'production'"
+            :order-id="order.id"
+          />
         </section>
         <section v-if="afterSale" class="checkout-section">
           <h2>售后进度</h2>
@@ -294,8 +318,13 @@ async function request() {
       <aside class="order-summary">
         <h2>订单操作</h2>
         <template v-if="order.status === 'pending'"
-          ><RouterLink :to="`/orders/${order.id}/pay`" class="button"
-            >模拟支付</RouterLink
+          ><RouterLink :to="`/orders/${order.id}/pay`" class="button">{{
+            order.transactionMode === "production"
+              ? "前往付款"
+              : production
+                ? "查看历史演示订单"
+                : "模拟支付"
+          }}</RouterLink
           ><button :disabled="busy" class="text-link" @click="cancel">
             取消订单
           </button></template
@@ -337,7 +366,16 @@ async function request() {
           class="button secondary-button"
           >评价商品</RouterLink
         >
-        <p class="secondary">付款、物流和退款均为演示，不产生真实资金流动。</p>
+        <p v-if="order.transactionMode !== 'production'" class="secondary">
+          付款、物流和退款均为演示，不产生真实资金流动。
+        </p>
+        <p
+          v-else-if="order.cancelRequested && order.status === 'pending'"
+          role="status"
+          class="secondary"
+        >
+          正在确认渠道关单，库存预占仍保留。
+        </p>
       </aside>
     </div>
   </div>

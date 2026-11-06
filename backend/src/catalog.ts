@@ -1,5 +1,7 @@
 import { checkVersion } from "./versions";
 import { reservedStock } from "./commerce-rules";
+import { context } from "./repository";
+import { validateAssetReferences } from "./production/assets";
 import type { ShopApi } from "../../shared/domain/api";
 import { HttpError } from "./auth";
 import {
@@ -25,6 +27,7 @@ export const catalogApi: Pick<
   | "saveSettings"
 > = {
   async saveProduct(input) {
+    validateAssetReferences(context.getStore()!.sql, input.images);
     await transact((db) => {
       admin();
       requireThat(
@@ -94,6 +97,7 @@ export const catalogApi: Pick<
     });
   },
   async saveCategory(input) {
+    validateAssetReferences(context.getStore()!.sql, [input.image], 1);
     await transact((db) => {
       admin();
       requireThat(

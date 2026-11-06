@@ -1,3 +1,4 @@
+import { shopMode } from "./production/config";
 import type { ShopApi } from "../../shared/domain/api";
 import type { Message } from "../../shared/domain/types";
 import { aiConfig } from "./ai/ai-provider";
@@ -52,8 +53,8 @@ export const supportApi: Pick<
             id: id("msg-"),
             role: "assistant",
             text: aiConfig().enabled
-              ? "你好，我是 ShopMate AI 客服。我可以帮你选商品、查询本人订单和售后，或根据已发布资料回答问题。业务操作需要你点击确认；支付、物流和退款均为模拟。"
-              : "你好，我是 ShopMate 模拟客服。我可以帮你找商品、查看当前账号的演示订单，或指引售后。回复来自本地规则，信息不足时可以转人工。",
+              ? `你好，我是 ShopMate AI 客服。我可以帮你选商品、查询本人订单和售后，或根据已发布资料回答问题。业务操作需要你点击确认；${shopMode() === "production" ? "支付和退款请以渠道最终结果为准。" : "支付、物流和退款均为模拟。"}`
+              : `你好，我是 ShopMate ${shopMode() === "production" ? "规则" : "模拟"}客服。我可以帮你找商品、查看当前账号的订单，或指引售后。回复来自本地规则，信息不足时可以转人工。`,
             createdAt: now(),
             ...(product ? { productIds: [product.id] } : {}),
             ...(context.orderId ? { orderId: context.orderId } : {}),
@@ -117,7 +118,7 @@ export const supportApi: Pick<
         const order =
           orders.find((o) => o.id === conversation.orderId) ?? orders[0];
         answer.text = order
-          ? `你的演示订单 ${order.id} 可在订单详情中查看最新状态与物流。此处不会查询其他账号的订单。`
+          ? `你的订单 ${order.id} 可在订单详情中查看最新状态与物流。此处不会查询其他账号的订单。`
           : "当前账号暂无演示订单。可以先去商城选择商品。";
         if (order) answer.orderId = order.id;
       } else if (

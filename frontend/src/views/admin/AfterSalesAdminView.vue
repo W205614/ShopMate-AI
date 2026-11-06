@@ -9,6 +9,10 @@ import { useAdminAction } from "./useAdmin";
 import { useAdminQuery, useAdminPagination } from "./useAdminList";
 import { afterSaleState } from "../../domain/afterSaleState";
 import { eventLabel } from "../../components/shop/commerceLabels";
+import { request, refreshState } from "../../services/repository";
+import type { Refund } from "../../../../shared/domain/production";
+import { useCommerceMode } from "../../services/commerceMode";
+const { production, loaded } = useCommerceMode();
 import "../../styles/account-commerce.css";
 const filters = useAdminQuery();
 const shop = useShop(),
@@ -125,7 +129,10 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
     approve: "批准申请",
     reject: "拒绝申请",
     receive: "确认收到退货",
-    refund: "执行模拟退款",
+    refund:
+      selectedOrder.value?.transactionMode === "production"
+        ? "提交渠道退款"
+        : "执行模拟退款",
   };
   if (type === "reject" && !inputNote.trim())
     return void run(async () => {
@@ -152,10 +159,36 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
       return void (await run(async () => {
         throw new Error("申请已切换或状态已变化，请重新核对后操作");
       }));
-    const success = await run(() => {
-      if (!permitted(type)) throw new Error("当前员工没有此操作权限");
-      return api.processAfterSale(sale.id, type, inputNote);
-    }, labels[type] + "成功");
+    const success = await run(
+      async () => {
+        if (!permitted(type)) throw new Error("当前员工没有此操作权限");
+        if (
+          type === "refund" &&
+          selectedOrder.value?.transactionMode === "production"
+        ) {
+          const key = `shopmate:refund:${sale.id}`;
+          const requestId = sessionStorage.getItem(key) ?? crypto.randomUUID();
+          sessionStorage.setItem(key, requestId);
+          const result = await request<Refund>("/api/admin/refunds", {
+            afterSaleId: sale.id,
+            requestId,
+          });
+          sessionStorage.removeItem(key);
+          await refreshState("admin");
+          if (["unknown", "failed", "abnormal"].includes(result.status))
+            throw new Error(
+              "退款尚未确认成功，请在生产接入页面查询渠道结果，勿重复提交。",
+            );
+          return;
+        }
+        return api.processAfterSale(sale.id, type, inputNote);
+      },
+      labels[type] +
+        (type === "refund" &&
+        selectedOrder.value?.transactionMode === "production"
+          ? "已受理，请在生产接入页面核对渠道结果"
+          : "成功"),
+    );
     if (
       success &&
       alive &&
@@ -177,7 +210,9 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
       <h1>售后管理</h1>
       <p>有进度、有说明，让售后处理更透明。</p>
     </div>
-    <el-tag effect="plain">退款为模拟</el-tag>
+    <el-tag effect="plain">{{
+      production ? "渠道退款以最终结果为准" : "退款为模拟"
+    }}</el-tag>
   </div>
   <section class="admin-panel">
     <div class="admin-toolbar">
@@ -399,9 +434,20 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
         v-if="allowedActions.refund"
         type="primary"
         :loading="pending"
-        :disabled="busy || confirming"
+        :disabled="
+          busy ||
+          confirming ||
+          !loaded ||
+          (production && selectedOrder?.transactionMode !== 'production')
+        "
         @click="action('refund')"
-        >执行模拟退款</el-button
+        >{{
+          production && selectedOrder?.transactionMode !== "production"
+            ? "历史演示订单不可退款"
+            : selectedOrder?.transactionMode === "production"
+              ? "提交渠道退款"
+              : "执行模拟退款"
+        }}</el-button
       ></template
     ></el-dialog
   >

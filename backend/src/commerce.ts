@@ -1,6 +1,8 @@
 import type { ShopApi } from "../../shared/domain/api";
 import type { DatabaseSync } from "node:sqlite";
-import type { Database, Order } from "../../shared/domain/types";
+import type { Database, Order, AfterSale } from "../../shared/domain/types";
+import { shopMode } from "./production/config";
+import { HttpError } from "./errors";
 import { readDatabase, writeDatabase, transaction } from "./database";
 import { ensureRuntimeSchema, enqueue } from "./runtime";
 import { releaseSnapshot } from "./storage";
@@ -329,6 +331,7 @@ export const commerceApi: Pick<
       const orderId = id("SM");
       db.orders.unshift({
         id: orderId,
+        transactionMode: shopMode(),
         userId: uid,
         items: clone(quote.items).map((item) => ({
           ...item,
@@ -379,10 +382,16 @@ export const commerceApi: Pick<
     });
   },
   async payOrder(orderId) {
+    if (shopMode() === "production")
+      throw new HttpError(403, "请通过真实支付渠道付款", "SIMULATION_DISABLED");
     // Persist deadline closure before rejecting payment, rather than rolling it back with the error.
     expirePendingOrders(context.getStore()!.sql);
     await transact((db) => {
       const order = ownedOrder(db, orderId);
+      requireThat(
+        order.transactionMode !== "production",
+        "真实订单不能模拟付款",
+      );
       if (["paid", "shipped", "completed", "refunded"].includes(order.status))
         return;
       requireThat(
@@ -402,28 +411,7 @@ export const commerceApi: Pick<
           `${item.name}已下架或库存不足，无法支付`,
         );
       }
-      for (const item of order.items)
-        move(
-          db,
-          item.productId,
-          item.skuId,
-          -item.quantity,
-          `订单付款 ${order.id}`,
-        );
-      if (order.coupon) {
-        const claim = db.couponClaims.find(
-          (c) => c.id === order.coupon!.claimId,
-        );
-        requireThat(
-          claim?.status === "locked" && claim.orderId === order.id,
-          "订单优惠券状态无效",
-        );
-        claim.status = "used";
-      }
-      order.status = "paid";
-      order.paidAt = now();
-      addEvent(order, "paid", "user");
-      ledger(db, "payment", order.total, order.id, "模拟订单收款");
+      applyPaidOrder(db, order, "demo");
     });
   },
   async cancelOrder(orderId) {
@@ -503,7 +491,9 @@ export const commerceApi: Pick<
       );
       requireThat(sale, "售后不存在或不属于当前用户");
       requireThat(
-        ["requested", "approved"].includes(sale.status) && !sale.returnTracking,
+        !sale.refundPending &&
+          ["requested", "approved"].includes(sale.status) &&
+          !sale.returnTracking,
         "当前售后不可撤销",
       );
       sale.status = "cancelled";
@@ -599,73 +589,16 @@ export const commerceApi: Pick<
         }
       } else {
         requireThat(action === "refund", "售后操作无效");
-        requireThat(
-          sale.requiresReturn
-            ? sale.status === "received"
-            : sale.status === "approved",
-          "请先完成审核及必要的退货收货",
-        );
-        requireThat(
-          ["paid", "shipped", "completed"].includes(order.status),
-          "订单当前不能退款",
-        );
-        let amount = 0;
-        for (const line of sale.lines) {
-          const item = order.items.find((i) => i.id === line.orderItemId);
-          requireThat(
-            item &&
-              integer(line.quantity, 1) &&
-              item.refundedQuantity + line.quantity <= item.quantity,
-            "退款数量超出购买数量",
+        if (
+          shopMode() === "production" ||
+          order.transactionMode === "production"
+        )
+          throw new HttpError(
+            403,
+            "请从渠道退款入口发起退款",
+            "SIMULATION_DISABLED",
           );
-          const expected =
-            refundThrough(item, item.refundedQuantity + line.quantity) -
-            refundThrough(item, item.refundedQuantity);
-          requireThat(expected === line.amount, "退款分摊金额无效");
-          amount += expected;
-        }
-        const shippingRefund = sale.shippingRefund ?? 0;
-        requireThat(
-          integer(shippingRefund) &&
-            (!shippingRefund ||
-              (!sale.requiresReturn &&
-                shippingRefund ===
-                  (order.shippingFee ?? 0) - (order.shippingRefunded ?? 0) &&
-                order.items.every(
-                  (item) =>
-                    item.refundedQuantity +
-                      (sale.lines.find((l) => l.orderItemId === item.id)
-                        ?.quantity ?? 0) ===
-                    item.quantity,
-                ))),
-          "运费退款金额无效",
-        );
-        amount += shippingRefund;
-        requireThat(
-          amount === sale.refundAmount &&
-            order.refundedAmount + amount <= order.total,
-          "退款金额超出实付金额",
-        );
-        for (const line of sale.lines) {
-          const item = order.items.find((i) => i.id === line.orderItemId)!;
-          if (!sale.requiresReturn || order.inventoryPolicy !== "reserved-v1")
-            move(
-              db,
-              item.productId,
-              item.skuId,
-              line.quantity,
-              `售后退款回补 ${order.id}`,
-            );
-          item.refundedQuantity += line.quantity;
-        }
-        ledger(db, "refund", amount, order.id, `模拟售后退款 ${sale.id}`);
-        sale.status = "refunded";
-        order.refundedAmount += amount;
-        order.shippingRefunded = (order.shippingRefunded ?? 0) + shippingRefund;
-        syncOrderPoints(db, order);
-        if (order.items.every((i) => i.refundedQuantity === i.quantity))
-          order.status = "refunded";
-        addEvent(order, "refund", "admin", `退款 ${amount} 分`);
+        applyRefund(db, sale, order, true, "demo");
       }
       if (note.trim()) sale.note = note.trim();
       sale.events.push({
@@ -713,6 +646,11 @@ export function cancelOrderChange(db: Database, orderId: string) {
   const order = ownedOrder(db, orderId);
   if (order.status === "cancelled") return;
   requireThat(order.status === "pending", "只有待付款订单可以取消");
+  if (order.paymentHold) {
+    order.cancelRequested = true;
+    order.cancelReason = "用户取消";
+    return;
+  }
   order.status = "cancelled";
   order.cancelledAt = now();
   order.cancelReason = "用户取消";
@@ -792,4 +730,130 @@ export function requestAfterSaleChange(
     events: [{ at, actor: "user", action: "requested" }],
   });
   addEvent(order, "afterSaleRequested", "user");
+}
+
+export function applyPaidOrder(
+  db: Database,
+  order: Order,
+  source: "demo" | "provider",
+  succeededAt = now(),
+) {
+  requireThat(order.status === "pending", "订单状态不能登记收款");
+  for (const item of order.items)
+    move(
+      db,
+      item.productId,
+      item.skuId,
+      -item.quantity,
+      `订单付款 ${order.id}`,
+    );
+  if (order.coupon) {
+    const claim = db.couponClaims.find((c) => c.id === order.coupon!.claimId);
+    requireThat(
+      claim?.status === "locked" && claim.orderId === order.id,
+      "订单优惠券状态无效",
+    );
+    claim.status = "used";
+  }
+  order.status = "paid";
+  order.paidAt = succeededAt;
+  addEvent(order, "paid", "user");
+  ledger(
+    db,
+    "payment",
+    order.total,
+    order.id,
+    source === "demo" ? "模拟订单收款" : "渠道订单收款",
+    source === "demo" ? "demo" : "production",
+    succeededAt,
+  );
+  order.paymentHold = false;
+}
+
+export function applyRefund(
+  db: Database,
+  sale: AfterSale,
+  order: Order,
+  apply: boolean,
+  source: "demo" | "provider" | "zero",
+  succeededAt = now(),
+) {
+  requireThat(
+    sale.requiresReturn
+      ? sale.status === "received"
+      : sale.status === "approved",
+    "请先完成审核及必要的退货收货",
+  );
+  requireThat(
+    ["paid", "shipped", "completed"].includes(order.status),
+    "订单当前不能退款",
+  );
+  let amount = 0;
+  for (const line of sale.lines) {
+    const item = order.items.find((i) => i.id === line.orderItemId);
+    requireThat(
+      item &&
+        integer(line.quantity, 1) &&
+        item.refundedQuantity + line.quantity <= item.quantity,
+      "退款数量超出购买数量",
+    );
+    const expected =
+      refundThrough(item, item.refundedQuantity + line.quantity) -
+      refundThrough(item, item.refundedQuantity);
+    requireThat(expected === line.amount, "退款分摊金额无效");
+    amount += expected;
+  }
+  const shippingRefund = sale.shippingRefund ?? 0;
+  requireThat(
+    integer(shippingRefund) &&
+      (!shippingRefund ||
+        (!sale.requiresReturn &&
+          shippingRefund ===
+            (order.shippingFee ?? 0) - (order.shippingRefunded ?? 0) &&
+          order.items.every(
+            (item) =>
+              item.refundedQuantity +
+                (sale.lines.find((l) => l.orderItemId === item.id)?.quantity ??
+                  0) ===
+              item.quantity,
+          ))),
+    "运费退款金额无效",
+  );
+  amount += shippingRefund;
+  requireThat(
+    amount === sale.refundAmount &&
+      order.refundedAmount + amount <= order.total,
+    "退款金额超出实付金额",
+  );
+  if (!apply) return amount;
+  for (const line of sale.lines) {
+    const item = order.items.find((i) => i.id === line.orderItemId)!;
+    if (!sale.requiresReturn || order.inventoryPolicy !== "reserved-v1")
+      move(
+        db,
+        item.productId,
+        item.skuId,
+        line.quantity,
+        `售后退款回补 ${order.id}`,
+      );
+    item.refundedQuantity += line.quantity;
+  }
+  ledger(
+    db,
+    "refund",
+    amount,
+    order.id,
+    `${source === "demo" ? "模拟售后退款" : source === "zero" ? "零金额售后结案（无资金流转）" : "渠道售后退款"} ${sale.id}`,
+    source === "demo" ? "demo" : "production",
+    succeededAt,
+  );
+  sale.status = "refunded";
+  order.refundedAmount += amount;
+  order.shippingRefunded = (order.shippingRefunded ?? 0) + shippingRefund;
+  syncOrderPoints(db, order);
+  if (order.items.every((i) => i.refundedQuantity === i.quantity))
+    order.status = "refunded";
+  addEvent(order, "refund", "admin", `退款 ${amount} 分`);
+  sale.refundPending = false;
+  return amount;
 }

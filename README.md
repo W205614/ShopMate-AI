@@ -1,6 +1,6 @@
 # ShopMate-AI
 
-ShopMate-AI 是一个中文单店商城。顾客选规格、下单和申请售后，运营人员在后台发货、管理库存并核对收退款。支付、物流和退款均为模拟流程。默认客服提供 FAQ 和人工回复，也可接入 AI，根据商品、本人订单和已发布的知识回答问题。
+ShopMate-AI 是一个中文单店商城。顾客选规格、下单和申请售后，运营人员在后台发货、管理库存并核对收退款。默认演示模式使用模拟交易；独立生产模式提供真实支付退款、物流、账号验证与运维接入。默认客服提供 FAQ 和人工回复，也可接入 AI，根据商品、本人订单和已发布的知识回答问题。
 
 ![商城首页，可按分类浏览商品](docs/screenshots/storefront-desktop-fold.jpg)
 
@@ -54,6 +54,26 @@ docker compose ps
 
 启动失败时，用 `docker compose logs --tail 100 api web` 查看日志。端口占用、镜像源及公网访问配置见[开发与运维](docs/development.md)。日常停止用 `docker compose stop`，再次启动用 `docker compose up -d --wait`。业务数据在 Docker 卷中，`docker compose down -v` 会删除该卷。
 
+## 生产版与外部接入
+
+生产目标为 Linux Docker Compose、单店、单 API、SQLite。支持的供应商适配代码已包含在仓库中；后续在已实现的产品范围内填写配置、挂载凭据并完成平台开通及联调。真实账号、商户审核、公网回调和云资源需要自行准备。
+
+| 能力                 | 已实现范围                                                        | 接入入口                                              |
+| -------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
+| 支付、退款与渠道对账 | 微信 Native/H5，支付宝电脑网站/WAP；查单关单、异步退款、差异复核  | [支付配置](docs/integrations.md#微信支付)             |
+| 账号与安全           | 邮箱或手机验证、找回密码、会话撤销、管理 TOTP MFA、资料导出及注销 | [账号与通知](docs/integrations.md#邮件短信与账号验证) |
+| 物流                 | 真实运单录入、快递100订阅回调、查询和退货轨迹                     | [物流接入](docs/integrations.md#快递100)              |
+| 图片与恢复           | 本地/S3 存储、显式迁移、快照与图片恢复集、远端上传下载校验        | [存储与备份](docs/integrations.md#图片存储与远端备份) |
+| 经营与运维           | 商家和协议管理、HTTPS、只读监控、告警配置、维护发布与恢复         | [生产部署](docs/production.md)                        |
+
+自动化协议及本地服务验证不等于真实商户或云服务已验收。真实联调按[验收清单](docs/integrations.md#本地验证与实网验收)单独记录；后台“接入状态”只报告当前配置和运行数据。首次运行继续使用下面的演示流程，生产环境使用独立 `.env.production` 和生产 Compose，不改变现有本机备份配置。
+
+入口镜像的原始扫描保留已知依赖问题；[HTTPS 入口安全评估](docs/security/production-edge-vex.md)说明固定配置的执行路径证据、临时 VEX 门禁及适用边界，不代表镜像原始扫描零高危。
+
+微信 H5 支付链接遵循官方五分钟有效期；到期后先查单，再按原支付单号恢复链接，跳转前重新确认状态，详见[H5 链接刷新与限制](docs/integrations.md#h5-支付链接刷新)。
+
+本轮实现、失败修复、本地验证和待实网项目见[单店生产版验收报告](docs/production-acceptance-20261106.md)。报告标明候选源码、测试条件和实际限制，不将本地协议测试作为已上线证明。
+
 ## 第一次体验
 
 新商城已包含商品、分类和 FAQ。用第一笔订单体验顾客和运营人员如何配合：
@@ -78,4 +98,6 @@ docs/        开发说明、业务规则、验收报告和历史证据
 
 追踪刚才的下单流程，可从[结算页面](frontend/src/views/shop/CheckoutView.vue)进入[前端 API 调用](frontend/src/services/api.ts)，再看[后端 HTTP 入口](backend/src/app.ts)和[订单事务](backend/src/commerce.ts)。其他模块和脚本见[项目结构与阅读顺序](docs/project-structure.md)。
 
-本地开发与测试见[开发指南](docs/development.md#本地开发)。业务规则、AI 知识库、压测条件、故障记录及发布验证统一从[文档导航](docs/README.md)查阅。
+请求和数据流见[架构与运行边界](docs/architecture.md)，调用入口见[HTTP 接口总览](docs/api.md)。本地开发与测试见[开发指南](docs/development.md#本地开发)，生产发布从[上线核对](docs/production.md#上线核对)开始，本轮变更与发布证据见[发布记录](docs/release-20261106.md)。
+
+业务规则、AI 知识库、压测条件、故障记录及历史发布统一从[文档导航](docs/README.md)查阅。参与开发前阅读[贡献说明](CONTRIBUTING.md)；安全问题通过[GitHub 私密报告](SECURITY.md)提交。

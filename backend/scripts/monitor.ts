@@ -5,6 +5,14 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 type Diagnostics = {
+  production?: {
+    paymentsUnknown: number;
+    refundsPending: number;
+    webhooksFailed: number;
+    reconciliationDifferences: number;
+    notificationsFailed: number;
+    notificationsUnknown: number;
+  };
   jobs: { failed: number; oldestWaitingMs: number };
   backup: {
     enabled: boolean;
@@ -13,6 +21,8 @@ type Diagnostics = {
     lastFailureAt: string | null;
     lastErrorCode: string | null;
     lastReplicaSnapshotAt: string | null;
+    remoteConfigured?: boolean;
+    lastRemoteSnapshotAt?: string | null;
   };
 };
 export type Probe = {
@@ -33,6 +43,23 @@ export function evaluateProbe(probe: Probe, now = Date.now()) {
     issues.push("DIAGNOSTICS_UNAVAILABLE");
   if (probe.diagnostics) {
     const { jobs, backup } = probe.diagnostics;
+    const production = probe.diagnostics.production;
+    if (production?.paymentsUnknown) issues.push("PAYMENT_UNKNOWN");
+    if (production?.refundsPending) issues.push("REFUND_PENDING");
+    if (production?.webhooksFailed) issues.push("PAYMENT_WEBHOOK_FAILED");
+    if (production?.reconciliationDifferences)
+      issues.push("RECONCILIATION_DIFFERENCE");
+    if (production?.notificationsFailed || production?.notificationsUnknown)
+      issues.push("NOTIFICATION_FAILED");
+    if (backup.remoteConfigured) {
+      const remote = Date.parse(backup.lastRemoteSnapshotAt ?? "");
+      if (
+        !Number.isFinite(remote) ||
+        remote > now ||
+        now - remote > 23 * 3600000
+      )
+        issues.push("REMOTE_BACKUP_STALE");
+    }
     if (jobs.failed > 0) issues.push("JOB_FAILED");
     if (jobs.oldestWaitingMs > 300000) issues.push("JOB_STALLED");
     if (!backup.enabled) issues.push("BACKUP_DISABLED");
@@ -111,19 +138,39 @@ async function probe(base: string, cookie: string): Promise<Probe> {
   }
   const latencyMs = Math.round(performance.now() - start);
   try {
-    const response = await fetch(`${base}/api/admin/diagnostics`, {
-      headers: { Cookie: cookie },
-      signal: AbortSignal.timeout(5000),
-      redirect: "error",
-    });
-    if (response.ok) {
-      const body = await response.json();
+    if (process.env.MONITOR_DIAGNOSTICS_DOCKER === "true") {
+      const name =
+        process.env.MONITOR_API_CONTAINER ??
+        `${process.env.MONITOR_COMPOSE_PROJECT ?? "shopmate-ai"}-api-1`;
+      const script =
+        "import{readFileSync}from'node:fs';const t=process.env.MONITOR_TOKEN_FILE?readFileSync(process.env.MONITOR_TOKEN_FILE,'utf8').trim():process.env.MONITOR_TOKEN;const r=await fetch('http://127.0.0.1:3001/api/internal/diagnostics',{headers:{Authorization:'Bearer '+t},signal:AbortSignal.timeout(5000)});if(!r.ok)process.exit(1);process.stdout.write(JSON.stringify(await r.json()));";
+      const { stdout } = await execute(
+        "docker",
+        ["exec", name, "node", "--input-type=module", "-e", script],
+        { timeout: 10_000, maxBuffer: 100_000, windowsHide: true },
+      );
+      const body = JSON.parse(stdout);
       if (
         typeof body.jobs?.failed === "number" &&
         typeof body.jobs?.oldestWaitingMs === "number" &&
         typeof body.backup?.enabled === "boolean"
       )
         diagnostics = body;
+    } else {
+      const response = await fetch(`${base}/api/admin/diagnostics`, {
+        headers: { Cookie: cookie },
+        signal: AbortSignal.timeout(5000),
+        redirect: "error",
+      });
+      if (response.ok) {
+        const body = await response.json();
+        if (
+          typeof body.jobs?.failed === "number" &&
+          typeof body.jobs?.oldestWaitingMs === "number" &&
+          typeof body.backup?.enabled === "boolean"
+        )
+          diagnostics = body;
+      }
     }
   } catch {
     /* A login expiry must be visible as a probe failure. */
@@ -196,6 +243,7 @@ async function maintenance() {
 }
 
 async function login(base: string) {
+  if (process.env.MONITOR_DIAGNOSTICS_DOCKER === "true") return "";
   if (process.env.MONITOR_ADMIN_COOKIE) return process.env.MONITOR_ADMIN_COOKIE;
   if (!process.env.MONITOR_ADMIN_PASSWORD) return "";
   try {

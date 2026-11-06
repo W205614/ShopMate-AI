@@ -5,9 +5,14 @@ export function migrateDatabase(
   db: Database,
   at = new Date().toISOString(),
 ): boolean {
-  if (db.version > 4)
+  if (db.version > 5)
     throw new Error("数据库版本高于当前程序支持范围，请恢复匹配版本的程序");
-  if (db.version === 4) return false;
+  if (db.version === 5) return false;
+  // Older binaries must reject a database that can contain real channel transactions.
+  if (db.version === 4) {
+    db.version = 5;
+    return true;
+  }
   if (db.version < 2) {
     db.coupons ??= [];
     db.couponClaims ??= [];
@@ -83,6 +88,6 @@ export function migrateDatabase(
   db.notifications ??= [];
   db.auditEntries ??= [];
   // Missing policy fields intentionally remain absent: historical orders keep legacy rules.
-  db.version = 4;
+  db.version = 5;
   return true;
 }

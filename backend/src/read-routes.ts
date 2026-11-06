@@ -1,4 +1,5 @@
 import { dashboard } from "./dashboard";
+import { shopMode } from "./production/config";
 import type { Express, Request } from "express";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
@@ -565,6 +566,13 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
       options.type = z
         .enum(["payment", "refund", "purchase"])
         .parse(req.query.type);
+    if (collection === "ledger")
+      options.transactionMode =
+        req.query.transactionMode === undefined
+          ? shopMode() === "production"
+            ? "production"
+            : undefined
+          : z.enum(["production", "demo"]).parse(req.query.transactionMode);
     for (const field of ["from", "to"] as const)
       if (req.query[field])
         options[field] = z

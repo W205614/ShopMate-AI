@@ -357,7 +357,9 @@ describe("real authentication over HTTP", () => {
       let disk = openDatabase(join(dir, "test.sqlite"));
       const account = await createAccount(disk, input);
       disk
-        .prepare("INSERT INTO sessions VALUES (?, ?, ?)")
+        .prepare(
+          "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES (?, ?, ?)",
+        )
         .run(tokenHash("persisted"), account.id, Date.now() + 60000);
       disk.close();
       disk = openDatabase(join(dir, "test.sqlite"));

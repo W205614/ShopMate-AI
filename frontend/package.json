@@ -17,6 +17,7 @@
     "element-plus": "^2.14.7",
     "lucide-vue-next": "^0.577.0",
     "pinia": "^4.1.0",
+    "qrcode": "1.5.4",
     "vue": "^3.5.42",
     "vue-router": "^5.4.0"
   },
@@ -25,6 +26,7 @@
     "@fontsource/libre-franklin": "^5.3.0",
     "@playwright/test": "^1.64.1",
     "@types/node": "^24.13.3",
+    "@types/qrcode": "1.5.6",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
     "eslint": "^10.12.0",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, getCurrentInstance } from "vue";
+import { computed, ref, getCurrentInstance, onMounted } from "vue";
 import ElementPlus from "element-plus";
 import zhCn from "element-plus/es/locale/lang/zh-cn";
 import {
@@ -22,6 +22,7 @@ import "element-plus/dist/index.css";
 import "../../styles/admin.css";
 import { useShop } from "../../stores/shop";
 import { canOpenAdminPath } from "../../router";
+import { productionApi } from "../../services/production";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter();
@@ -41,6 +42,14 @@ const icons = [
   Settings2,
 ];
 const expanded = ref(false);
+const mode = ref<"demo" | "production" | null>(null);
+onMounted(async () => {
+  try {
+    mode.value = (await productionApi.capabilities()).mode;
+  } catch {
+    mode.value = null;
+  }
+});
 const allLinks = [
   ["/admin", "经营概览", "Overview"],
   ["/admin/products", "商品管理", "Products"],
@@ -53,8 +62,9 @@ const allLinks = [
   ["/admin/reviews", "评价管理", "Reviews"],
   ["/admin/support", "客服工作台", "Support"],
   ["/admin/knowledge", "FAQ 管理", "Knowledge"],
-  ["/admin/settings", "演示设置", "Settings"],
+  ["/admin/settings", "商城设置", "Settings"],
   ["/admin/operations", "经营工作台", "Operations"],
+  ["/admin/production", "生产接入", "Production"],
 ];
 const links = computed(() =>
   allLinks.filter((link) =>
@@ -99,7 +109,16 @@ async function logout() {
       </nav>
       <div class="admin-sidebar-bottom">
         <RouterLink to="/">前往商城 ↗</RouterLink>
-        <p>业务体验版 · 数据由服务端保存</p>
+        <p>
+          {{
+            mode === "production"
+              ? "单店生产版"
+              : mode === "demo"
+                ? "业务体验版"
+                : "单店管理"
+          }}
+          · 数据由服务端保存
+        </p>
       </div>
     </aside>
     <div class="admin-workspace">
@@ -115,14 +134,27 @@ async function logout() {
           ><span>工作空间</span><b>/ {{ title }}</b>
         </div>
         <div>
-          <span class="admin-demo-dot">演示环境</span
+          <span class="admin-demo-dot">{{
+            mode === "production"
+              ? "生产环境"
+              : mode === "demo"
+                ? "演示环境"
+                : "环境状态待核对"
+          }}</span
           ><span>{{ shop.adminSession?.name }}</span
           ><button class="admin-text-button" @click="logout">退出</button>
         </div>
       </header>
       <main class="admin-main"><RouterView /></main>
       <footer class="admin-foot">
-        ShopMate-AI · 单店自营演示 <span>所有交易、物流和客服均为模拟</span>
+        ShopMate-AI · 单店自营
+        <span>{{
+          mode === "production"
+            ? "渠道结果以验签通知与主动查询为准"
+            : mode === "demo"
+              ? "交易、物流和退款均为模拟"
+              : "请核对当前运行配置"
+        }}</span>
       </footer>
     </div>
   </div>

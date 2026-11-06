@@ -25,6 +25,12 @@ export async function runAutomaticBackup(
     timeoutMs?: number;
     replicaDirectory?: string;
     onReplicaCreated?: (copiedAt: string, snapshotAt: string) => void;
+    onRemoteCreated?: (point: {
+      bucket: string;
+      bundleKey: string;
+      snapshotAt: string;
+      sha256: string;
+    }) => void;
   } = {},
 ) {
   if (running) throw new Error("BACKUP_ALREADY_RUNNING");
@@ -68,7 +74,30 @@ export async function runAutomaticBackup(
       throw new Error("BACKUP_TARGET_EXISTS");
     ownsTarget = true;
     const env = Object.fromEntries(
-      ["PATH", "TZ", "TEMP", "TMP", "TMPDIR", "SystemRoot"]
+      [
+        "PATH",
+        "TZ",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "SystemRoot",
+        "SHOP_MODE",
+        "ASSET_DIR",
+        "ASSET_STORAGE",
+        "S3_ENDPOINT",
+        "S3_REGION",
+        "S3_BUCKET",
+        "S3_ACCESS_KEY_ID",
+        "S3_SECRET_ACCESS_KEY",
+        "S3_FORCE_PATH_STYLE",
+        "S3_PREFIX",
+        "S3_SOURCE_ENDPOINT",
+        "S3_SOURCE_ACCESS_KEY_ID",
+        "S3_SOURCE_SECRET_ACCESS_KEY",
+        "BACKUP_S3_ENABLED",
+        "BACKUP_S3_BUCKET",
+        "BACKUP_S3_PREFIX",
+      ]
         .filter((key) => process.env[key] !== undefined)
         .map((key) => [key, process.env[key]!]),
     );
@@ -128,12 +157,36 @@ export async function runAutomaticBackup(
         } else if (
           message.type === "phase" &&
           ((!created &&
-            ["copy", "verify", "publish"].includes(String(message.phase))) ||
+            ["copy", "verify", "publish", "assets"].includes(
+              String(message.phase),
+            )) ||
             (created &&
-              ["retention", "replica"].includes(String(message.phase))))
+              ["retention", "replica", "remote"].includes(
+                String(message.phase),
+              )))
         ) {
           if (message.phase === "copy") ownsScratch = true;
           enterPhase(String(message.phase));
+        } else if (
+          message.type === "remoteUploaded" &&
+          phase === "remote" &&
+          typeof message.bucket === "string" &&
+          typeof message.bundleKey === "string" &&
+          typeof message.snapshotAt === "string" &&
+          Number.isFinite(Date.parse(message.snapshotAt)) &&
+          typeof message.sha256 === "string" &&
+          /^[a-f0-9]{64}$/.test(message.sha256)
+        ) {
+          try {
+            options.onRemoteCreated?.({
+              bucket: message.bucket,
+              bundleKey: message.bundleKey,
+              snapshotAt: message.snapshotAt,
+              sha256: message.sha256,
+            });
+          } catch {
+            fail("BACKUP_WORKER_CALLBACK");
+          }
         } else if (
           message.type === "replicated" &&
           phase === "replica" &&
@@ -161,16 +214,26 @@ export async function runAutomaticBackup(
         } else if (message.type === "failed") {
           const reported = String(message.phase);
           if (
-            ["copy", "verify", "publish", "retention", "replica"].includes(
-              reported,
-            ) &&
+            [
+              "copy",
+              "verify",
+              "publish",
+              "retention",
+              "replica",
+              "assets",
+              "remote",
+            ].includes(reported) &&
             reported !== phase
           )
             enterPhase(reported);
           failure =
-            phase === "replica"
-              ? "BACKUP_REPLICA_FAILED"
-              : "BACKUP_WORKER_FAILED";
+            phase === "assets"
+              ? "BACKUP_ASSETS_FAILED"
+              : phase === "remote"
+                ? "BACKUP_REMOTE_FAILED"
+                : phase === "replica"
+                  ? "BACKUP_REPLICA_FAILED"
+                  : "BACKUP_WORKER_FAILED";
         } else fail("BACKUP_WORKER_PROTOCOL");
       });
       child.once("error", () => fail("BACKUP_WORKER_START_FAILED"));

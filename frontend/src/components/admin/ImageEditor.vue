@@ -5,7 +5,11 @@ import {
   IMAGES_MAX_BYTES,
   imageBytes,
 } from "../../../../shared/domain/images";
-import { validateDecodedImages } from "../../services/images";
+import {
+  validateDecodedImages,
+  uploadProductImage,
+  uploadedImageBytes,
+} from "../../services/images";
 const props = withDefaults(
   defineProps<{
     modelValue: string[];
@@ -25,7 +29,7 @@ const sourceDraft = ref(""),
 const total = computed(() =>
   props.modelValue.reduce((sum, image) => {
     try {
-      return sum + imageBytes(image);
+      return sum + (uploadedImageBytes(image) ?? imageBytes(image));
     } catch {
       return sum;
     }
@@ -68,7 +72,8 @@ async function upload(event: Event) {
           throw new Error(`${file.name}：请上传 2 MiB 内的 PNG/JPEG/WebP 图片`);
       }
       const existingBytes = props.modelValue.reduce(
-        (sum, source) => sum + imageBytes(source),
+        (sum, source) =>
+          sum + (uploadedImageBytes(source) ?? imageBytes(source)),
         0,
       );
       if (
@@ -76,17 +81,9 @@ async function upload(event: Event) {
         IMAGES_MAX_BYTES
       )
         throw new Error("商品图片合计不能超过 5 MiB");
-      return Promise.all(
-        files.map((file) => {
-          return new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
-            reader.onerror = reader.onabort = () =>
-              reject(new Error(`${file.name}：读取图片失败，请重新选择`));
-            reader.readAsDataURL(file);
-          });
-        }),
-      );
+      const urls: string[] = [];
+      for (const file of files) urls.push(await uploadProductImage(file));
+      return urls;
     });
   } finally {
     input.value = "";
@@ -104,7 +101,8 @@ function remove(index: number) {
   <div class="image-editor">
     <p class="admin-note">
       PNG/JPEG/WebP，每张最多 2 MiB，合计最多 5 MiB；{{ modelValue.length }} /
-      {{ maximum }} 张，{{ (total / 1024 / 1024).toFixed(2) }} MiB。
+      {{ maximum }} 张；已知大小
+      {{ (total / 1024 / 1024).toFixed(2) }} MiB，保存时由服务端核对总量。
     </p>
     <div class="image-source-row">
       <el-input
@@ -127,7 +125,7 @@ function remove(index: number) {
       :disabled="disabled || processing"
       @change="upload"
     />
-    <p v-if="processing" role="status">正在读取并检查图片…</p>
+    <p v-if="processing" role="status">正在上传并检查图片…</p>
     <p v-if="error" class="image-editor-error" role="alert">{{ error }}</p>
     <div class="image-editor-previews">
       <div v-for="(src, index) in modelValue" :key="index">

@@ -7,7 +7,7 @@ export const stockAvailabilityFrom = `
     FROM biz_orders o JOIN order_items i ON i.order_id=o.key
     WHERE o.status='pending'
       AND json_extract(o.data,'$.inventoryPolicy')='reserved-v1'
-      AND json_extract(o.data,'$.expiresAt')>?
+      AND (json_extract(o.data,'$.paymentHold')=1 OR json_extract(o.data,'$.expiresAt')>?)
     GROUP BY i.product_id,i.sku_id
   ) reservations ON reservations.product_id=s.product_id AND reservations.sku_id=s.id`;
 

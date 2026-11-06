@@ -89,6 +89,9 @@ export interface OrderItem {
   quantity: number;
 }
 export interface Order {
+  transactionMode?: "demo" | "production";
+  paymentHold?: boolean;
+  cancelRequested?: boolean;
   inventoryPolicy?: "reserved-v1";
   shipping?: { ruleId: string; name: string; fee: number };
   shippingFee?: number;
@@ -133,6 +136,7 @@ export interface AfterSaleLine {
   amount: number;
 }
 export interface AfterSale {
+  refundPending?: boolean;
   shippingRefund?: number;
   lines: AfterSaleLine[];
   refundAmount: number;
@@ -179,6 +183,7 @@ export interface InventoryRequest {
   createdAt: string;
 }
 export interface LedgerEntry {
+  transactionMode?: "demo" | "production";
   id: string;
   type: "payment" | "refund" | "purchase";
   amount: number;

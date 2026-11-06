@@ -9,6 +9,8 @@ import OrderItems from "../../components/shop/OrderItems.vue";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import { useAction } from "../../components/shop/useAction";
 import "../../styles/commerce-flow.css";
+import { useCommerceMode } from "../../services/commerceMode";
+const { production } = useCommerceMode();
 const shop = useShop(),
   route = useRoute(),
   router = useRouter(),
@@ -152,7 +154,13 @@ async function cancel(id: string) {
               v-if="o.status === 'pending'"
               :to="`/orders/${o.id}/pay`"
               class="button"
-              >模拟支付</RouterLink
+              >{{
+                o.transactionMode === "production"
+                  ? "前往付款"
+                  : production
+                    ? "查看历史演示订单"
+                    : "模拟支付"
+              }}</RouterLink
             ><button
               v-if="o.status === 'shipped'"
               class="button"

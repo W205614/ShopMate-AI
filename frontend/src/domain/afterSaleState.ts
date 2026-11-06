@@ -4,7 +4,9 @@ export function afterSaleState(sale: AfterSale, order?: Order) {
   const orderMatches =
     !!order && order.id === sale.orderId && order.userId === sale.userId;
   const canCancel =
-    ["requested", "approved"].includes(sale.status) && !sale.returnTracking;
+    !sale.refundPending &&
+    ["requested", "approved"].includes(sale.status) &&
+    !sale.returnTracking;
   const canReturn = sale.status === "approved" && sale.requiresReturn;
   const canApprove = sale.status === "requested" && orderMatches;
   const canReceive =
@@ -17,6 +19,7 @@ export function afterSaleState(sale: AfterSale, order?: Order) {
     sale.status === "received" ||
     (sale.status === "approved" && !sale.requiresReturn);
   const canRefund =
+    !sale.refundPending &&
     refundStage &&
     orderMatches &&
     ["paid", "shipped", "completed"].includes(order?.status ?? "");
@@ -43,6 +46,13 @@ export function afterSaleState(sale: AfterSale, order?: Order) {
     ["requested", "approved", "returning", "received"].includes(sale.status)
   )
     guidance = "关联订单数据不可用，请联系人工客服核对后再处理。";
+  if (order?.transactionMode === "production")
+    guidance = guidance
+      .replace("模拟承运商", "实际承运商")
+      .replace("，无需实际寄件", "")
+      .replaceAll("模拟退款", "渠道退款");
+  if (sale.refundPending)
+    guidance = "渠道退款处理中，尚未确认到账。请等待结果或联系财务核对。";
   return {
     canCancel,
     canReturn,

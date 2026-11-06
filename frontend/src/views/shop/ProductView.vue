@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useCommerceMode } from "../../services/commerceMode";
+const { production } = useCommerceMode();
 import { computed, ref, watch, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -235,13 +237,21 @@ async function toggleFavorite() {
           <details>
             <summary>配送与收货</summary>
             <p>
-              配送费按收货省份和配送规则核算，以结算页报价为准。提交订单后，可在管理端填写模拟快递信息并发货；不会产生真实包裹。
+              {{
+                production
+                  ? "配送费按收货省份和配送规则核算，以结算页报价为准。商家寄件后登记实际运单，可在订单详情查看物流。"
+                  : "配送费按收货省份和配送规则核算，以结算页报价为准。提交订单后，可在管理端填写模拟快递信息并发货；不会产生真实包裹。"
+              }}
             </p>
           </details>
           <details>
             <summary>退换与售后</summary>
             <p>
-              已付款订单可以申请售后。未发货订单审核后退款，已发货订单需退货确认后退款。所有处理均为本地模拟。
+              {{
+                production
+                  ? "已付款订单可以申请售后。未发货订单审核后发起渠道退款，已发货订单需退货确认后退款；以渠道最终结果为准。"
+                  : "已付款订单可以申请售后。未发货订单审核后退款，已发货订单需退货确认后退款。所有处理均为本地模拟。"
+              }}
             </p>
           </details>
         </div>

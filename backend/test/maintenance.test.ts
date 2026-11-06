@@ -209,10 +209,14 @@ describe("backup and persistent recovery jobs", () => {
       oldConfirm = process.env.CONFIRM_RESTORE;
     try {
       sql
-        .prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)")
+        .prepare(
+          "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)",
+        )
         .run("kept", "kept", "Kept", "user", "password-hash", 1);
       sql
-        .prepare("INSERT INTO sessions VALUES(?,?,?)")
+        .prepare(
+          "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES(?,?,?)",
+        )
         .run("token-hash", "kept", Date.now() + 86400000);
       const db = readDatabase(sql);
       db.products[0]!.name = "backed-up catalogue";

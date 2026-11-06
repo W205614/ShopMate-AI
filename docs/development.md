@@ -10,6 +10,8 @@
 
 标准 Dockerfile 支持构建参数 `ALPINE_MIRROR`，默认使用 Alpine 官方 CDN。本机遇到该 CDN 的 APK 索引 I/O 错误时，可在 `.env` 显式设置 `ALPINE_MIRROR=https://mirrors.aliyun.com/alpine`，再执行正常构建；该站列于 [Alpine 官方镜像列表](https://mirrors.alpinelinux.org/)。参数只替换源地址前缀，保留基础镜像对应发行版路径、包签名校验及安全更新，不自动切源或无限重试。CI 未配置该参数时仍使用默认 CDN。
 
+若已定位 `npm ci` 的某个依赖下载持续 `ECONNRESET`，先核对具体 tarball URL、HTTPS 可达性和原锁文件的 integrity。两份 Dockerfile 另提供仅构建期的 `NPM_REGISTRY`，默认 `https://registry.npmjs.org`，可显式运行 `docker compose build --build-arg NPM_REGISTRY=https://registry.npmmirror.com`。它沿用 [npm 的 registry 覆盖规则](https://docs.npmjs.com/cli/v11/using-npm/config/#replace-registry-host)，不改写锁文件的版本、resolved 或 integrity，也不关闭 TLS 校验；锁文件原有非默认 registry URL 仍按 npm 规则处理。不要通过删除锁文件、关闭校验或无限重试掩盖下载问题。正常构建与 CI 不设置该参数时继续使用默认配置。
+
 | 配置                               | 用途                                                         |
 | ---------------------------------- | ------------------------------------------------------------ |
 | `APP_PORT`                         | Docker 对外端口，默认 18086                                  |

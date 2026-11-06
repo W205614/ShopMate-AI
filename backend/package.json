@@ -11,15 +11,29 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@alicloud/dysmsapi20170525": "4.6.0",
+    "@alicloud/openapi-client": "0.4.15",
+    "@alicloud/tea-util": "1.4.11",
+    "@aws-sdk/client-s3": "3.1163.0",
+    "@prometheus-io/client": "0.16.1",
+    "alipay-sdk": "4.14.0",
+    "csv-parse": "7.0.3",
     "express": "^5.1.0",
+    "fflate": "0.8.3",
     "mammoth": "^1.13.0",
+    "nodemailer": "10.3.1",
+    "otplib": "13.6.0",
+    "qrcode": "1.5.4",
     "sharp": "^0.35.5",
     "tsx": "^4.20.0",
+    "urllib": "4.9.1",
+    "wechatpay-axios-plugin": "0.9.6",
     "zod": "^4.1.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
+    "@types/qrcode": "1.5.6",
     "jszip": "^3.10.2",
     "typescript": "~6.0.2",
     "vitest": "^5.0.5"

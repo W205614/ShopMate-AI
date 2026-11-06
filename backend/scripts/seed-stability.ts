@@ -23,7 +23,9 @@ try {
       const uid = `stability-${i}`,
         at = new Date().toISOString();
       sql
-        .prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)")
+        .prepare(
+          "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)",
+        )
         .run(
           uid,
           `stability_${i}`,

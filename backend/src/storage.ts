@@ -546,6 +546,7 @@ export function saveStoredDatabase(sql: DatabaseSync, db: Database) {
 }
 
 export interface PageOptions {
+  transactionMode?: "demo" | "production";
   page?: number;
   pageSize?: number;
   userId?: string;
@@ -594,6 +595,10 @@ export function queryPage<T>(
     pageSize = Math.min(100, Math.max(1, Math.trunc(options.pageSize ?? 20)));
   const filters: string[] = [],
     args: SQLInputValue[] = [];
+  if (domain === "ledger" && options.transactionMode) {
+    filters.push("coalesce(json_extract(data,'$.transactionMode'),'demo')=?");
+    args.push(options.transactionMode);
+  }
   for (const [key, column] of [
     ["userId", "user_id"],
     ["status", "status"],

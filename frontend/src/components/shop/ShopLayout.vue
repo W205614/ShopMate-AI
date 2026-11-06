@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   Search,
@@ -12,12 +12,21 @@ import {
 } from "lucide-vue-next";
 import { queryText } from "../../domain/catalogue";
 import { useShop } from "../../stores/shop";
+import { productionApi } from "../../services/production";
 import "../../styles/shop.css";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter(),
   search = ref(queryText(route.query.q)),
   menu = ref(false);
+const mode = ref<"demo" | "production" | null>(null);
+onMounted(async () => {
+  try {
+    mode.value = (await productionApi.capabilities()).mode;
+  } catch {
+    mode.value = null;
+  }
+});
 watch(
   () => route.fullPath,
   () => {
@@ -88,15 +97,31 @@ function submit() {
         /></RouterLink>
       </div>
       <div class="footer-links">
-        <span>中文综合百货 · 单店自营演示</span
+        <span
+          >中文综合百货 ·
+          {{
+            mode === "production"
+              ? "单店自营"
+              : mode === "demo"
+                ? "单店自营演示"
+                : "商城"
+          }}</span
         ><RouterLink to="/orders">我的订单</RouterLink
         ><RouterLink to="/after-sales">售后服务</RouterLink
         ><RouterLink to="/credits">图片来源与许可</RouterLink
+        ><RouterLink to="/policies/privacy">隐私政策</RouterLink
+        ><RouterLink to="/policies/terms">服务协议</RouterLink
         ><RouterLink to="/admin/login">管理入口</RouterLink>
       </div>
       <div class="footer-brand">SHOPMATE</div>
       <p class="footer-note">
-        所有价格、库存与业务记录仅供功能演示。不产生真实交易。
+        {{
+          mode === "production"
+            ? "商品、价格、库存与订单状态以服务端当前记录为准。"
+            : mode === "demo"
+              ? "所有价格、库存与业务记录仅供功能演示。不产生真实交易。"
+              : "请在订单页核对交易状态，或联系客服。"
+        }}
       </p>
     </footer>
     <RouterLink

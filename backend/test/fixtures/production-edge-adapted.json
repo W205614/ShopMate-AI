@@ -1,0 +1,147 @@
+{
+	"admin": {
+		"disabled": true
+	},
+	"apps": {
+		"http": {
+			"servers": {
+				"srv0": {
+					"listen": [
+						":443"
+					],
+					"routes": [
+						{
+							"match": [
+								{
+									"host": [
+										"shopmate.example"
+									]
+								}
+							],
+							"handle": [
+								{
+									"handler": "subroute",
+									"routes": [
+										{
+											"handle": [
+												{
+													"handler": "headers",
+													"response": {
+														"deferred": true,
+														"delete": [
+															"X-Powered-By"
+														],
+														"set": {
+															"Strict-Transport-Security": [
+																"max-age=31536000"
+															]
+														}
+													}
+												},
+												{
+													"encodings": {
+														"gzip": {},
+														"zstd": {}
+													},
+													"handler": "encode",
+													"prefer": [
+														"zstd",
+														"gzip"
+													]
+												},
+												{
+													"handler": "subroute",
+													"routes": [
+														{
+															"handle": [
+																{
+																	"handler": "static_response",
+																	"status_code": 404
+																}
+															],
+															"match": [
+																{
+																	"path": [
+																		"/api/internal/*",
+																		"/metrics"
+																	]
+																}
+															]
+														},
+														{
+															"handle": [
+																{
+																	"body": "商城正在维护，请稍后重试。",
+																	"handler": "static_response",
+																	"status_code": 503
+																}
+															],
+															"match": [
+																{
+																	"file": {
+																		"root": "/srv/maintenance",
+																		"try_files": [
+																			"active"
+																		]
+																	}
+																}
+															]
+														},
+														{
+															"handle": [
+																{
+																	"handler": "reverse_proxy",
+																	"headers": {
+																		"request": {
+																			"set": {
+																				"X-Forwarded-Proto": [
+																					"https"
+																				]
+																			}
+																		}
+																	},
+																	"upstreams": [
+																		{
+																			"dial": "web:80"
+																		}
+																	]
+																}
+															]
+														}
+													]
+												}
+											]
+										}
+									]
+								}
+							],
+							"terminal": true
+						}
+					]
+				}
+			}
+		},
+		"tls": {
+			"automation": {
+				"policies": [
+					{
+						"subjects": [
+							"shopmate.example"
+						],
+						"issuers": [
+							{
+								"email": "ops@example.com",
+								"module": "acme"
+							},
+							{
+								"ca": "https://acme.zerossl.com/v2/DV90",
+								"email": "ops@example.com",
+								"module": "acme"
+							}
+						]
+					}
+				]
+			}
+		}
+	}
+}

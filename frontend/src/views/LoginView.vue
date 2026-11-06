@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useShop } from "../stores/shop";
+import { confirmSession, refreshState, request } from "../services/repository";
+import type { Session } from "../domain/types";
+import ProductionIdentity from "../components/production/ProductionIdentity.vue";
+import AdminMfa from "../components/production/AdminMfa.vue";
 const route = useRoute(),
   router = useRouter(),
   shop = useShop();
@@ -15,12 +19,29 @@ const username = ref(""),
   password = ref(""),
   error = ref(""),
   busy = ref(false);
+const production = ref<boolean | null>(null),
+  configError = ref("");
+const mfa = ref<{ enrollment: boolean } | null>(null);
+async function loadAuthConfiguration() {
+  production.value = null;
+  configError.value = "";
+  try {
+    production.value = (
+      await request<{ production: boolean }>("/api/auth/production")
+    ).production;
+  } catch (cause) {
+    configError.value =
+      cause instanceof Error ? cause.message : "登录配置无法读取";
+  }
+}
+onMounted(loadAuthConfiguration);
 watch(
   () => route.fullPath,
   () => {
     error.value = "";
     password.value = "";
     confirmation.value = "";
+    mfa.value = null;
   },
 );
 async function login() {
@@ -32,6 +53,21 @@ async function login() {
   }
   busy.value = true;
   try {
+    if (production.value && role.value === "admin") {
+      const challenge = await request<{
+        mfaRequired: boolean;
+        enrollment: boolean;
+      }>("/api/auth/login", {
+        role: "admin",
+        username: username.value.trim(),
+        password: password.value,
+      });
+      password.value = "";
+      if (challenge.mfaRequired !== true)
+        throw new Error("服务端未返回管理验证挑战，请重新登录");
+      mfa.value = { enrollment: challenge.enrollment };
+      return;
+    }
     if (registering.value)
       await shop.register({
         username: username.value.trim(),
@@ -39,26 +75,43 @@ async function login() {
         password: password.value,
       });
     else await shop.login(role.value, username.value.trim(), password.value);
-    const redirect =
-      typeof route.query.redirect === "string" ? route.query.redirect : "";
-    const safe =
-      redirect.startsWith("/") &&
-      !redirect.startsWith("//") &&
-      !redirect.includes("\\") &&
-      !redirect.startsWith("/login") &&
-      !redirect.startsWith("/register") &&
-      !redirect.startsWith("/admin/login") &&
-      (role.value === "admin"
-        ? redirect.startsWith("/admin")
-        : !redirect.startsWith("/admin"));
-    await router.replace(
-      safe ? redirect : role.value === "admin" ? "/admin" : "/",
-    );
+    await redirectAfterLogin();
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "登录失败";
   } finally {
     busy.value = false;
   }
+}
+async function authenticated(session: Session) {
+  confirmSession(role.value, session);
+  await refreshState(role.value);
+  await redirectAfterLogin();
+}
+async function restartMfa() {
+  try {
+    await request("/api/auth/mfa/cancel", {});
+    mfa.value = null;
+  } catch (cause) {
+    error.value =
+      cause instanceof Error ? cause.message : "未能取消验证，请重试";
+  }
+}
+async function redirectAfterLogin() {
+  const redirect =
+    typeof route.query.redirect === "string" ? route.query.redirect : "";
+  const safe =
+    redirect.startsWith("/") &&
+    !redirect.startsWith("//") &&
+    !redirect.includes("\\") &&
+    !redirect.startsWith("/login") &&
+    !redirect.startsWith("/register") &&
+    !redirect.startsWith("/admin/login") &&
+    (role.value === "admin"
+      ? redirect.startsWith("/admin")
+      : !redirect.startsWith("/admin"));
+  await router.replace(
+    safe ? redirect : role.value === "admin" ? "/admin" : "/",
+  );
 }
 </script>
 <template>
@@ -90,7 +143,32 @@ async function login() {
       <p class="demo-note">综合百货 · 你的日常好物</p>
     </section>
     <section class="auth-form-area">
-      <form class="auth-form" @submit.prevent="login">
+      <div v-if="production === null" class="auth-form">
+        <p v-if="configError" role="alert">{{ configError }}</p>
+        <p v-else role="status">正在读取登录配置…</p>
+        <button
+          v-if="configError"
+          class="button"
+          @click="loadAuthConfiguration"
+        >
+          重新读取
+        </button>
+      </div>
+      <div v-else-if="production && role === 'user'" class="auth-form">
+        <ProductionIdentity
+          :registering="registering"
+          @authenticated="authenticated"
+        />
+      </div>
+      <div v-else-if="mfa" class="auth-form">
+        <AdminMfa
+          :enrollment="mfa.enrollment"
+          @authenticated="authenticated"
+          @restart="restartMfa"
+        />
+        <p v-if="error" role="alert" class="auth-error">{{ error }}</p>
+      </div>
+      <form v-else class="auth-form" @submit.prevent="login">
         <h2>
           {{
             role === "admin"

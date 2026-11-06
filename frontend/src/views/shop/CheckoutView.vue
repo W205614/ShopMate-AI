@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useCommerceMode } from "../../services/commerceMode";
+const { production } = useCommerceMode();
 import { computed, ref, watch, onUnmounted, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useShop } from "../../stores/shop";
@@ -609,7 +611,11 @@ watch(
           {{ quoting ? "正在更新报价…" : "重新获取报价" }}
         </button>
         <p class="secondary">
-          下单后 30 分钟内完成模拟支付。最终库存由服务端在付款时校验。
+          {{
+            production
+              ? "请在下单后30分钟内付款。超时后将核对渠道关单结果，再释放库存预占。"
+              : "下单后 30 分钟内完成模拟支付。最终库存由服务端在付款时校验。"
+          }}
         </p>
       </aside>
     </div>

@@ -1,0 +1,22 @@
+[Unit]
+Description=ShopMate read-only health monitor
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shopmate
+Group=shopmate
+WorkingDirectory=/opt/shopmate-ai/backend
+EnvironmentFile=/etc/shopmate-ai/monitor.env
+ExecStart=/usr/bin/node --import tsx scripts/monitor.ts
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/shopmate-ai/runtime
+
+[Install]
+WantedBy=multi-user.target

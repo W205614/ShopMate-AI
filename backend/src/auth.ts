@@ -12,6 +12,7 @@ import { readDatabase, transaction, writeDatabase } from "./database";
 import { BoundedQueue, ensureRuntimeSchema } from "./runtime";
 import { grants, isStaffRole } from "./permissions";
 import type { StaffRole } from "../../shared/domain/operations";
+import { shopMode } from "./production/config";
 
 import { HttpError } from "./errors";
 export { HttpError } from "./errors";
@@ -78,9 +79,15 @@ export function findSession(
   const row = sql
     .prepare(
       `SELECT a.id, a.name, a.role FROM sessions s JOIN accounts a ON a.id=s.account_id
-    WHERE s.token_hash=? AND s.expires_at>? AND a.role=?`,
+    WHERE s.token_hash=? AND s.expires_at>? AND a.role=? AND a.active=1
+      AND (?=0 OR s.mfa_verified=1)`,
     )
-    .get(tokenHash(tokenFrom(req, role)), Date.now(), role);
+    .get(
+      tokenHash(tokenFrom(req, role)),
+      Date.now(),
+      role,
+      role === "admin" && shopMode() === "production" ? 1 : 0,
+    );
   if (!row) return null;
   const session = row as unknown as Session;
   if (role === "admin") {
@@ -108,7 +115,9 @@ export function issueSession(
       .prepare("DELETE FROM sessions WHERE token_hash=? OR expires_at<=?")
       .run(tokenHash(tokenFrom(req, account.role)), Date.now());
     sql
-      .prepare("INSERT INTO sessions VALUES (?, ?, ?)")
+      .prepare(
+        "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES (?, ?, ?)",
+      )
       .run(tokenHash(token), account.id, Date.now() + ttl);
   });
   res.cookie(cookieName(account.role), token, {
@@ -173,7 +182,9 @@ export async function createAccount(
     )
       throw new HttpError(409, "该账号已被注册");
     sql
-      .prepare("INSERT INTO accounts VALUES (?, ?, ?, ?, ?, ?)")
+      .prepare(
+        "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
       .run(
         account.id,
         account.username,

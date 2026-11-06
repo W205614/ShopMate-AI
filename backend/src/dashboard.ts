@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Order, Product, Session } from "../../shared/domain/types";
 import { queryPage, queryRecord } from "./database";
 import { permits } from "./permissions";
+import { shopMode } from "./production/config";
 import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
 
 export function dashboard(sql: DatabaseSync, session: Session) {
@@ -17,7 +18,7 @@ export function dashboard(sql: DatabaseSync, session: Session) {
   if (canFinance)
     for (const row of sql
       .prepare(
-        "SELECT amount,json_extract(data,'$.type') AS type,created_at FROM biz_ledger",
+        `SELECT amount,json_extract(data,'$.type') AS type,created_at FROM biz_ledger${shopMode() === "production" ? " WHERE json_extract(data,'$.transactionMode')='production'" : ""}`,
       )
       .iterate() as Iterable<{
       amount: number;

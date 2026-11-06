@@ -17,7 +17,9 @@ it("password maintenance revokes sessions and records an atomic audit without cr
       "admin",
     );
     sql
-      .prepare("INSERT INTO sessions VALUES (?,?,?)")
+      .prepare(
+        "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES (?,?,?)",
+      )
       .run("old-session", account.id, Date.now() + 60000);
     sql.close();
     await promisify(execFile)(

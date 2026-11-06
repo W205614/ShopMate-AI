@@ -247,7 +247,7 @@ try {
     foreignKeys:
       baseline.prepare("PRAGMA foreign_key_check").all().length === 0 &&
       live.prepare("PRAGMA foreign_key_check").all().length === 0,
-    currentVersion: current.meta.version === 4,
+    currentVersion: current.meta.version === 5,
   };
   console.log(
     JSON.stringify(

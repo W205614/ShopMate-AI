@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useCommerceMode } from "../../services/commerceMode";
+const { production } = useCommerceMode();
 import CollectionPager from "../../components/shop/CollectionPager.vue";
 import { computed, reactive } from "vue";
 import { useShop } from "../../stores/shop";
@@ -20,7 +22,13 @@ const returns = reactive<Record<string, { carrier: string; tracking: string }>>(
   {},
 );
 function returnForm(id: string) {
-  return returns[id] ?? (returns[id] = { carrier: "模拟快递", tracking: "" });
+  return (
+    returns[id] ??
+    (returns[id] = {
+      carrier: production.value ? "顺丰速运" : "模拟快递",
+      tracking: "",
+    })
+  );
 }
 function itemName(orderId: string, itemId: string) {
   const i = shop.myOrders
@@ -99,12 +107,14 @@ function submitReturn(id: string) {
         >
           <div class="form-two">
             <label
-              >模拟退货承运商<input
+              >{{ production ? "退货承运商" : "模拟退货承运商"
+              }}<input
                 v-model.trim="returnForm(a.id).carrier"
                 required
                 maxlength="60" /></label
             ><label
-              >模拟退货单号<input
+              >{{ production ? "退货单号" : "模拟退货单号"
+              }}<input
                 v-model.trim="returnForm(a.id).tracking"
                 required
                 maxlength="80"

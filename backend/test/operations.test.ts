@@ -125,13 +125,19 @@ describe("operating commands and scoped reads", () => {
       { headers: { Cookie: cookie } },
     );
     expect((await lookup.json()).result).toEqual(result);
-    expect(
-      (
-        await fetch(base + "/api/admin/reconciliation", {
-          headers: { Cookie: cookie },
-        })
-      ).status,
-    ).toBe(200);
+    const internalReport = await fetch(base + "/api/admin/reconciliation", {
+      headers: { Cookie: cookie },
+    });
+    expect(internalReport.status).toBe(200);
+    expect(await internalReport.json()).toMatchObject({ balanced: true });
+    const channelReports = await fetch(
+      base + "/api/admin/channel-reconciliation",
+      {
+        headers: { Cookie: cookie },
+      },
+    );
+    expect(channelReports.status).toBe(200);
+    expect(await channelReports.json()).toMatchObject({ items: [], total: 0 });
   });
   it("enforces employee permissions, prevents last-owner removal and revokes changed staff sessions", async () => {
     const staff = (

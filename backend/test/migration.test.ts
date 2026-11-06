@@ -57,10 +57,14 @@ describe("v1 业务状态升级", () => {
     let sql = legacyFile(path, old);
     try {
       sql
-        .prepare("INSERT INTO accounts VALUES (?, ?, ?, ?, ?, ?)")
+        .prepare(
+          "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
         .run("u1", "lin", "旧用户", "user", "kept-hash", 1000);
       sql
-        .prepare("INSERT INTO sessions VALUES (?, ?, ?)")
+        .prepare(
+          "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES (?, ?, ?)",
+        )
         .run("kept-token", "u1", Date.now() + 86400000);
       sql.close();
       copyFileSync(path, join(directory, "backup.sqlite"));
@@ -105,7 +109,7 @@ describe("v1 业务状态升级", () => {
   });
   it("拒绝未来版本状态，避免旧程序覆盖新结构", () => {
     const db = createSeed();
-    db.version = 5;
+    db.version = 6;
     const before = structuredClone(db);
     expect(() => migrateDatabase(db)).toThrow("版本高于");
     expect(db).toEqual(before);
@@ -117,17 +121,21 @@ describe("v1 业务状态升级", () => {
     let sql = legacyFile(path, legacy);
     try {
       sql
-        .prepare("INSERT INTO accounts VALUES (?, ?, ?, ?, ?, ?)")
+        .prepare(
+          "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
         .run("u1", "lin", "林小满", "user", "retained-password-hash", 1000);
       sql
-        .prepare("INSERT INTO sessions VALUES (?, ?, ?)")
+        .prepare(
+          "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES (?, ?, ?)",
+        )
         .run("retained-token-hash", "u1", Date.now() + 86400000);
       sql.close();
       copyFileSync(path, join(directory, "backup.sqlite"));
       const start = Date.now();
       sql = openDatabase(path);
       const migrated = readDatabase(sql);
-      expect(migrated.version).toBe(4);
+      expect(migrated.version).toBe(5);
       expect(migrated.orders.map((o) => o.total)).toEqual(
         legacy.orders.map((o) => o.total),
       );

@@ -48,9 +48,7 @@ test("商品和分类保存中阻止关闭弹窗，旧响应不会关闭新的�
     await page.unroute(`**/api/actions/${method}`);
   }
 });
-test("选图预检在 FileReader 前拒绝数量和总量超限并保留原图", async ({
-  page,
-}) => {
+test("选图预检在读取文件前拒绝数量和总量超限并保留原图", async ({ page }) => {
   await page.goto("/admin/products");
   await page
     .locator(".el-table__body-wrapper tbody tr")
@@ -60,13 +58,13 @@ test("选图预检在 FileReader 前拒绝数量和总量超限并保留原图",
   const dialog = page.getByRole("dialog", { name: "编辑商品" });
   const upload = page.getByLabel("上传商品图片", { exact: true });
   await page.evaluate(() => {
-    const original = FileReader.prototype.readAsDataURL;
+    const original = File.prototype.arrayBuffer;
     document.documentElement.dataset.imageReads = "0";
-    FileReader.prototype.readAsDataURL = function (blob) {
+    File.prototype.arrayBuffer = function () {
       document.documentElement.dataset.imageReads = String(
         Number(document.documentElement.dataset.imageReads) + 1,
       );
-      original.call(this, blob);
+      return original.call(this);
     };
   });
   const file = await png(page);
@@ -131,13 +129,14 @@ test("图片读取和解码失败保留草稿并能重试，保存失败不丢�
   await expect(dialog.getByRole("alert")).toBeVisible();
   await expect(dialog.getByAltText("商品图片预览")).toHaveCount(1);
   await page.evaluate(() => {
-    const original = FileReader.prototype.readAsDataURL;
+    const original = File.prototype.arrayBuffer;
     let fail = true;
-    FileReader.prototype.readAsDataURL = function (blob) {
+    File.prototype.arrayBuffer = function () {
       if (fail) {
         fail = false;
-        queueMicrotask(() => this.dispatchEvent(new Event("error")));
-      } else original.call(this, blob);
+        return Promise.reject(new Error("读取图片失败，请重新选择"));
+      }
+      return original.call(this);
     };
   });
   const file = await png(page);
@@ -190,6 +189,27 @@ test("图片读取和解码失败保留草稿并能重试，保存失败不丢�
   expect(writes).toBe(2);
 });
 test("分类创建修改支持三种可解码图片，删除仍保护关联商品", async ({ page }) => {
+  async function expectStoredImage() {
+    const db = (await readSnapshot(page.request, "admin")).db;
+    const source = db.categories.find(
+      (category: { name: string }) => category.name === "图片分类验收",
+    ).image as string;
+    expect(source).toMatch(/^\/api\/assets\/[\da-f-]{36}$/);
+    const response = await page.request.get(source);
+    expect(response.ok()).toBe(true);
+    expect(response.headers()["content-type"]).toBe("image/webp");
+    const stored = await response.body();
+    expect(stored.subarray(0, 4).toString()).toBe("RIFF");
+    expect(stored.subarray(8, 12).toString()).toBe("WEBP");
+    expect(
+      await page.evaluate(async (url) => {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        return [image.naturalWidth, image.naturalHeight];
+      }, source),
+    ).toEqual([2, 2]);
+  }
   await page.goto("/admin/categories");
   await page.getByRole("button", { name: "新建分类", exact: true }).click();
   let dialog = page.getByRole("dialog", { name: "新建分类" });
@@ -202,6 +222,7 @@ test("分类创建修改支持三种可解码图片，删除仍保护关联商�
     .setInputFiles(await png(page));
   await dialog.getByRole("button", { name: "保存", exact: true }).click();
   await expect(dialog).not.toBeVisible();
+  await expectStoredImage();
   for (const type of ["image/jpeg", "image/webp"]) {
     const row = page
       .locator(".el-table__body-wrapper tbody tr")
@@ -219,11 +240,7 @@ test("分类创建修改支持三种可解码图片，删除仍保护关联商�
     await expect(dialog).not.toBeVisible();
     await expect(page).not.toHaveURL(/detail=/);
     await page.reload();
-    const db = (await readSnapshot(page.request, "admin")).db;
-    expect(
-      db.categories.find((c: { name: string }) => c.name === "图片分类验收")
-        .image,
-    ).toMatch(new RegExp(`^data:${type};base64,`));
+    await expectStoredImage();
   }
   const row = page
     .locator(".el-table__body-wrapper tbody tr")

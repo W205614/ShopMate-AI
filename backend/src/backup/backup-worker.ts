@@ -10,8 +10,15 @@ import {
 const [source, destination, temporaryId, replicaDirectory] =
   process.argv.slice(2);
 let reader: DatabaseSync | undefined,
-  phase: "backup" | "copy" | "verify" | "publish" | "retention" | "replica" =
-    "backup";
+  phase:
+    | "backup"
+    | "copy"
+    | "verify"
+    | "publish"
+    | "assets"
+    | "remote"
+    | "retention"
+    | "replica" = "backup";
 const releaseSnapshot = () => {
   if (reader?.isTransaction) reader.exec("ROLLBACK");
   reader?.close();
@@ -40,7 +47,45 @@ try {
     // Release WAL retention before hashing, integrity checks and retention scans.
     afterCopy: releaseSnapshot,
   });
+  const copyAssets = async (target: string) => {
+    const snapshotReader = new DatabaseSync(destination, { readOnly: true });
+    try {
+      if (
+        snapshotReader
+          .prepare(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='external_assets'",
+          )
+          .get() &&
+        snapshotReader
+          .prepare("SELECT 1 FROM external_assets WHERE status='ready' LIMIT 1")
+          .get()
+      ) {
+        const { backupAssets } = await import("../production/assets");
+        await backupAssets(snapshotReader, target + ".assets", {
+          snapshotSha256: manifest.sha256,
+        });
+      }
+    } finally {
+      snapshotReader.close();
+    }
+  };
+  phase = "assets";
+  process.send?.({ type: "phase", phase });
+  await copyAssets(destination);
   process.send?.({ type: "created", createdAt: manifest.createdAt });
+  if (process.env.BACKUP_S3_ENABLED === "true") {
+    phase = "remote";
+    process.send?.({ type: "phase", phase });
+    const { uploadRemoteBackup } = await import("../production/remote-backup");
+    const remote = await uploadRemoteBackup(destination);
+    process.send?.({
+      type: "remoteUploaded",
+      bucket: remote.bucket,
+      bundleKey: remote.bundleKey,
+      snapshotAt: manifest.createdAt,
+      sha256: remote.sha256,
+    });
+  }
   phase = "retention";
   process.send?.({ type: "phase", phase });
   // External retention delegates old-file handling to the host (for example,
@@ -53,6 +98,7 @@ try {
     const replica = copyBackupPair(destination, replicaDirectory, {
       temporaryId,
     });
+    await copyAssets(replica.path);
     process.send?.({
       type: "replicated",
       copiedAt: replica.verifiedAt,

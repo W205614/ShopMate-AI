@@ -73,11 +73,13 @@ it("rejects invalid images at the request boundary without changing persisted da
     product = before.products[0]!;
   sql
     .prepare(
-      "INSERT INTO accounts VALUES ('admin','admin','管理员','admin','synthetic',1)",
+      "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES ('admin','admin','管理员','admin','synthetic',1)",
     )
     .run();
   sql
-    .prepare("INSERT INTO sessions VALUES (?, 'admin', ?)")
+    .prepare(
+      "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES (?, 'admin', ?)",
+    )
     .run(tokenHash("image-boundary"), Date.now() + 60000);
   const app = await createApp(sql, { origins: [] });
   sql.prepare("INSERT INTO staff_access VALUES ('admin','owner',1)").run();

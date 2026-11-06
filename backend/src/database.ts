@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import type { Database } from "../../shared/domain/types";
 import { createSeed } from "../../shared/domain/seed";
 import { migrateDatabase } from "./migration";
+import { shopMode } from "./production/config";
 import {
   createStorageSchema,
   loadStoredDatabase,
@@ -24,6 +25,16 @@ export function initialDatabase(): Database {
   db.conversations = [];
   db.favorites = {};
   db.ledger = [];
+  if (shopMode() === "production") {
+    db.categories = [];
+    db.products = [];
+    db.faqs = [];
+    db.coupons = [];
+    db.promotions = [];
+    db.suppliers = [];
+    db.shippingRules = [];
+    db.settings = { name: "商城", slogan: "", notice: "" };
+  }
   db.inventory = db.products.flatMap((p) =>
     p.skus.map((s) => ({
       id: `initial-${s.id}`,
@@ -48,16 +59,34 @@ export function openDatabase(path: string) {
     CREATE TABLE IF NOT EXISTS accounts (
       id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
       name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('user','admin')),
-      password_hash TEXT NOT NULL, created_at INTEGER NOT NULL
+      password_hash TEXT NOT NULL, created_at INTEGER NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1))
     );
     CREATE TABLE IF NOT EXISTS sessions (
       token_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-      expires_at INTEGER NOT NULL
+      expires_at INTEGER NOT NULL,
+      mfa_verified INTEGER NOT NULL DEFAULT 0 CHECK(mfa_verified IN (0,1))
     );
     CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
     CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL);
   `);
+  for (const [table, column, definition] of [
+    ["accounts", "active", "INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1))"],
+    [
+      "sessions",
+      "mfa_verified",
+      "INTEGER NOT NULL DEFAULT 0 CHECK(mfa_verified IN (0,1))",
+    ],
+  ]) {
+    if (
+      !sql
+        .prepare(`PRAGMA table_info(${table})`)
+        .all()
+        .some((entry) => entry.name === column)
+    )
+      sql.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
   sql
     .prepare("INSERT OR IGNORE INTO state VALUES (1, ?)")
     .run(JSON.stringify(initialDatabase()));
@@ -83,7 +112,7 @@ export function openDatabase(path: string) {
         const db = readDatabase(sql);
         if (migrateDatabase(db)) writeDatabase(sql, db);
       }
-      // Preserve the exact legacy bytes as migration evidence; business writes never touch them.
+      // Preserve legacy migration evidence. Account closure alone may redact its personal fields.
       sql.exec(`CREATE TRIGGER IF NOT EXISTS legacy_state_immutable_update BEFORE UPDATE ON state BEGIN SELECT RAISE(ABORT,'legacy state is read-only migration evidence'); END;
         CREATE TRIGGER IF NOT EXISTS legacy_state_immutable_delete BEFORE DELETE ON state BEGIN SELECT RAISE(ABORT,'legacy state is read-only migration evidence'); END;`);
     });

@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 import { resolve } from "node:path";
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "production-*.spec.ts",
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
@@ -19,10 +20,20 @@ export default defineConfig({
     ? undefined
     : [
         {
-          command: "npm --prefix ../backend start",
+          command: "node --import tsx src/index.ts",
+          cwd: resolve("../backend"),
           url: "http://127.0.0.1:3001/api/health",
           reuseExistingServer: false,
           env: {
+            SHOP_MODE: "demo",
+            PAYMENT_CHANNELS: "",
+            SMTP_HOST: "",
+            SMS_ENABLED: "false",
+            KUAIDI100_ENABLED: "false",
+            BACKUP_S3_ENABLED: "false",
+            LLM_API_KEY: "",
+            EMBEDDING_API_KEY: "",
+            RERANKER_API_KEY: "",
             DATABASE_PATH: resolve("../backend/.e2e/shopmate.sqlite"),
             ADMIN_PASSWORD: "TestAdmin123!",
             APP_ORIGINS: "http://127.0.0.1:5173",

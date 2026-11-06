@@ -31,10 +31,14 @@ beforeEach(async () => {
     ["admin", "admin"],
   ]) {
     sql
-      .prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)")
+      .prepare(
+        "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)",
+      )
       .run(id, id, id, role, "synthetic", 1);
     sql
-      .prepare("INSERT INTO sessions VALUES(?,?,?)")
+      .prepare(
+        "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES(?,?,?)",
+      )
       .run(tokenHash(`${id}-token`), id, Date.now() + 60000);
   }
   let arrive!: () => void;

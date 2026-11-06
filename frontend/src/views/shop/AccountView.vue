@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import CollectionPager from "../../components/shop/CollectionPager.vue";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter, type LocationQuery } from "vue-router";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
@@ -18,10 +18,22 @@ import { useAction } from "../../components/shop/useAction";
 import { reviewWriteReason } from "../../domain/reviewWriteState";
 import { reviewState, reviewLabels } from "../../../../shared/domain/reviews";
 import "../../styles/account-commerce.css";
+import AccountSecurityPanel from "../../components/production/AccountSecurityPanel.vue";
+import { productionApi } from "../../services/production";
 
 const shop = useShop(),
   route = useRoute(),
   router = useRouter();
+const productionMode = ref(false),
+  productionError = ref("");
+onMounted(async () => {
+  try {
+    productionMode.value =
+      (await productionApi.capabilities()).mode === "production";
+  } catch {
+    productionError.value = "扩展账号安全状态无法读取，请刷新后重试。";
+  }
+});
 const sections = [
   ["overview", "我的收藏"],
   ["addresses", "收货地址"],
@@ -115,6 +127,31 @@ const reviewForm = reactive({
   rating: 5,
   content: "",
 });
+watch(
+  () => shop.userSession?.id,
+  () => {
+    editing.value = false;
+    Object.assign(form, {
+      id: undefined,
+      name: "",
+      phone: "",
+      region: "",
+      province: "",
+      detail: "",
+      isDefault: false,
+    });
+    Object.assign(password, { current: "", next: "", confirm: "" });
+    Object.assign(reviewForm, {
+      orderId: "",
+      orderItemId: "",
+      rating: 5,
+      content: "",
+    });
+    profileName.value = shop.user?.name ?? "";
+    error.value = "";
+    notice.value = "";
+  },
+);
 
 function selectSection(value: string) {
   const query: LocationQuery = { ...route.query, section: value };
@@ -425,6 +462,12 @@ async function deleteReview(id: string) {
         </p>
         <button class="button" :disabled="busy">修改密码并重新登录</button>
       </form>
+      <p v-if="productionError" role="alert">{{ productionError }}</p>
+      <AccountSecurityPanel
+        v-if="productionMode"
+        :key="shop.userSession?.id"
+        @closed="router.replace('/login')"
+      />
     </section>
     <section v-else-if="section === 'coupons'">
       <div class="section-heading">

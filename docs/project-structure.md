@@ -8,6 +8,7 @@
 ShopMate-AI/
 ├── README.md                 首次部署、能力边界和主要入口
 ├── .env.example              配置模板；实际凭据放在被忽略的 .env
+├── .env.production.example   独立 Linux 生产配置模板
 ├── compose.yaml              日常 API/Web 编排
 ├── Dockerfile                前端构建及 Nginx 镜像
 ├── backend/
@@ -15,6 +16,7 @@ ShopMate-AI/
 │   ├── src/                  HTTP、业务事务、SQLite、AI 与维护逻辑
 │   │   ├── ai/               客服会话、知识库、模型调用与文档工作进程
 │   │   ├── backup/           自动备份调度、状态与工作进程
+│   │   ├── production/       真实资金、账号安全、外部通知物流、图片与远端恢复
 │   │   └── reconciliation/   财务核对与只读工作进程
 │   ├── scripts/              监控、隔离验收、造数和数据核验工具
 │   ├── test/                 单元/HTTP 测试及合成 AI 文档样例
@@ -28,7 +30,7 @@ ShopMate-AI/
 ├── shared/
 │   ├── domain/               两端共享类型、API 契约、规则辅助和演示种子
 │   └── testing/              通过受限公开 API 组装验收快照的辅助代码
-├── deploy/                   Nginx 配置与独立验收 Compose 覆盖文件
+├── deploy/                   Nginx/Caddy、独立生产编排、可选监控及验收覆盖文件
 ├── scripts/                  仓库检查与宿主机维护脚本
 ├── docs/
 │   ├── README.md             当前文档、验收报告与历史记录导航
@@ -58,6 +60,7 @@ ShopMate-AI/
 4. `commerce.ts`、`commerce-rules.ts`、`stock-availability.ts`：订单、库存及售后；`catalog.ts` 管商品分类，`marketing.ts` 管营销与会员，`operations.ts` 管采购、仓储及经营管理，`dashboard.ts` 汇总经营概览，`support.ts` 管规则与人工客服。财务核对模块位于 `reconciliation/`，其中 `reconciliation.ts` 负责精确聚合与核对，`reconciliation-reader.ts`、`reconciliation-worker.ts` 将文件库核对放到独立只读进程。
 5. `ai/` 集中管理 AI 客服。`ai-support.ts`、`ai-knowledge.ts`、`ai-provider.ts`、`ai-schema.ts`：AI 会话、提案与确认、文档检索、供应商调用和结构校验；文档工作进程入口为 `ai-document-worker.ts`。`ai-answer.ts` 从服务端证据生成事实文案，`ai-budget.ts` 管理北京时间每日配额及工作进程额度协议。
 6. `runtime.ts`、`jobs.ts` 管审计、命令结果和持久化任务；`diagnostics.ts` 管受限诊断；维护命令在 `maintenance.ts`。`backup/` 下的 `automatic-backup.ts`、`backup-worker.ts`、`backup-state.ts` 管理自动备份调度、子进程和备份状态。`admin-password.ts` 是管理员密码维护入口。
+7. `production/` 管真实支付与退款、渠道对账、账号验证/MFA、商家协议、物流通知、图片资产与远端备份。读前先核对[架构边界](architecture.md)及[接口总览](api.md)，避免将演示交易入口当作真实渠道 API。
 
 沿一个功能定位相关测试即可：后端在 `backend/test/`，前端逻辑测试与源码同目录，页面流程在 `frontend/e2e/`。日常验证命令见[开发与运维](development.md#验证命令)。
 
@@ -68,6 +71,7 @@ ShopMate-AI/
 | 脚本                                                               | 用途与前提                                                                                                                        |
 | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `monitor.ts`                                                       | 宿主机健康、容器、磁盘、任务和备份观测，可单次或持续运行；配置告警与维护静默见[运行观测](monitoring.md)                           |
+| `reset-mfa.ts`                                                     | 离线管理 MFA 恢复；显式数据库、停机标记及恢复码丢失前提见[账号接入](integrations.md#邮件短信与账号验证)                           |
 | `verify-security-headers.mjs`                                      | 用 `SECURITY_BASE_URL` 指定独立本机验收入口，检查页面／资源／API／404安全头、压缩请求拒绝与后续健康；不使用账号凭据或写入业务数据 |
 | `ai-acceptance.mjs`                                                | 真实供应商 AI 验收，上传合成文档并创建账号/交易，产生模型费用；要求显式开启及独立本机端口，见[AI 验收](ai-acceptance.md)          |
 | `generate-ai-fixtures.py`                                          | 重新生成 `backend/test/fixtures/ai/` 合成样例；依赖 Pillow、python-docx、ReportLab 和脚本指定的中文字体                           |
@@ -102,6 +106,8 @@ ShopMate-AI/
 这些工具使用 Playwright，Windows 默认启动 Edge。目标地址可由 `PLAYWRIGHT_BASE_URL` 指定，参数与凭据要求以脚本为准；界面复审的历史操作入口见[归档报告](archive/ui-review.md)。
 
 根目录的 `scripts/check-docs.mjs` 是文档维护脚本：执行 `node scripts/check-docs.mjs`，检查 Git 跟踪和未忽略 Markdown 中本地 Markdown 链接及 HTML 图片/链接的目标文件是否存在，发现缺失则返回失败。它不检查锚点或外部网站可访问性。
+
+`scripts/production-preflight.mjs` 检查独立生产配置、私有文件、镜像与可选运行状态；`scripts/production-release.sh` 执行维护发布与受约束恢复；`scripts/production-edge-vex.mjs` 守护固定入口配置的临时安全评估。使用前阅读[生产指南](production.md)，这些脚本不读取或替换本机日常 `.env`。
 
 ## 部署文件如何组合
 

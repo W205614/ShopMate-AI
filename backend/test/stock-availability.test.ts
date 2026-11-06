@@ -112,10 +112,14 @@ beforeEach(async () => {
     }));
   writeDatabase(sql, seed);
   sql
-    .prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)")
+    .prepare(
+      "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)",
+    )
     .run("admin", "admin", "admin", "admin", "unused-test-hash", 1);
   sql
-    .prepare("INSERT INTO sessions VALUES(?,?,?)")
+    .prepare(
+      "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES(?,?,?)",
+    )
     .run(tokenHash("admin-token"), "admin", Date.now() + 60000);
   const app = await createApp(sql, { origins: ["http://localhost"] });
   sql.prepare("INSERT INTO staff_access VALUES('admin','owner',1)").run();

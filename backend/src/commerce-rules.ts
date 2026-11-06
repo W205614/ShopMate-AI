@@ -20,8 +20,7 @@ export function reservedStock(
       (order.id !== excludeOrderId &&
       order.inventoryPolicy === "reserved-v1" &&
       order.status === "pending" &&
-      !!order.expiresAt &&
-      order.expiresAt > at
+      (order.paymentHold || (!!order.expiresAt && order.expiresAt > at))
         ? order.items
             .filter((i) => i.productId === productId && i.skuId === skuId)
             .reduce((n, i) => n + i.quantity, 0)
@@ -79,6 +78,14 @@ export function expireOrders(db: Database, at = now(), cleanup = true) {
       order.expiresAt &&
       order.expiresAt <= at
     ) {
+      if (order.paymentHold) {
+        if (!order.cancelRequested) {
+          order.cancelRequested = true;
+          order.cancelReason = "付款超时";
+          changed = true;
+        }
+        continue;
+      }
       order.status = "cancelled";
       order.cancelledAt = at;
       order.cancelReason = "付款超时";

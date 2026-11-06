@@ -15,6 +15,8 @@ const builtIn = new Map<string, number>(
 );
 export function imageBytes(source: string): number {
   if (builtIn.has(source)) return builtIn.get(source)!;
+  // Stored assets are measured from trusted server metadata when saving the catalog.
+  if (/^\/api\/assets\/[a-f0-9-]{36}$/.test(source)) return 0;
   if (typeof source !== "string" || source.length > IMAGE_MAX_ENCODED_LENGTH)
     throw new Error("单张图片不能超过 2 MiB");
   const match =

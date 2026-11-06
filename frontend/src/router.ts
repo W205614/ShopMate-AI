@@ -71,7 +71,7 @@ const router = createRouter({
         {
           path: "orders/:id/pay",
           component: () => import("./views/shop/PaymentView.vue"),
-          meta: { title: "模拟支付", auth: "user" },
+          meta: { title: "订单支付", auth: "user" },
         },
         {
           path: "orders/:id",
@@ -112,6 +112,11 @@ const router = createRouter({
           path: "credits",
           component: () => import("./views/CreditsView.vue"),
           meta: { title: "素材与演示说明" },
+        },
+        {
+          path: "policies/:kind",
+          component: () => import("./views/shop/PolicyView.vue"),
+          meta: { title: "商家协议" },
         },
       ],
     },
@@ -181,9 +186,14 @@ const router = createRouter({
           meta: { title: "经营工作台" },
         },
         {
+          path: "production",
+          component: () => import("./views/admin/ProductionAdminView.vue"),
+          meta: { title: "生产接入" },
+        },
+        {
           path: "settings",
           component: () => import("./views/admin/SettingsAdminView.vue"),
-          meta: { title: "演示设置" },
+          meta: { title: "商城设置" },
         },
       ],
     },
@@ -253,6 +263,7 @@ export function canOpenAdminPath(path: string, permissions: string[]) {
     reviews: ["catalog", "support"],
     support: ["support"],
     knowledge: ["support"],
+    production: ["settings", "finance", "warehouse"],
     settings: ["settings"],
   };
   return (

@@ -21,6 +21,9 @@ export function ensureBackupState(sql: DatabaseSync) {
     last_success_at TEXT, last_path TEXT, last_failure_at TEXT,
     last_error_code TEXT, last_replica_at TEXT, last_replica_snapshot_at TEXT
   ); INSERT OR IGNORE INTO backup_runtime(id) VALUES(1);`);
+  sql.exec(
+    `CREATE TABLE IF NOT EXISTS production_remote_backup(id INTEGER PRIMARY KEY CHECK(id=1),bucket TEXT NOT NULL,bundle_key TEXT NOT NULL,snapshot_at TEXT NOT NULL,verified_at TEXT NOT NULL,sha256 TEXT NOT NULL)`,
+  );
 }
 
 function state(sql: DatabaseSync) {
@@ -38,6 +41,17 @@ function state(sql: DatabaseSync) {
 
 export function readBackupStatus(sql: DatabaseSync) {
   const current = state(sql);
+  const remote = sql
+    .prepare(
+      "SELECT 1 FROM sqlite_master WHERE name='production_remote_backup'",
+    )
+    .get()
+    ? sql
+        .prepare(
+          "SELECT snapshot_at,verified_at FROM production_remote_backup WHERE id=1",
+        )
+        .get()
+    : undefined;
   return {
     enabled: Boolean(process.env.BACKUP_DIR),
     replicaConfigured: Boolean(process.env.BACKUP_REPLICA_DIR),
@@ -49,7 +63,37 @@ export function readBackupStatus(sql: DatabaseSync) {
     lastReplicaSnapshotAt: current?.last_replica_snapshot_at ?? null,
     replicaKind: current?.last_replica_at ? ("filesystem-copy" as const) : null,
     offhostVerified: false,
+    remoteConfigured: process.env.BACKUP_S3_ENABLED === "true",
+    lastRemoteSnapshotAt: remote?.snapshot_at ?? null,
+    lastRemoteVerifiedAt: remote?.verified_at ?? null,
   };
+}
+
+export function recordRemoteBackup(
+  sql: DatabaseSync,
+  point: {
+    bucket: string;
+    bundleKey: string;
+    snapshotAt: string;
+    sha256: string;
+  },
+) {
+  if (
+    !Number.isFinite(Date.parse(point.snapshotAt)) ||
+    !/^[a-f0-9]{64}$/.test(point.sha256)
+  )
+    throw new Error("BACKUP_WORKER_PROTOCOL");
+  sql
+    .prepare(
+      "INSERT INTO production_remote_backup VALUES(1,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET bucket=excluded.bucket,bundle_key=excluded.bundle_key,snapshot_at=excluded.snapshot_at,verified_at=excluded.verified_at,sha256=excluded.sha256",
+    )
+    .run(
+      point.bucket,
+      point.bundleKey,
+      point.snapshotAt,
+      new Date().toISOString(),
+      point.sha256,
+    );
 }
 
 export function automaticBackupDue(sql: DatabaseSync, now = Date.now()) {

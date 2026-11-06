@@ -4,7 +4,8 @@ ARG ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine
 RUN sed -i "s#https://dl-cdn.alpinelinux.org/alpine#${ALPINE_MIRROR%/}#g" /etc/apk/repositories \
     && apk --timeout 60 add --no-cache poppler-utils
 COPY backend/package*.json ./
-RUN npm ci --omit=dev
+ARG NPM_REGISTRY=https://registry.npmjs.org
+RUN npm ci --omit=dev --registry="${NPM_REGISTRY}"
 
 FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85
 WORKDIR /app/backend

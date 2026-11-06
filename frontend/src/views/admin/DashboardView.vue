@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useCommerceMode } from "../../services/commerceMode";
+const { production } = useCommerceMode();
 import { computed, ref, watch, onUnmounted } from "vue";
 import { RouterLink } from "vue-router";
 import { useShop } from "../../stores/shop";
@@ -146,11 +148,15 @@ const ranking = computed(() =>
       <h1>经营概览</h1>
       <p>掌握生意进展，把每一笔订单照顾好。</p>
     </div>
-    <el-tag effect="plain">模拟交易实时数据</el-tag>
+    <el-tag effect="plain">{{
+      production ? "生产流水汇总" : "模拟交易实时数据"
+    }}</el-tag>
   </div>
   <div class="admin-kpis">
     <div v-if="permitted('finance')" class="admin-kpi">
-      <div class="admin-kpi-label">累计模拟收款</div>
+      <div class="admin-kpi-label">
+        {{ production ? "累计渠道收款" : "累计模拟收款" }}
+      </div>
       <div class="admin-kpi-value">{{ money(income) }}</div>
       <span class="admin-kpi-note">来自支付流水，不含未付款订单</span>
     </div>
@@ -164,7 +170,9 @@ const ranking = computed(() =>
     <div v-if="permitted('finance')" class="admin-kpi">
       <div class="admin-kpi-label">累计退款</div>
       <div class="admin-kpi-value">{{ money(refund) }}</div>
-      <span class="admin-kpi-note">已完成的模拟退款</span>
+      <span class="admin-kpi-note">{{
+        production ? "渠道已确认的退款" : "已完成的模拟退款"
+      }}</span>
     </div>
     <div class="admin-kpi">
       <div class="admin-kpi-label">在售商品</div>

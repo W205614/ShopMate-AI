@@ -36,8 +36,38 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
         working-directory: backend
+      - name: Check production deployment syntax
+        working-directory: .
+        run: |
+          node --check scripts/production-preflight.mjs
+          node --check scripts/production-edge-vex.mjs
+          bash -n scripts/production-release.sh
+          PRODUCTION_ENV_FILE="$GITHUB_WORKSPACE/.env.production.example" docker compose --env-file .env.production.example -f deploy/compose.production.yaml config --quiet
+      - name: Start isolated SMTP and S3 protocol services
+        working-directory: .
+        run: |
+          docker compose -p shopmate-external-ci -f deploy/compose.external-acceptance.yaml up -d
+          node --input-type=module <<'JS'
+          const endpoints = ['http://127.0.0.1:18126/readyz', 'http://127.0.0.1:18127/'];
+          for (const endpoint of endpoints) {
+            let ready = false;
+            for (let attempt = 0; attempt < 45; attempt++) {
+              try { const response = await fetch(endpoint, {signal: AbortSignal.timeout(2000)}); await response.body?.cancel(); if(response.ok) { ready=true; break; } } catch {}
+              await new Promise(resolve=>setTimeout(resolve,1000));
+            }
+            if(!ready) throw new Error('Isolated external service did not become ready');
+          }
+          JS
       - run: npm test
         working-directory: backend
+        env:
+          MAILPIT_SMTP_PORT: "18125"
+          MAILPIT_API_URL: http://127.0.0.1:18126
+          S3MOCK_ENDPOINT: http://127.0.0.1:18127
+      - name: Stop isolated SMTP and S3 protocol services
+        if: always()
+        working-directory: .
+        run: docker compose -p shopmate-external-ci -f deploy/compose.external-acceptance.yaml down
       - run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
         working-directory: backend
       - run: npm run typecheck
@@ -54,6 +84,8 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Verify production account and payment browser flows over isolated HTTPS
+        run: npx playwright test --config playwright.production.config.ts
       - name: Build and start isolated Docker deployment
         working-directory: .
         env:
@@ -62,6 +94,11 @@ jobs:
           APP_ORIGINS: http://127.0.0.1:18087
           VCS_REF: ${{ github.sha }}
         run: docker compose -p shopmate-auth-ci -f compose.yaml -f deploy/compose.acceptance.yaml up -d --build --wait
+      - name: Validate production edge and proxy configuration
+        working-directory: .
+        run: |
+          docker run --rm --network none -e DOMAIN=shop.example.test -e ACME_EMAIL=ops@example.test --mount "type=bind,source=$GITHUB_WORKSPACE/deploy/Caddyfile,target=/etc/caddy/Caddyfile,readonly" caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3 caddy validate --config /etc/caddy/Caddyfile
+          docker run --rm --network none -e CADDY_IP=10.254.86.2 --mount "type=bind,source=$GITHUB_WORKSPACE/deploy/nginx.production.conf.template,target=/etc/nginx/templates/default.conf.template,readonly" shopmate-ai-web:acceptance nginx -t
       - name: Scan complete API image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -79,6 +116,15 @@ jobs:
           output: web-vulnerabilities.json
           exit-code: "0"
           skip-setup-trivy: true
+      - name: Scan production HTTPS edge image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3
+          scanners: vuln
+          format: json
+          output: edge-vulnerabilities.json
+          exit-code: "0"
+          skip-setup-trivy: true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -92,6 +138,30 @@ jobs:
         run: |
           trivy image --scanners vuln --skip-db-update --severity HIGH,CRITICAL --exit-code 1 shopmate-ai-api:acceptance
           trivy image --scanners vuln --skip-db-update --severity HIGH,CRITICAL --exit-code 1 shopmate-ai-web:acceptance
+      - name: Install the verified native edge VEX scanner
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.76.2
+      - name: Assess edge HIGH gate with verified configuration and native OpenVEX
+        working-directory: .
+        env:
+          TRIVY_CACHE_DIR: ${{ github.workspace }}/.cache/trivy
+        run: |
+          set -euo pipefail
+          edge_vex_dir=$(mktemp -d "$RUNNER_TEMP/shopmate-edge-vex.XXXXXX")
+          node scripts/production-edge-vex.mjs --output "$edge_vex_dir/edge.openvex.json"
+          cp "$edge_vex_dir/edge.openvex.json" edge-config.openvex.json
+          cp "$edge_vex_dir/edge.openvex.json.evidence.json" edge-config-evidence.json
+          cp "$edge_vex_dir/edge.openvex.json.adapted.json" edge-config-adapted.json
+          trivy image --scanners vuln --skip-db-update --severity HIGH,CRITICAL --exit-code 1 --vex "$edge_vex_dir/edge.openvex.json" --format json --output edge-assessed-vulnerabilities.json caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edge-configuration-vex-assessment
+          path: |
+            edge-config*.json
+            edge-assessed-vulnerabilities.json
+          if-no-files-found: ignore
       - name: Verify proxy security headers and compressed request rejection
         working-directory: .
         env:
@@ -193,6 +263,7 @@ jobs:
             frontend/test-results-operations
             frontend/test-results-maintenance
             frontend/test-results-ai-task
+            frontend/test-results-production
       - name: Export validated container images
         working-directory: .
         run: docker image save shopmate-ai-api:acceptance shopmate-ai-web:acceptance | gzip > validated-images.tar.gz

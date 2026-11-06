@@ -1,0 +1,448 @@
+{
+  "format": 1,
+  "date": "2026-11-06",
+  "source": {
+    "branch": "codex/production-single-store",
+    "baseHead": "8cfdc87b335f3507ef5d5d7422ba561d7b66811b",
+    "dirty": true,
+    "revisionLabel": "candidate-20261106",
+    "remoteCi": "not-run"
+  },
+  "localChecks": {
+    "fullBackend": {
+      "filesPassed": 61,
+      "testsPassed": 353,
+      "testsSkipped": 1,
+      "skip": "Host Poppler unavailable; not counted as passed"
+    },
+    "finalH5Backend": {
+      "scope": "Final WeChat H5 checkout lifetime and original-payment recovery patch",
+      "verificationType": "Observed local execution summary; protocol peers and provider boundary fixtures, no live merchant service",
+      "checks": [
+        {
+          "command": "npm --prefix backend test -- --run test/production-h5-checkout.test.ts test/production-payment-providers.test.ts test/production-payment-regressions.test.ts",
+          "exitCode": 0,
+          "filesPassed": 3,
+          "testsPassed": 22,
+          "durationSeconds": 4.96
+        },
+        {
+          "command": "npm --prefix backend test -- --run test/production-payments.test.ts",
+          "exitCode": 0,
+          "filesPassed": 1,
+          "testsPassed": 9,
+          "durationSeconds": 3.31,
+          "rawLog": ".delivery/production-final-h5-lifecycle.log"
+        },
+        {
+          "command": "npm --prefix backend run typecheck",
+          "exitCode": 0
+        },
+        {
+          "command": "npm --prefix frontend run typecheck",
+          "exitCode": 0
+        },
+        {
+          "command": "node scripts/check-docs.mjs",
+          "exitCode": 0,
+          "files": 31,
+          "links": 194,
+          "missing": []
+        }
+      ],
+      "browserVerification": {
+        "reportedBy": "production browser acceptance owner",
+        "testsPassed": 6,
+        "durationSeconds": 28.2,
+        "rawLog": ".delivery/production-final-h5-browser.log",
+        "scope": "Isolated HTTPS browser fixture, original-payment H5 expiry renewal, fresh revision navigation and subsequent channel switching"
+      },
+      "actualMerchantVerification": "Not performed"
+    },
+    "frontendUnit": {
+      "filesPassed": 14,
+      "testsPassed": 57
+    },
+    "existingBrowser": {
+      "fullRun": {
+        "passed": 131,
+        "skipped": 1,
+        "failed": 3
+      },
+      "correctedFilesRerun": {
+        "passed": 7
+      },
+      "combinedCoverage": {
+        "passed": 134,
+        "skipped": 1
+      },
+      "singleGreenFullRun": false
+    },
+    "finalProductionBrowser": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 28.2
+    },
+    "typecheck": "passed",
+    "lint": "passed",
+    "finalRuntimeSmoke": {
+      "passed": true,
+      "container": "shopmate-production-final-h5-smoke",
+      "imageId": "sha256:04d442dfcd174afee8998f4a0ec60b6e7d5c40a7bf05aba7b4240be8d7906ef7",
+      "network": "none",
+      "publishedPorts": {},
+      "mounts": [],
+      "tmpfs": {
+        "/app/assets": "rw,uid=1000,gid=1000,mode=0700",
+        "/app/data": "rw,uid=1000,gid=1000,mode=0700"
+      },
+      "healthStatus": "ok",
+      "config": {
+        "mode": "demo",
+        "paymentChannels": [],
+        "emailEnabled": false,
+        "smsEnabled": false
+      },
+      "version": {
+        "schema_version": 1,
+        "version": 5
+      },
+      "poppler": [
+        {
+          "command": "pdfinfo",
+          "status": 0,
+          "version": "pdfinfo version 25.12.0"
+        },
+        {
+          "command": "pdftotext",
+          "status": 0,
+          "version": "pdftotext version 25.12.0"
+        },
+        {
+          "command": "pdftoppm",
+          "status": 0,
+          "version": "pdftoppm version 25.12.0"
+        }
+      ],
+      "boundary": "Fresh isolated demo runtime startup and binary -v checks only; not a production public deployment or the skipped host PDF-processing unit test"
+    },
+    "historicalV4Recovery": {
+      "verified": true,
+      "sourceSha256": "C4E10D96B94F32340AA43AD729B81B0E8C0D8DD0C5182844AD774C9FD111C36E",
+      "sourceBusinessVersion": 4,
+      "sourceOrders": 1000,
+      "backupVerified": true,
+      "restored": true,
+      "originalRetained": true,
+      "readonlyMountAttempt": "SQLite WAL source could not open read-only bind without shared-memory sidecar; retained failure evidence, retried on independent copy"
+    }
+  },
+  "benchmark": {
+    "environment": {
+      "date": "2026-11-06",
+      "host": "Windows with Docker Desktop Linux engine; not a public Linux deployment",
+      "docker": {
+        "engine": "29.9.2",
+        "operatingSystem": "Docker Desktop",
+        "architecture": "x86_64",
+        "kernel": "6.18.33.2-microsoft-standard-WSL2",
+        "cpus": 12,
+        "memoryBytes": 16341671936
+      },
+      "apiMemoryLimitBytes": 1073741824,
+      "sqliteVolume": "fresh isolated Docker named volume",
+      "network": "localhost:18094 through nginx; isolated synthetic provider:3099",
+      "replica": "independent local filesystem directory on same host; offhostVerified=false",
+      "mode": "demo commerce; production provider throughput not measured",
+      "images": [
+        {
+          "id": "sha256:b781d8658e1543a5ec4df59a89d6ced68bd2d32d8df84d70c56453f295923aeb",
+          "revision": "candidate-20261106",
+          "created": "2026-11-06T09:16:57.635315416Z"
+        },
+        {
+          "id": "sha256:87085d8a7e39db6c1a6af3a6b2425ebc20c964120423905a4dc173dd593bc259",
+          "revision": "candidate-20261106",
+          "created": "2026-11-06T09:28:46.968312314Z"
+        }
+      ],
+      "sourceRevisionLabel": "candidate-20261106",
+      "actualGitHead": "8cfdc87b335f3507ef5d5d7422ba561d7b66811b",
+      "uncommittedCandidate": true
+    },
+    "result": {
+      "exitCode": 0,
+      "passed": true,
+      "profile": "production-baseline",
+      "phases": [
+        {
+          "concurrency": 20,
+          "seconds": 600,
+          "paceMs": 0,
+          "startedAt": "2026-11-06T09:32:16.849Z",
+          "endedAt": "2026-11-06T09:42:17.075Z",
+          "requests": 146990,
+          "writes": 42854,
+          "reads": 104136,
+          "errors": 0,
+          "rejected": 0,
+          "p95Ms": 171,
+          "p99Ms": 238
+        }
+      ],
+      "requests": 146990,
+      "p95Ms": 171,
+      "p99Ms": 238,
+      "completedTransactions": 4070,
+      "liveVerified": true,
+      "backupVerified": true,
+      "replicaVerified": true,
+      "replicaMatches": true,
+      "restoredVerified": true,
+      "backupDueSimulated": true,
+      "snapshot": "shopmate-daily-2026-11-06-1793957720030.sqlite",
+      "boundary": "demo commerce with synthetic AI faults; real provider adapters verified separately"
+    },
+    "invariantChecks": {
+      "live": {
+        "readOnlySnapshot": true,
+        "integrity": true,
+        "foreignKeys": true,
+        "historicalOrdersUnchanged": true,
+        "baselineCommandsPreserved": true,
+        "completedJobsPreserved": true,
+        "nonnegativeStocks": true,
+        "perSkuStockEqualsInventoryDeltas": true,
+        "reservationsWithinStock": true,
+        "validOrderItems": true,
+        "skuProjection": true,
+        "orderItemProjection": true,
+        "validMoney": true,
+        "paymentExactlyOnce": true,
+        "refundExactlyOnce": true,
+        "purchaseExactlyOnce": true,
+        "noOrphanLedger": true,
+        "noOrphanOwnership": true,
+        "financeBalance": true,
+        "commandHistoryRetained": true
+      },
+      "backup": {
+        "readOnlySnapshot": true,
+        "integrity": true,
+        "foreignKeys": true,
+        "historicalOrdersUnchanged": true,
+        "baselineCommandsPreserved": true,
+        "completedJobsPreserved": true,
+        "nonnegativeStocks": true,
+        "perSkuStockEqualsInventoryDeltas": true,
+        "reservationsWithinStock": true,
+        "validOrderItems": true,
+        "skuProjection": true,
+        "orderItemProjection": true,
+        "validMoney": true,
+        "paymentExactlyOnce": true,
+        "refundExactlyOnce": true,
+        "purchaseExactlyOnce": true,
+        "noOrphanLedger": true,
+        "noOrphanOwnership": true,
+        "financeBalance": true,
+        "commandHistoryRetained": true
+      },
+      "replica": {
+        "readOnlySnapshot": true,
+        "integrity": true,
+        "foreignKeys": true,
+        "historicalOrdersUnchanged": true,
+        "baselineCommandsPreserved": true,
+        "completedJobsPreserved": true,
+        "nonnegativeStocks": true,
+        "perSkuStockEqualsInventoryDeltas": true,
+        "reservationsWithinStock": true,
+        "validOrderItems": true,
+        "skuProjection": true,
+        "orderItemProjection": true,
+        "validMoney": true,
+        "paymentExactlyOnce": true,
+        "refundExactlyOnce": true,
+        "purchaseExactlyOnce": true,
+        "noOrphanLedger": true,
+        "noOrphanOwnership": true,
+        "financeBalance": true,
+        "commandHistoryRetained": true
+      },
+      "restored": {
+        "readOnlySnapshot": true,
+        "integrity": true,
+        "foreignKeys": true,
+        "historicalOrdersUnchanged": true,
+        "baselineCommandsPreserved": true,
+        "completedJobsPreserved": true,
+        "nonnegativeStocks": true,
+        "perSkuStockEqualsInventoryDeltas": true,
+        "reservationsWithinStock": true,
+        "validOrderItems": true,
+        "skuProjection": true,
+        "orderItemProjection": true,
+        "validMoney": true,
+        "paymentExactlyOnce": true,
+        "refundExactlyOnce": true,
+        "purchaseExactlyOnce": true,
+        "noOrphanLedger": true,
+        "noOrphanOwnership": true,
+        "financeBalance": true,
+        "commandHistoryRetained": true
+      }
+    },
+    "backupWindows": {
+      "passed": true,
+      "failures": [],
+      "dropped": 0,
+      "completeBackupsInLoad": 1,
+      "backups": [
+        {
+          "backupId": "095d531c-b0e9-4dde-b1be-b46e5fe64421",
+          "file": "shopmate-daily-2026-11-06-1793957720030.sqlite",
+          "startAt": 1793957720031,
+          "endAt": 1793957735669,
+          "durationMs": 15640,
+          "observedDurationMs": 15638,
+          "bytes": 81694720,
+          "entirelyWithinLoad": true,
+          "overlapWindow": {
+            "startAt": 1793957719703,
+            "endAt": 1793957735997,
+            "fullyWithinLoad": true,
+            "stats": {
+              "startAt": 1793957719703,
+              "endAt": 1793957735997,
+              "count": 3784,
+              "writes": 1097,
+              "statusCounts": {
+                "200": 3784
+              },
+              "errors": 0,
+              "rejected": 0,
+              "p50Ms": 72.35693359375,
+              "p95Ms": 178.794677734375,
+              "p99Ms": 237.3515625,
+              "maxMs": 401.697265625,
+              "startedInWindow": 3764,
+              "finishedInWindow": 3763,
+              "dropped": 0
+            }
+          },
+          "contextWindow": {
+            "startAt": 1793957719031,
+            "endAt": 1793957736669,
+            "fullyWithinLoad": true,
+            "stats": {
+              "startAt": 1793957719031,
+              "endAt": 1793957736669,
+              "count": 4114,
+              "writes": 1195,
+              "statusCounts": {
+                "200": 4114
+              },
+              "errors": 0,
+              "rejected": 0,
+              "p50Ms": 72.2353515625,
+              "p95Ms": 177.061767578125,
+              "p99Ms": 233.78369140625,
+              "maxMs": 401.697265625,
+              "startedInWindow": 4094,
+              "finishedInWindow": 4094,
+              "dropped": 0
+            }
+          },
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "containersStopped": true
+  },
+  "finalImages": {
+    "images": [
+      {
+        "id": "sha256:04d442dfcd174afee8998f4a0ec60b6e7d5c40a7bf05aba7b4240be8d7906ef7",
+        "revision": "candidate-20261106",
+        "created": "2026-11-06T09:52:04.459366455Z"
+      },
+      {
+        "id": "sha256:b63f1c562537742e60fbe8257081faab32e1ecfed649e0b05a77eae7cfce4b57",
+        "revision": "candidate-20261106",
+        "created": "2026-11-06T09:52:27.687061248Z"
+      }
+    ],
+    "sourceFiles": 85,
+    "sourceSha256": "b6446ff4fb31fa75b5145d94fc94ad1a930be20f9a2f01ce2bf7f193cc5b780b",
+    "webFiles": 123,
+    "webDistSha256": "7c5d70f318efb72242bbca61e0c398b5b9572a1aa0e157bbe0b79f8c050753b4",
+    "changesAfterBenchmark": [
+      "backend/src/production/payment-providers.ts",
+      "backend/src/production/payments.ts",
+      "frontend/src/components/production/ChannelPayment.vue",
+      "shared/domain/production.ts"
+    ],
+    "benchmarkScope": "Previous b781 API/870 Web images exercised demo ordinary commerce; H5 TTL refresh separately covered by directed SDK/state and production HTTPS browser tests. No second demo load was run."
+  },
+  "security": {
+    "scanner": "Trivy 0.76.2",
+    "databaseUpdatedAt": "2026-11-06T06:50:38.697107077Z",
+    "originalFinalImageFindings": {
+      "api": {
+        "image": "shopmate-ai-api:production-candidate",
+        "imageId": "sha256:04d442dfcd174afee8998f4a0ec60b6e7d5c40a7bf05aba7b4240be8d7906ef7",
+        "total": 0,
+        "counts": {}
+      },
+      "web": {
+        "image": "shopmate-ai-web:production-candidate",
+        "imageId": "sha256:b63f1c562537742e60fbe8257081faab32e1ecfed649e0b05a77eae7cfce4b57",
+        "total": 0,
+        "counts": {}
+      },
+      "edge": {
+        "image": "caddy:2.11.9-alpine",
+        "imageId": "sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3",
+        "total": 6,
+        "counts": {
+          "HIGH": 1,
+          "MEDIUM": 2,
+          "UNKNOWN": 3
+        }
+      }
+    },
+    "edgeScopedVex": {
+      "nativeMatchingExitCode": 0,
+      "wrongComponentVersionExitCode": 1,
+      "wrongImageDigestExitCode": 1,
+      "rawCounts": {
+        "HIGH": 1,
+        "CRITICAL": 0,
+        "MEDIUM": 2,
+        "UNKNOWN": 3
+      },
+      "assessedCounts": {
+        "HIGH": 0,
+        "CRITICAL": 0,
+        "MEDIUM": 2,
+        "UNKNOWN": 3
+      },
+      "scope": "Only exact reviewed ShopMate edge image/configuration; dependency remains unpatched"
+    }
+  },
+  "localConfiguration": {
+    "actualEnvModified": false,
+    "actualComposeOverrideModified": false,
+    "windowsAutomaticBackupEnabled": false
+  },
+  "pending": [
+    "Live merchant payment/refund/bill acceptance",
+    "Live SMTP/SMS and carrier delivery",
+    "Real S3 permissions and off-host recovery",
+    "Public DNS/ACME and alert receiver",
+    "Commit, remote CI and immutable release images"
+  ]
+}

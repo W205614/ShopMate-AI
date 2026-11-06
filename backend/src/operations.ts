@@ -351,7 +351,9 @@ export const operationsApi = {
           throw new HttpError(409, "该账号已存在");
         const accountId = id("staff-");
         sql
-          .prepare("INSERT INTO accounts VALUES (?,?,?,?,?,?)")
+          .prepare(
+            "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES (?,?,?,?,?,?)",
+          )
           .run(
             accountId,
             input.username,

@@ -15,10 +15,14 @@ beforeEach(async () => {
     ["admin", "admin", "admin-token"],
   ]) {
     sql
-      .prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)")
+      .prepare(
+        "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)",
+      )
       .run(id, id, id, role, "unused-test-hash", 1);
     sql
-      .prepare("INSERT INTO sessions VALUES(?,?,?)")
+      .prepare(
+        "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES(?,?,?)",
+      )
       .run(tokenHash(token), id, Date.now() + 60000);
   }
   const app = await createApp(sql, { origins: ["http://localhost"] });
@@ -294,13 +298,17 @@ describe("paged read contracts", () => {
       movement.id,
     );
     sql
-      .prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)")
+      .prepare(
+        "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)",
+      )
       .run("finance", "finance", "财务", "admin", "unused-test-hash", 1);
     sql
       .prepare("INSERT INTO staff_access VALUES(?,?,?)")
       .run("finance", "finance", 1);
     sql
-      .prepare("INSERT INTO sessions VALUES(?,?,?)")
+      .prepare(
+        "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES(?,?,?)",
+      )
       .run(tokenHash("finance-token"), "finance", Date.now() + 60000);
     const headers = { Cookie: "shopmate_admin=finance-token" },
       finance = await fetch(
@@ -545,13 +553,17 @@ describe("paged read contracts", () => {
     ];
     writeDatabase(sql, seed);
     sql
-      .prepare("INSERT INTO accounts VALUES(?,?,?,?,?,?)")
+      .prepare(
+        "INSERT INTO accounts(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)",
+      )
       .run("operations", "operations", "运营", "admin", "unused-test-hash", 1);
     sql
       .prepare("INSERT INTO staff_access VALUES(?,?,?)")
       .run("operations", "operations", 1);
     sql
-      .prepare("INSERT INTO sessions VALUES(?,?,?)")
+      .prepare(
+        "INSERT INTO sessions(token_hash,account_id,expires_at) VALUES(?,?,?)",
+      )
       .run(tokenHash("operations-token"), "operations", Date.now() + 60000);
     const headers = { Cookie: "shopmate_admin=operations-token" };
     for (const collection of ["reviews", "couponClaims"]) {

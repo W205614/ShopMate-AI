@@ -1,7 +1,8 @@
 FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci
+ARG NPM_REGISTRY=https://registry.npmjs.org
+RUN npm ci --registry="${NPM_REGISTRY}"
 COPY frontend/ ./
 COPY shared/ /app/shared/
 RUN npm run build

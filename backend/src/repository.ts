@@ -14,6 +14,8 @@ import {
 } from "./database";
 import { HttpError } from "./auth";
 import { audit, enqueue } from "./runtime";
+import { enqueueNotification, enqueueShipment } from "./production/external";
+import { shopMode } from "./production/config";
 import type { DatabaseReadScope } from "./storage";
 import { releaseSnapshot } from "./storage";
 
@@ -303,6 +305,38 @@ export async function transact<T>(
           if (order) {
             recipient = order.userId;
             orderId = order.id;
+            if (order.transactionMode === "production") {
+              enqueueNotification(sql, {
+                userId: order.userId,
+                orderId: order.id,
+                event: command.method,
+                eventId: `${actor.id}:${command.method}:${command.requestId}`,
+                variables: { orderId: order.id },
+                text: "订单或售后进度已更新，请前往商城查看",
+              });
+              if (
+                command.method === "shipOrder" &&
+                order.carrier &&
+                order.tracking
+              )
+                enqueueShipment(sql, {
+                  orderId: order.id,
+                  carrier: order.carrier,
+                  tracking: order.tracking,
+                });
+              if (command.method === "submitReturn") {
+                const sale = db.afterSales.find(
+                  (value) => value.id === command.args[0],
+                );
+                if (sale?.returnCarrier && sale.returnTracking)
+                  enqueueShipment(sql, {
+                    orderId: order.id,
+                    afterSaleId: sale.id,
+                    carrier: sale.returnCarrier,
+                    tracking: sale.returnTracking,
+                  });
+              }
+            }
           }
           if (recipient)
             enqueue(
@@ -315,7 +349,10 @@ export async function transact<T>(
                   {
                     createOrder: "订单已创建，库存保留30分钟",
                     payOrder: "订单付款成功",
-                    cancelOrder: "订单已取消",
+                    cancelOrder:
+                      order?.status === "pending" && order.cancelRequested
+                        ? "取消申请已提交，等待支付渠道确认"
+                        : "订单已取消",
                     confirmOrder: "订单已确认收货",
                     shipOrder: "订单已发货",
                     requestAfterSale: "售后申请已受理",
@@ -389,15 +426,18 @@ export function ledger(
   amount: number,
   reference: string,
   note: string,
+  transactionMode: "demo" | "production" = shopMode(),
+  createdAt = now(),
 ): LedgerEntry {
   requireThat(integer(amount), "金额必须是非负整数分");
   const entry = {
+    transactionMode,
     id: id("ledger-"),
     type,
     amount,
     reference,
     note,
-    createdAt: now(),
+    createdAt,
   };
   db.ledger.unshift(entry);
   return entry;

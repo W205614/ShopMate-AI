@@ -69,8 +69,10 @@ describe("automatic backup worker", () => {
     expect(created).toHaveBeenCalledWith(inspectBackup(destination).createdAt);
     expect(inspectBackup(destination).revision).toBe(result.snapshotRevision);
     for (const old of previous) {
-      expect(readFileSync(old.file)).toEqual(old.bytes);
-      expect(readFileSync(old.file + ".manifest.json")).toEqual(old.manifest);
+      expect(readFileSync(old.file).equals(old.bytes)).toBe(true);
+      expect(
+        readFileSync(old.file + ".manifest.json").equals(old.manifest),
+      ).toBe(true);
     }
     expect(
       readdirSync(join(directory, "backups")).filter((file) =>

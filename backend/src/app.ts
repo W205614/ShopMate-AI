@@ -4,6 +4,36 @@ import { marketingApi, publicReviews } from "./marketing";
 import type { ErrorRequestHandler } from "express";
 import type { DatabaseSync } from "node:sqlite";
 import { ZodError } from "zod";
+import { productionConfig, shopMode } from "./production/config";
+import {
+  ensureAccountSchema,
+  registerAccountRoutes,
+  requireVerifiedContact,
+  cancelMfaChallenge,
+  type AccountOptions,
+} from "./production/accounts";
+import {
+  ensureExternalSchema,
+  validateExternalConfig,
+  registerExternalRoutes,
+  registerLogisticsWebhooks,
+  sendVerification,
+  anonymizeExternalAccount,
+  exportExternalAccountData,
+} from "./production/external";
+import {
+  PaymentService,
+  paymentOptions,
+  registerPaymentWebhooks,
+  registerPaymentRoutes,
+  assertPaymentsClosable,
+  anonymizePaymentAccount,
+  type PaymentOptions,
+} from "./production/payments";
+import {
+  registerProductionRoutes,
+  productionObserver,
+} from "./production/routes";
 import {
   readDatabase,
   transaction,
@@ -62,11 +92,18 @@ export async function createApp(
     logRequests?: boolean;
     afterSaleDays?: number;
     allowLegacyCommands?: boolean;
+    payments?: PaymentOptions;
+    verificationSender?: AccountOptions["sendVerification"];
   },
 ) {
   ensureRuntimeSchema(sql);
   migrateLegacyAdminAccess(sql);
   ensureKnowledgeSchema(sql);
+  ensureAccountSchema(sql);
+  ensureExternalSchema(sql);
+  validateExternalConfig();
+  const production = productionConfig();
+  const payments = new PaymentService(sql, config.payments ?? paymentOptions());
   if (
     config.afterSaleDays !== undefined &&
     (!Number.isSafeInteger(config.afterSaleDays) ||
@@ -75,13 +112,18 @@ export async function createApp(
   )
     throw new Error("AFTER_SALE_DAYS must be an integer between 1 and 365");
   const app = express();
+  app.locals.payments = payments;
   if (config.trustProxy) app.set("trust proxy", 1);
   const requests = createRequestObserver(config.logRequests);
   app.use(requests.middleware);
+  const metrics = productionObserver(sql);
+  app.use(metrics.middleware);
   const secure = config.secureCookies ?? false;
   const ttl = config.sessionTtl ?? 8 * 60 * 60 * 1000;
   const dummyHash = await hashPassword("unusable-dummy-password");
   app.disable("x-powered-by");
+  registerLogisticsWebhooks(app, sql);
+  registerPaymentWebhooks(app, payments);
   app.use((req, res, next) => {
     res.set({
       "Cache-Control": "no-store",
@@ -99,6 +141,8 @@ export async function createApp(
     const largeImage =
       req.path === "/api/actions/saveProduct" ||
       req.path === "/api/actions/saveCategory";
+    const assetUpload = req.path === "/api/assets" && req.method === "POST";
+    if (assetUpload) demand(findSession(sql, req, "admin"), "catalog");
     if (req.path.startsWith("/api/support/documents") && req.method === "POST")
       demand(findSession(sql, req, "admin"), "support");
     if (largeImage && !findSession(sql, req, "admin"))
@@ -108,13 +152,37 @@ export async function createApp(
       limit:
         req.path.startsWith("/api/support/documents") && req.method === "POST"
           ? "15mb"
-          : largeImage
-            ? "8mb"
-            : req.path.startsWith("/api/auth/")
-              ? "4kb"
-              : "128kb",
+          : req.path === "/api/admin/merchant"
+            ? "256kb"
+            : assetUpload
+              ? "3mb"
+              : largeImage
+                ? "8mb"
+                : req.path.startsWith("/api/auth/")
+                  ? "4kb"
+                  : "128kb",
     })(req, res, next);
   });
+  registerAccountRoutes(app, sql, {
+    production: production.mode === "production",
+    secureCookies: secure,
+    sessionTtl: ttl,
+    encryptionKey: production.encryptionKey,
+    emailEnabled: production.emailEnabled,
+    smsEnabled: production.smsEnabled,
+    sendVerification:
+      config.verificationSender ?? ((input) => sendVerification(input, sql)),
+    assertClosable: (id) => assertPaymentsClosable(sql, id),
+    anonymizeAccount: (id) => {
+      anonymizeExternalAccount(sql, id);
+      anonymizePaymentAccount(sql, id);
+    },
+    exportAccountData: (id) => exportExternalAccountData(sql, id),
+  });
+  registerExternalRoutes(app, sql);
+  registerPaymentRoutes(app, payments);
+  registerProductionRoutes(app, sql, payments);
+  metrics.register(app);
   app.get("/api/live", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/health", (_req, res) => {
     if (app.locals.draining)
@@ -241,6 +309,9 @@ export async function createApp(
         .prepare("UPDATE accounts SET password_hash=? WHERE id=?")
         .run(nextHash, session.id);
       sql.prepare("DELETE FROM sessions WHERE account_id=?").run(session.id);
+      sql
+        .prepare("DELETE FROM verification_challenges WHERE account_id=?")
+        .run(session.id);
     });
     clearSession(sql, req, res, "user", secure);
     res.json({ ok: true });
@@ -264,7 +335,14 @@ export async function createApp(
       input.password,
       account?.password_hash ?? dummyHash,
     );
-    if (!account || !valid) throw new HttpError(401, "账号或密码错误");
+    if (
+      !account ||
+      !valid ||
+      !sql
+        .prepare("SELECT 1 FROM accounts WHERE id=? AND active=1")
+        .get(account.id)
+    )
+      throw new HttpError(401, "账号或密码错误");
     if (account.role === "admin") {
       const access = sql
         .prepare(
@@ -296,6 +374,7 @@ export async function createApp(
   });
   app.post("/api/auth/logout", (req, res) => {
     const role = roleSchema.parse(req.body?.role);
+    if (role === "admin") cancelMfaChallenge(sql, req, res, secure);
     clearSession(sql, req, res, role, secure);
     res.json({ ok: true });
   });
@@ -309,7 +388,7 @@ export async function createApp(
     ...maintenanceCommands,
     async resetDemo() {
       admin();
-      if (!config.allowDemoReset)
+      if (!config.allowDemoReset || shopMode() === "production")
         throw new HttpError(403, "当前部署已关闭网页数据重置，请使用维护流程");
       await transact(() => undefined, true);
     },
@@ -323,6 +402,8 @@ export async function createApp(
     res.locals.actorId = session.id;
     res.locals.action = method;
     const args = definition.args.parse(req.body?.args);
+    if (method === "createOrder" && shopMode() === "production")
+      requireVerifiedContact(sql, session.id);
     if (definition.role === "admin")
       demand(session, methodPermission(method, args));
     const requestId =

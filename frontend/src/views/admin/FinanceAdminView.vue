@@ -17,9 +17,14 @@ import {
 import { localDate } from "./useAdmin";
 import { useAdminQuery, useAdminPagination } from "./useAdminList";
 import { canOpenAdminPath } from "../../router";
+import { useCommerceMode } from "../../services/commerceMode";
+const { production } = useCommerceMode();
 const shop = useShop(),
   filters = useAdminQuery();
 const query = filters.field("q", { replace: true }),
+  transactionMode = filters.field("transactionMode", {
+    values: ["production", "demo"],
+  }),
   type = filters.field("type", { values: Object.keys(labels) }),
   from = filters.field("from"),
   to = filters.field("to"),
@@ -230,6 +235,14 @@ async function download() {
   </div>
   <section class="admin-panel">
     <div class="admin-toolbar">
+      <el-select
+        v-if="production"
+        v-model="transactionMode"
+        aria-label="流水模式"
+        ><el-option value="" label="生产流水" /><el-option
+          value="production"
+          label="生产流水" /><el-option value="demo" label="历史模拟流水"
+      /></el-select>
       <el-input
         v-model="query"
         maxlength="100"

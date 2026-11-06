@@ -130,7 +130,7 @@ export async function rehearseMigration(source: string, directory: string) {
       digest(canonical(oldShape(original, original, true)))
     )
       throw new Error("迁移改变了已有业务字段");
-    if (digest(accountFacts(sql)) !== digest(identity))
+    if (digest(oldShape(accountFacts(sql), identity)) !== digest(identity))
       throw new Error("迁移改变账号或会话");
     if (legacyBytes(sql) !== legacy)
       throw new Error("迁移改变旧 JSON 证据字节");
@@ -179,7 +179,7 @@ export async function rehearseMigration(source: string, directory: string) {
       digest(canonical(readDatabase(restored))) !== digest(canonical(migrated))
     )
       throw new Error("备份恢复后业务状态不同");
-    if (digest(accountFacts(restored)) !== digest(identity))
+    if (digest(oldShape(accountFacts(restored), identity)) !== digest(identity))
       throw new Error("备份恢复后账号或会话不同");
     if (legacyBytes(restored) !== legacy)
       throw new Error("备份恢复后旧 JSON 证据不同");

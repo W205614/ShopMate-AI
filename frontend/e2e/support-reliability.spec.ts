@@ -266,7 +266,7 @@ test("跨标签管理员切换清空私有草稿并取消旧身份关闭确认",
   try {
     sql
       .prepare(
-        "INSERT INTO accounts SELECT 'admin2','admin2','备用管理员',role,password_hash,created_at FROM accounts WHERE id='admin'",
+        "INSERT INTO accounts(id,username,name,role,password_hash,created_at) SELECT 'admin2','admin2','备用管理员',role,password_hash,created_at FROM accounts WHERE id='admin'",
       )
       .run();
     sql.prepare("INSERT INTO staff_access VALUES ('admin2','owner',1)").run();
@@ -347,7 +347,7 @@ test("旧回复跨管理员及页面返回后不能清除新实例草稿", async
   try {
     sql
       .prepare(
-        "INSERT INTO accounts SELECT 'admin2','admin2','备用管理员',role,password_hash,created_at FROM accounts WHERE id='admin'",
+        "INSERT INTO accounts(id,username,name,role,password_hash,created_at) SELECT 'admin2','admin2','备用管理员',role,password_hash,created_at FROM accounts WHERE id='admin'",
       )
       .run();
     sql.prepare("INSERT INTO staff_access VALUES ('admin2','owner',1)").run();

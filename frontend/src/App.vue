@@ -16,6 +16,32 @@ const expectedRole = computed(() =>
   route.path.startsWith("/admin") ? "admin" : "user",
 );
 let redirecting = false;
+let automaticLogin: {
+  role: "user" | "admin";
+  target: string;
+  login: string;
+} | null = null;
+function restoreAutomaticLogin() {
+  const pending = automaticLogin;
+  if (!pending || redirecting) return false;
+  if (
+    route.fullPath !== pending.login ||
+    hasConfirmedLogout(pending.role) ||
+    (pending.role === "user" && hasPasswordChangeNotice())
+  ) {
+    automaticLogin = null;
+    return false;
+  }
+  if (
+    shop.syncStatus.phase !== "ready" ||
+    shop.syncStatus.role !== pending.role ||
+    !(pending.role === "user" ? shop.userSession : shop.adminSession)
+  )
+    return false;
+  automaticLogin = null;
+  void router.replace(pending.target);
+  return true;
+}
 watch(
   () => [
     shop.userSession,
@@ -24,6 +50,7 @@ watch(
     route.fullPath,
   ],
   () => {
+    if (restoreAutomaticLogin()) return;
     const role = route.meta.auth;
     if (shop.syncStatus.role !== expectedRole.value) return;
     if (
@@ -38,17 +65,27 @@ watch(
       if (redirecting) return;
       redirecting = true;
       const changed = role === "user" && hasPasswordChangeNotice();
-      void router
-        .replace({
-          path: role === "admin" ? "/admin/login" : "/login",
-          query: {
-            redirect: route.fullPath,
-            ...(changed ? { changed: "1" } : {}),
-          },
-        })
-        .finally(() => {
-          redirecting = false;
-        });
+      const location = {
+        path: role === "admin" ? "/admin/login" : "/login",
+        query: {
+          redirect: route.fullPath,
+          ...(changed ? { changed: "1" } : {}),
+        },
+      };
+      // A revoked cookie can yield a late anonymous snapshot during another tab's login.
+      // Only undo our own redirect; explicit logout or navigation cancels this target.
+      automaticLogin =
+        hasConfirmedLogout(role) || changed
+          ? null
+          : {
+              role,
+              target: route.fullPath,
+              login: router.resolve(location).fullPath,
+            };
+      void router.replace(location).finally(() => {
+        redirecting = false;
+        restoreAutomaticLogin();
+      });
     }
   },
 );

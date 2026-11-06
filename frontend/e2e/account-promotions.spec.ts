@@ -266,13 +266,17 @@ test("购买后评价公开脱敏，后台隐藏恢复及用户删除影响公�
   const row = management
     .locator(".el-table__body-wrapper tbody tr")
     .filter({ hasText: "外观简洁，日常使用体验很好。" });
+  await management.bringToFront();
   await row.getByRole("button", { name: "隐藏评价", exact: true }).click();
   await expect(row).toContainText("已隐藏");
+  await page.bringToFront();
   await expect(
     reviews.getByText("外观简洁，日常使用体验很好。", { exact: true }),
   ).toHaveCount(0);
   await expect(reviews).toContainText("0 条评价");
+  await management.bringToFront();
   await row.getByRole("button", { name: "恢复展示", exact: true }).click();
+  await page.bringToFront();
   await expect(reviews).toContainText("外观简洁，日常使用体验很好。");
   await page.goto("/account?section=reviews");
   page.once("dialog", (dialog) => dialog.accept());

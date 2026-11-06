@@ -10,6 +10,10 @@ test.describe("production account browser acceptance", () => {
     page,
     context,
   }) => {
+    // Isolate this response-order race from periodic polling; focus still performs real HTTP reads.
+    await page.addInitScript(() => {
+      window.setInterval = () => 0;
+    });
     const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 10);
     const merchant = await (await page.request.get("/api/merchant")).json();
     const headers = { "X-ShopMate-Request": "1" };
@@ -91,6 +95,39 @@ test.describe("production account browser acceptance", () => {
       .getByRole("button", { name: "导出本人资料", exact: true })
       .click();
     await started;
+    let releaseBootstrap!: () => void,
+      observedBootstrap!: () => void,
+      observedRedirectRead!: () => void;
+    const bootstrapHeld = new Promise<void>((done) => {
+      releaseBootstrap = done;
+    });
+    const bootstrapStarted = new Promise<void>((done) => {
+      observedBootstrap = done;
+    });
+    const redirectRead = new Promise<void>((done) => {
+      observedRedirectRead = done;
+    });
+    let bootstrapPhase: "armed" | "held" | "redirect" | "done" = "armed";
+    await page.route(/\/api\/bootstrap\?role=user$/, async (route) => {
+      if (bootstrapPhase === "armed") {
+        bootstrapPhase = "held";
+        observedBootstrap();
+        await bootstrapHeld;
+        const response = await route.fetch();
+        expect(response.ok()).toBe(true);
+        expect((await response.json()).sessions.user).toBeNull();
+        bootstrapPhase = "redirect";
+        await route.fulfill({ response });
+      } else {
+        if (bootstrapPhase === "redirect") {
+          bootstrapPhase = "done";
+          observedRedirectRead();
+        }
+        await route.continue();
+      }
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await bootstrapStarted;
     const other = await context.newPage();
     try {
       await other.goto("/login");
@@ -98,8 +135,10 @@ test.describe("production account browser acceptance", () => {
       await other.getByLabel("密码", { exact: true }).fill(password);
       await other.getByRole("button", { name: "登录", exact: true }).click();
       await expect(other).toHaveURL(/\/$/);
+      releaseBootstrap();
+      // The anonymous A response has initiated App's redirect; its guard now reads B's real session.
+      await redirectRead;
       await page.bringToFront();
-      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(
         panel.getByText(/邮箱：.*@second\.example\.test/),
       ).toBeVisible();
@@ -124,8 +163,34 @@ test.describe("production account browser acceptance", () => {
         panel.getByText(/邮箱：.*@second\.example\.test/),
       ).toBeVisible();
       await expect(page).toHaveURL(/\/account\?section=security$/);
+      await page.getByRole("button", { name: "退出登录", exact: true }).click();
+      await expect(page).toHaveURL(/\/login\?redirect=/);
+      const explicitLogoutLocation = page.url();
+      expect(
+        (
+          await page.request.post("/api/auth/login", {
+            headers,
+            data: { role: "user", username: second, password },
+          })
+        ).ok(),
+      ).toBe(true);
+      const resumedSession = page.waitForResponse(
+        /\/api\/bootstrap\?role=user$/,
+      );
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      expect(
+        (await (await resumedSession).json()).sessions.user,
+      ).not.toBeNull();
+      await expect(page).toHaveURL(explicitLogoutLocation);
+      await page.goto("/login?redirect=%2Faccount%3Fsection%3Dsecurity");
+      await expect(
+        page.getByRole("heading", { name: "欢迎回来", exact: true }),
+      ).toBeVisible();
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(page).toHaveURL(/\/login\?redirect=/);
     } finally {
       release();
+      releaseBootstrap();
       await other.close();
     }
   });

@@ -176,10 +176,12 @@ describe("production release script against isolated command protocols", () => {
     expect(result.trace).not.toContain("up -d");
     expect(result.active).toBe(true);
   }, 30000);
-  it("refuses another revision's maintenance marker and restores maintenance for invalid public health JSON", () => {
+  it("refuses another revision's maintenance marker", () => {
     const wrong = release({ resume: true, marker: "b".repeat(40) });
     expect(wrong.status).not.toBe(0);
     expect(wrong.active).toBe(true);
+  }, 30000);
+  it("restores maintenance for invalid public health JSON", () => {
     const invalid = release({ resume: true, badHealth: true });
     expect(invalid.status).not.toBe(0);
     expect(invalid.trace).toContain("--runtime");

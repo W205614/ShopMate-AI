@@ -12,6 +12,20 @@
 
 若已定位 `npm ci` 的某个依赖下载持续 `ECONNRESET`，先核对具体 tarball URL、HTTPS 可达性和原锁文件的 integrity。两份 Dockerfile 另提供仅构建期的 `NPM_REGISTRY`，默认 `https://registry.npmjs.org`，可显式运行 `docker compose build --build-arg NPM_REGISTRY=https://registry.npmmirror.com`。它沿用 [npm 的 registry 覆盖规则](https://docs.npmjs.com/cli/v11/using-npm/config/#replace-registry-host)，不改写锁文件的版本、resolved 或 integrity，也不关闭 TLS 校验；锁文件原有非默认 registry URL 仍按 npm 规则处理。不要通过删除锁文件、关闭校验或无限重试掩盖下载问题。正常构建与 CI 不设置该参数时继续使用默认配置。
 
+宿主机 `.npmrc` 的 registry 不会自动传入 Docker 构建。需要持续使用已验证的镜像源时，将以下 `build.args` 合入本机 `compose.override.yaml` 的对应服务，保留已有的环境和备份设置。该本机文件不提交 Git；随后正常执行 `docker compose build` 即可使用此配置。
+
+```yaml
+services:
+  api:
+    build:
+      args:
+        NPM_REGISTRY: https://registry.npmmirror.com
+  web:
+    build:
+      args:
+        NPM_REGISTRY: https://registry.npmmirror.com
+```
+
 | 配置                               | 用途                                                         |
 | ---------------------------------- | ------------------------------------------------------------ |
 | `APP_PORT`                         | Docker 对外端口，默认 18086                                  |

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createServer } from "node:http";
 import { aiConfig, chat, embed, rerank, vision } from "../src/ai/ai-provider";
 
 afterEach(() => {
@@ -16,6 +17,100 @@ function configure() {
   vi.stubEnv("RERANKER_URL", "https://reranker.invalid/v1/rerank");
 }
 describe("AI provider protocol and failure boundaries", () => {
+  it("sends GPT chat tools and vision through HTTP without DeepSeek-only parameters", async () => {
+    configure();
+    vi.stubEnv("LLM_MODEL_ID", "gpt-6-luna");
+    const requests: Record<string, unknown>[] = [];
+    const toolCall = {
+      id: "synthetic-lookup-call",
+      type: "function",
+      function: { name: "lookup", arguments: "{}" },
+    };
+    const provider = createServer(async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.from(chunk));
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      requests.push(body);
+      res.setHeader("Content-Type", "application/json");
+      if (
+        req.url !== "/v1/chat/completions" ||
+        req.method !== "POST" ||
+        req.headers.authorization !== "Bearer synthetic-provider-key" ||
+        "thinking" in body ||
+        "max_tokens" in body ||
+        body.reasoning_effort !== "none" ||
+        body.max_completion_tokens !== 4096
+      ) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "Unsupported request" }));
+        return;
+      }
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: body.tools
+                ? { role: "assistant", content: null, tool_calls: [toolCall] }
+                : { role: "assistant", content: "合成转录正文" },
+            },
+          ],
+        }),
+      );
+    });
+    provider.listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => provider.once("listening", resolve));
+    const { port } = provider.address() as { port: number };
+    vi.stubEnv("LLM_BASE_URL", `http://127.0.0.1:${port}/v1`);
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "lookup",
+          parameters: { type: "object", properties: {} },
+        },
+      },
+    ];
+    try {
+      await expect(
+        chat([{ role: "system", content: "Return JSON" }], tools),
+      ).resolves.toMatchObject({ content: null, tool_calls: [toolCall] });
+      await expect(
+        vision(Buffer.from("synthetic-image"), "image/png"),
+      ).resolves.toBe("合成转录正文");
+      expect(requests).toHaveLength(2);
+      expect(requests[0]).toMatchObject({
+        model: "gpt-6-luna",
+        tools,
+        tool_choice: "auto",
+        response_format: { type: "json_object" },
+        stream: false,
+      });
+      expect(requests[1]).not.toHaveProperty("response_format");
+      expect(requests[1]).not.toHaveProperty("tools");
+      expect(requests[1]).toMatchObject({
+        model: "gpt-6-luna",
+        messages: [
+          expect.any(Object),
+          {
+            role: "user",
+            content: [
+              expect.any(Object),
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/png;base64,${Buffer.from("synthetic-image").toString("base64")}`,
+                  detail: "high",
+                },
+              },
+            ],
+          },
+        ],
+      });
+    } finally {
+      provider.closeAllConnections();
+      await new Promise<void>((resolve) => provider.close(() => resolve()));
+    }
+  });
   it("defaults to the standard reranker while respecting an explicit provider tier", () => {
     vi.stubEnv("RERANKER_MODEL", "");
     vi.stubEnv("RERANKER_MODEL_ID", "");

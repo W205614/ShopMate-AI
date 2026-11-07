@@ -169,9 +169,15 @@ export async function chat(
             response_format: { type: "json_object" },
           }
         : {}),
-      thinking: { type: "disabled" },
+      ...(config.model === "gpt-6-luna"
+        ? { reasoning_effort: "none", max_completion_tokens: 4096 }
+        : {
+            max_tokens: 4096,
+            ...(config.model.startsWith("deepseek-")
+              ? { thinking: { type: "disabled" } }
+              : {}),
+          }),
       temperature: 0.2,
-      max_tokens: 4096,
       stream: false,
     },
     signal,

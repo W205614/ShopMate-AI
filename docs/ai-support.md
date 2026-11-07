@@ -34,6 +34,10 @@ AI 功能在现有 Node.js／Express、Vue 和 SQLite 服务内运行，仍使�
 | `RERANKER_MODEL`                | `BAAI/bge-reranker-v2-m3`；显式配置优先                                              |
 | `RERANKER_TIMEOUT_SECONDS`      | `2`；独立重排请求超时，允许 1–30 s                                                   |
 
+切换到 OpenAI 时，将 `LLM_BASE_URL` 和 `EMBEDDING_BASE_URL` 设为 `https://api.openai.com/v1`，并分别填写本机 `LLM_API_KEY` 和 `EMBEDDING_API_KEY`。对话和图片转录可使用 [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna)：设置 `LLM_MODEL_ID=gpt-6-luna`，适配器使用 `reasoning_effort=none` 和 `max_completion_tokens=4096`，支持现有 Chat Completions 工具调用流程。DeepSeek 的 `thinking` 参数只发送给 `deepseek-*` 模型。
+
+Embedding 使用 [text-embedding-3-large](https://developers.openai.com/api/docs/models/text-embedding-3-large)，保留 `EMBEDDING_DIMENSION=3072`。重排仍使用独立的 `/rerank` 服务，保留其模型、地址和凭据。
+
 完整文档检索需配置对话与 Embedding；Reranker 不可用时可降级。仅使用商品／订单工具和 FAQ 时，不需要先上传文档。`AI_ENABLED` 控制客服对话，文档上传后的处理任务独立运行，仍可能调用 Embedding 或视觉模型。
 
 数值配置仅在未设置时使用默认值；非法值、非整数或越界值会在启动时明确报错。`0` 不是停用额度的方式，关闭对话使用 `AI_ENABLED=false`。文档任务的 `AI_PROVIDER_BUDGET_EXHAUSTED` 表示当日额度耗尽；`AI_PROVIDER_BUDGET_UNAVAILABLE` 表示额度数据库或进程通信不可用，应先检查服务状态。

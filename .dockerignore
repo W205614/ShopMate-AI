@@ -14,3 +14,11 @@ backend/test
 backend/.e2e
 backups
 .delivery
+**/__pycache__
+**/*.log
+**/*.tsbuildinfo
+**/*.sqlite*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx

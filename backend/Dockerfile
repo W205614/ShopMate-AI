@@ -23,6 +23,7 @@ COPY --from=dependencies /usr/bin/pdfinfo /usr/bin/pdftotext /usr/bin/pdftoppm /
 COPY backend/package*.json ./
 COPY backend/src ./src
 COPY shared /app/shared
+COPY LICENSE /app/LICENSE
 COPY backend/scripts ./scripts
 RUN mkdir -p /app/data /app/backups && chown node:node /app/data /app/backups
 USER node

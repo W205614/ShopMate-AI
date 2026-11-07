@@ -4,5 +4,13 @@ import { defineConfig } from "vite";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  build: {
+    license: { fileName: "licenses/dependencies.md" },
+    rolldownOptions: {
+      output: {
+        postBanner: "/* Dependency licenses: /licenses/dependencies.md */",
+      },
+    },
+  },
   server: { proxy: { "/api": "http://127.0.0.1:3001" } },
 });

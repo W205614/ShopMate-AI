@@ -133,7 +133,7 @@ export function createEdgeVex(evidence, timestamp = new Date().toISOString()) {
     author: "ShopMate-AI project maintainers",
     role: "Project configuration assessor; not an upstream supplier statement",
     timestamp,
-    version: 1,
+    version: 2,
     statements: [
       {
         vulnerability: {
@@ -155,6 +155,22 @@ export function createEdgeVex(evidence, timestamp = new Date().toISOString()) {
         status: "not_affected",
         justification: "vulnerable_code_not_in_execute_path",
         impact_statement: `Applies only to the ShopMate edge profile verified by production-edge-vex.mjs: image ${reviewedEdgeImage}, Caddyfile SHA256 ${reviewedCaddyfileSha256}, effective configuration SHA256 ${evidence.normalizedHash}, explicit config command, admin disabled, only reviewed HTTP/TLS handlers and public ACME client issuers. The embedded smallstep ACME server/JWS-to-private-JWK parsing path is not activated. This is not a patched component or an image-wide assertion; do not reuse with other configurations. See docs/security/production-edge-vex.md.`,
+      },
+      {
+        vulnerability: {
+          name: "CVE-2026-78661",
+          "@id": "https://pkg.go.dev/vuln/GO-2026-6860",
+          aliases: ["GO-2026-6860", "GHSA-75pg-wvh3-34jr"],
+        },
+        products: [
+          {
+            "@id": `pkg:oci/caddy@${digest}?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fcaddy`,
+            subcomponents: [{ "@id": "pkg:golang/golang.org/x/net@v0.60.0" }],
+          },
+        ],
+        status: "not_affected",
+        justification: "vulnerable_code_not_in_execute_path",
+        impact_statement: `Applies only to the same guarded ShopMate edge profile: image ${reviewedEdgeImage}, Caddyfile SHA256 ${reviewedCaddyfileSha256}, effective configuration SHA256 ${evidence.normalizedHash}, explicit caddy run command, disabled admin and the exact reviewed HTTP/TLS profile. The x/net/html parser is present and unpatched. Its identified Smallstep CLI help/report path requires a separate help --html --report action and is not invoked by this Caddy run profile; the configured proxy, encoding, headers and fixed responses do not parse HTML. This is a configuration reachability assessment, not a patched dependency, a binary-wide absence claim or a general Caddy assertion. See the source-path review in docs/security/production-edge-vex.md.`,
       },
     ],
   };

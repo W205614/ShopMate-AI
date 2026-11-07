@@ -56,12 +56,16 @@ function edge() {
   };
 }
 
-it("accepts the recorded edge profile and emits only the reviewed CVE and exact subcomponent", () => {
+it("accepts the recorded edge profile and binds only the reviewed CVEs to their exact subcomponents", () => {
   const { domain, email } = validateEdgeInputs(edge(), caddyfile, configPath);
   validateEdgeImage(image);
   const result = validateAdaptedEdge(fixture, domain, email);
   const vex = createEdgeVex(result, "2026-11-06T00:00:00Z");
-  expect(vex.statements).toHaveLength(1);
+  expect(vex.version).toBe(2);
+  expect(vex.statements.map((entry) => entry.vulnerability.name)).toEqual([
+    "CVE-2026-116587",
+    "CVE-2026-78661",
+  ]);
   expect(vex.statements[0]).toMatchObject({
     vulnerability: { name: "CVE-2026-116587" },
     status: "not_affected",
@@ -72,6 +76,20 @@ it("accepts the recorded edge profile and emits only the reviewed CVE and exact 
         subcomponents: [
           { "@id": "pkg:golang/github.com/go-jose/go-jose/v3@v3.0.5" },
         ],
+      },
+    ],
+  });
+  expect(vex.statements[1]).toMatchObject({
+    vulnerability: {
+      name: "CVE-2026-78661",
+      aliases: ["GO-2026-6860", "GHSA-75pg-wvh3-34jr"],
+    },
+    status: "not_affected",
+    justification: "vulnerable_code_not_in_execute_path",
+    products: [
+      {
+        "@id": expect.stringContaining("@sha256:71d41"),
+        subcomponents: [{ "@id": "pkg:golang/golang.org/x/net@v0.60.0" }],
       },
     ],
   });
@@ -144,6 +162,11 @@ it("rejects activated PKI, ACME server, admin, internal issuer and changes withi
     (data: typeof fixture) => {
       data.apps.http.servers.srv0.routes.push({
         handle: [{ handler: "acme_server" }],
+      });
+    },
+    (data: typeof fixture) => {
+      data.apps.http.servers.srv0.routes.push({
+        handle: [{ handler: "templates" }],
       });
     },
     (data: typeof fixture) => {

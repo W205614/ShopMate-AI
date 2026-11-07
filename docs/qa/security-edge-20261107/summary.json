@@ -1,0 +1,74 @@
+{
+  "image": "caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3",
+  "binarySha256": "a563843e11cbce39c557bd429ebb787d56f49d51d9bbb3292cd9b36b37a60cdf",
+  "scanner": "Trivy 0.76.2",
+  "rawSeverityCounts": {
+    "MEDIUM": 4,
+    "HIGH": 2,
+    "UNKNOWN": 1
+  },
+  "nativeVexChecks": {
+    "correct": {
+      "exitCode": 0,
+      "remainingHighCritical": []
+    },
+    "wrong-net": {
+      "exitCode": 1,
+      "remainingHighCritical": [
+        "CVE-2026-78661"
+      ]
+    },
+    "wrong-image": {
+      "exitCode": 1,
+      "remainingHighCritical": [
+        "CVE-2026-116587",
+        "CVE-2026-78661"
+      ]
+    }
+  },
+  "vulnerableCodePresent": true,
+  "dependencyPatched": false,
+  "assessedSeverityCounts": {
+    "MEDIUM": 4,
+    "UNKNOWN": 1
+  },
+  "sourceReview": {
+    "goVersion": "go1.27.3",
+    "modules": 149,
+    "sourceFilesScanned": 8088,
+    "missingModules": [],
+    "htmlImports": [
+      {
+        "module": "github.com/smallstep/cli-utils",
+        "version": "v0.12.2",
+        "file": "usage/report.go",
+        "line": 12,
+        "import": "\"golang.org/x/net/html\""
+      },
+      {
+        "module": "golang.org/x/net",
+        "version": "v0.60.0",
+        "file": "html/doc.go",
+        "line": 112,
+        "import": "package html // import \"golang.org/x/net/html\""
+      },
+      {
+        "module": "golang.org/x/net",
+        "version": "v0.60.0",
+        "file": "html/charset/charset.go",
+        "line": 9,
+        "import": "package charset // import \"golang.org/x/net/html/charset\""
+      },
+      {
+        "module": "golang.org/x/net",
+        "version": "v0.60.0",
+        "file": "html/charset/charset.go",
+        "line": 19,
+        "import": "\"golang.org/x/net/html\""
+      }
+    ]
+  },
+  "scope": "Fixed ShopMate Caddy runtime profile; not a patched dependency or image-wide claim",
+  "upstreamAdvisory": "https://pkg.go.dev/vuln/GO-2026-6860",
+  "govulncheck": "v1.1.4, binary symbol scan; affected symbols reported"
+}

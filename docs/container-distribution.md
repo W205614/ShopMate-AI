@@ -4,7 +4,7 @@ API 和 Web 镜像适用于 Linux/amd64，分别发布到 `ghcr.io/w205614/shopm
 
 ## 获取和启动
 
-获取对应 Tag 的源码及配置模板，按 [README](../README.md) 设置管理员密码和数据目录。在 `.env` 中增加：
+克隆项目、从 `.env.example` 初始化 `.env`，按 [README](../README.md#快速部署) 设置管理员密码和数据目录。在 `.env` 中增加以下两行即可直接使用公开镜像，无需安装 Node.js/npm 或本机构建，也无需 GitHub 登录：
 
 ```dotenv
 API_IMAGE=ghcr.io/w205614/shopmate-ai-api:v0.1.2
@@ -12,9 +12,14 @@ WEB_IMAGE=ghcr.io/w205614/shopmate-ai-web:v0.1.2
 ```
 
 ```sh
-docker compose pull
+docker compose pull api web
 docker compose up -d --no-build --wait
+docker compose ps
 ```
+
+启动后访问 `http://localhost:18086/api/health`，应返回 `{"status":"ok"}`，再打开商城。日常停止使用 `docker compose stop`，再次启动使用 `docker compose up -d --no-build --wait`。这条入口只需拉取两个镜像，不会执行 Compose 中的 `build` 配置。
+
+主分支可能领先镜像，镜像内容以对应 Release 的提交为准。需要从源码构建时，将两个镜像变量改为 `shopmate-ai-api:local` 和 `shopmate-ai-web:local`，再按 README 执行带 `--build` 的启动命令。其他架构需要自行构建，不能假定已有原生镜像。
 
 镜像仍需要配置、业务卷及上传文件。已有环境升级前准备一致的恢复资料，保留原数据和密钥；不使用 `down -v`。生产入口仍按[生产指南](production.md)独立配置。
 

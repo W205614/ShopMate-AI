@@ -8,6 +8,8 @@
 
 根目录 `.env` 从 `.env.example` 复制，已有配置应保留。`ADMIN_PASSWORD` 必须设置，不能上传凭据。首次启动初始化管理员，后续重启不会覆盖已有账号或密码。
 
+直接运行正式镜像时，按 [README 的 Packages 入口](../README.md#快速部署) 在 `.env` 设置 `API_IMAGE`、`WEB_IMAGE`，执行 `docker compose pull api web` 和 `docker compose up -d --no-build --wait`，不需要本机编译。以下镜像源和 `build` 参数只用于源码构建；构建前将这两个镜像变量设回 `shopmate-ai-api:local`、`shopmate-ai-web:local`。
+
 标准 Dockerfile 支持构建参数 `ALPINE_MIRROR`，默认使用 Alpine 官方 CDN。本机遇到该 CDN 的 APK 索引 I/O 错误时，可在 `.env` 显式设置 `ALPINE_MIRROR=https://mirrors.aliyun.com/alpine`，再执行正常构建；该站列于 [Alpine 官方镜像列表](https://mirrors.alpinelinux.org/)。参数只替换源地址前缀，保留基础镜像对应发行版路径、包签名校验及安全更新，不自动切源或无限重试。CI 未配置该参数时仍使用默认 CDN。
 
 若已定位 `npm ci` 的某个依赖下载持续 `ECONNRESET`，先核对具体 tarball URL、HTTPS 可达性和原锁文件的 integrity。两份 Dockerfile 另提供仅构建期的 `NPM_REGISTRY`，默认 `https://registry.npmjs.org`，可显式运行 `docker compose build --build-arg NPM_REGISTRY=https://registry.npmmirror.com`。它沿用 [npm 的 registry 覆盖规则](https://docs.npmjs.com/cli/v11/using-npm/config/#replace-registry-host)，不改写锁文件的版本、resolved 或 integrity，也不关闭 TLS 校验；锁文件原有非默认 registry URL 仍按 npm 规则处理。不要通过删除锁文件、关闭校验或无限重试掩盖下载问题。正常构建与 CI 不设置该参数时继续使用默认配置。
@@ -26,14 +28,15 @@ services:
         NPM_REGISTRY: https://registry.npmmirror.com
 ```
 
-| 配置                               | 用途                                                         |
-| ---------------------------------- | ------------------------------------------------------------ |
-| `APP_PORT`                         | Docker 对外端口，默认 18086                                  |
-| `ADMIN_USERNAME`、`ADMIN_PASSWORD` | 首次管理员初始化及密码维护命令使用                           |
-| `APP_ORIGINS`                      | 允许写入请求的访问源，多个地址用逗号分隔；更换端口时同步修改 |
-| `COOKIE_SECURE`                    | HTTPS 部署时设为 `true`，同时配置实际访问源                  |
-| `BACKUP_PATH`                      | 主机备份目录，默认 `./backups`，独立于业务卷                 |
-| `LOG_REQUESTS`                     | 默认记录脱敏请求 ID、路径、状态和耗时，容器日志轮转          |
+| 配置                               | 用途                                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------------- |
+| `APP_PORT`                         | Docker 对外端口，默认 18086                                                   |
+| `API_IMAGE`、`WEB_IMAGE`           | API/Web 镜像引用；未设置时使用本机 `:local`，公开 Packages 可按版本或摘要固定 |
+| `ADMIN_USERNAME`、`ADMIN_PASSWORD` | 首次管理员初始化及密码维护命令使用                                            |
+| `APP_ORIGINS`                      | 允许写入请求的访问源，多个地址用逗号分隔；更换端口时同步修改                  |
+| `COOKIE_SECURE`                    | HTTPS 部署时设为 `true`，同时配置实际访问源                                   |
+| `BACKUP_PATH`                      | 主机备份目录，默认 `./backups`，独立于业务卷                                  |
+| `LOG_REQUESTS`                     | 默认记录脱敏请求 ID、路径、状态和耗时，容器日志轮转                           |
 
 Docker 默认只监听 `127.0.0.1`，后端没有主机映射端口。修改 `APP_ORIGINS` 不会自动开放外部监听，公开部署还需配置入口、HTTPS 和访问控制。`localhost` 与 `127.0.0.1` 的 Cookie 独立，体验双端时统一使用一种地址。
 
@@ -41,7 +44,7 @@ Docker 默认只监听 `127.0.0.1`，后端没有主机映射端口。修改 `AP
 docker compose ps
 docker compose logs --tail 100 api web
 docker compose stop
-docker compose up -d --wait
+docker compose up -d --no-build --wait
 ```
 
 静态服务健康检查为 `/healthz`，API 与数据库健康检查为 `/api/health`。

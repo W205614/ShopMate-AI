@@ -922,6 +922,11 @@ async function processBudgetedSupportRun(
         content:
           "最终JSON还需声明replyKind：clarify（缺少参数）、grounded（事实答复）或handoff（无法确认或越权）。answer不直接展示，事实由服务端生成。可选presentation控制表达：productView为details、compare或recommend；focus为description、material、price、stock的非空数组，按用户所问选择，比较与推荐须保留price，推荐还须保留description或material说明差异；missingFields为product、sku、quantity、order、reason、items数组，仅追问当前真正缺失的信息，不重复询问已知订单；sourceQuotes为[{sourceId,text}]，只能逐字摘录本轮已选引用中的完整相关句子，保留实体、单位、条件和否定词，不能拼接改写。比较时逐一查询相关商品，推荐先search_products按用户预算及需求检索，再选择有货商品。政策答复必须先search_knowledge；没有依据使用handoff。只保留直接回答本次问题所必需的最少引用；逐项检查所问的每个子问题。用户指定某份资料或政策时，限定在该资料范围内，不附加没有被询问的操作FAQ或售后流程。商品和订单必须返回本轮已查到的标识，禁止猜测。",
       },
+      {
+        role: "system",
+        content:
+          "相同参数的商品搜索只调用一次；已有结果足够答复时立即返回最终JSON，空结果选择handoff，不重复相同搜索。",
+      },
       ...c.messages
         .slice(Math.max(0, msgIndex - 12), msgIndex + 1)
         .map((m) => ({
@@ -929,8 +934,19 @@ async function processBudgetedSupportRun(
           content: m.text,
         })),
     ];
+    const completedSearches = new Map<string, unknown>();
+    let finishAfterTools = false;
+    let finalizing = false;
     for (let step = run.calls; step < 4; step++) {
       controller.signal.throwIfAborted();
+      if (!finalizing && (finishAfterTools || step === 3)) {
+        finalizing = true;
+        messages.push({
+          role: "system",
+          content:
+            "本轮查询阶段已结束，不再调用工具。请根据已返回的工具结果输出最终JSON；搜索结果为空或证据不足时选择handoff并引导人工，不编造商品或猜测参数。",
+        });
+      }
       sql
         .prepare(
           "UPDATE support_runs SET phase='generating',calls=calls+1 WHERE id=?",
@@ -941,6 +957,7 @@ async function processBudgetedSupportRun(
         messages,
         toolDefinitions,
         controller.signal,
+        finalizing ? "none" : "auto",
       );
       controller.signal.throwIfAborted();
       if (Date.now() >= run.deadline) throw new Error("AI_TIMEOUT");
@@ -975,34 +992,53 @@ async function processBudgetedSupportRun(
               run.id,
             );
           let result: unknown;
+          let reused = false;
           try {
             const input = JSON.parse(call.function.arguments);
-            if (
-              call.function.name === "propose_action" &&
-              sql
-                .prepare(
-                  "SELECT id FROM support_proposals WHERE run_id=? AND status='pending'",
-                )
-                .get(run.id)
-            )
-              result = { error: "本轮已有待确认提案，请等待用户确认" };
-            else
-              result = await context.run(
-                {
-                  sql,
-                  user: { id: run.user_id, name: "用户", role: "user" },
-                  admin: null,
-                },
-                () =>
-                  executeSupportTool(
+            const searchKey =
+              call.function.name === "search_products"
+                ? JSON.stringify(
+                    Object.fromEntries(
+                      Object.entries(input).sort(([a], [b]) =>
+                        a.localeCompare(b),
+                      ),
+                    ),
+                  )
+                : undefined;
+            if (searchKey !== undefined && completedSearches.has(searchKey)) {
+              result = completedSearches.get(searchKey);
+              reused = true;
+              finishAfterTools = true;
+            } else {
+              if (
+                call.function.name === "propose_action" &&
+                sql
+                  .prepare(
+                    "SELECT id FROM support_proposals WHERE run_id=? AND status='pending'",
+                  )
+                  .get(run.id)
+              )
+                result = { error: "本轮已有待确认提案，请等待用户确认" };
+              else
+                result = await context.run(
+                  {
                     sql,
-                    run,
-                    call.function.name,
-                    input,
-                    controller.signal,
-                    evidence,
-                  ),
-              );
+                    user: { id: run.user_id, name: "用户", role: "user" },
+                    admin: null,
+                  },
+                  () =>
+                    executeSupportTool(
+                      sql,
+                      run,
+                      call.function.name,
+                      input,
+                      controller.signal,
+                      evidence,
+                    ),
+                );
+              if (searchKey !== undefined)
+                completedSearches.set(searchKey, result);
+            }
           } catch (error) {
             result = {
               error:
@@ -1030,6 +1066,7 @@ async function processBudgetedSupportRun(
                 ? call.function.name
                 : "unsupported_tool",
               ok: !(result as { error?: unknown })?.error,
+              reused,
             }),
           );
           messages.push({

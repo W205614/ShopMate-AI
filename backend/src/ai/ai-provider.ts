@@ -153,6 +153,7 @@ export async function chat(
   messages: unknown[],
   tools?: unknown[],
   signal?: AbortSignal,
+  toolChoice: "auto" | "none" = "auto",
 ): Promise<AssistantMessage> {
   const config = aiConfig();
   const data = await post(
@@ -165,7 +166,7 @@ export async function chat(
       ...(tools?.length
         ? {
             tools,
-            tool_choice: "auto",
+            tool_choice: toolChoice,
             response_format: { type: "json_object" },
           }
         : {}),

@@ -40,6 +40,133 @@ afterEach(() => {
 
 describe("AI support task and confirmation invariants", () => {
   it.each([
+    ["水杯", "p21"],
+    ["保温杯", undefined],
+  ])(
+    "finishes repeated %s searches using the existing result",
+    async (query, productId) => {
+      const run: any = await queued(`查询150元以内的${query}，不要加购`);
+      let call = 0;
+      const choices: (string | undefined)[] = [];
+      const results: string[] = [];
+      const caller = vi.fn(
+        async (
+          messages: unknown[],
+          _tools?: unknown[],
+          _signal?: AbortSignal,
+          toolChoice?: "auto" | "none",
+        ) => {
+          choices.push(toolChoice);
+          call++;
+          if (toolChoice === "none") {
+            results.push(
+              ...(messages as { role: string; content: string }[])
+                .filter((m) => m.role === "tool")
+                .map((m) => m.content),
+            );
+            return {
+              role: "assistant" as const,
+              content: JSON.stringify({
+                replyKind: productId ? "grounded" : "handoff",
+                answer: "按查询结果答复",
+                citations: [],
+                productIds: productId ? [productId] : [],
+              }),
+            };
+          }
+          return {
+            role: "assistant" as const,
+            content: null,
+            tool_calls: [
+              {
+                id: `search-${call}`,
+                type: "function" as const,
+                function: {
+                  name: "search_products",
+                  arguments: JSON.stringify(
+                    call === 1
+                      ? { query, maxPrice: 15000 }
+                      : { maxPrice: 15000, query },
+                  ),
+                },
+              },
+            ],
+          };
+        },
+      );
+      await processSupportRun(sql, run.id, caller);
+      expect(caller).toHaveBeenCalledTimes(3);
+      expect(choices).toEqual(["auto", "auto", "none"]);
+      expect(results).toHaveLength(2);
+      expect(results[1]).toBe(results[0]);
+      expect(
+        sql
+          .prepare("SELECT status,calls FROM support_runs WHERE id=?")
+          .get(run.id),
+      ).toEqual({ status: "completed", calls: 3 });
+      const answer = readDatabase(sql)
+        .conversations.find((c) => c.id === run.conversation_id)!
+        .messages.at(-1)!;
+      expect(answer.replyKind).toBe(productId ? "grounded" : "handoff");
+      if (productId) expect(answer.text).toContain("水杯");
+      expect(
+        sql
+          .prepare("SELECT count(*) AS n FROM support_proposals WHERE run_id=?")
+          .get(run.id)?.n,
+      ).toBe(0);
+    },
+  );
+
+  it("reserves the fourth call for an answer after distinct tool queries", async () => {
+    const run: any = await queued("比较三款商品");
+    let call = 0;
+    const choices: (string | undefined)[] = [];
+    const caller = vi.fn(
+      async (
+        _messages: unknown[],
+        _tools?: unknown[],
+        _signal?: AbortSignal,
+        toolChoice?: "auto" | "none",
+      ) => {
+        choices.push(toolChoice);
+        call++;
+        if (toolChoice === "none")
+          return {
+            role: "assistant" as const,
+            content: JSON.stringify({
+              replyKind: "grounded",
+              answer: "商品对比",
+              citations: [],
+              productIds: ["p01", "p02", "p03"],
+              presentation: { productView: "compare", focus: ["price"] },
+            }),
+          };
+        return {
+          role: "assistant" as const,
+          content: null,
+          tool_calls: [
+            {
+              id: `detail-${call}`,
+              type: "function" as const,
+              function: {
+                name: "product_details",
+                arguments: JSON.stringify({ productId: `p0${call}` }),
+              },
+            },
+          ],
+        };
+      },
+    );
+    await processSupportRun(sql, run.id, caller);
+    expect(choices).toEqual(["auto", "auto", "auto", "none"]);
+    expect(
+      sql
+        .prepare("SELECT status,calls,tools FROM support_runs WHERE id=?")
+        .get(run.id),
+    ).toEqual({ status: "completed", calls: 4, tools: 3 });
+  });
+
+  it.each([
     ["保温杯", []],
     ["水杯", ["p21"]],
     ["马克杯", ["p05"]],

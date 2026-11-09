@@ -49,9 +49,16 @@ describe("AI provider protocol and failure boundaries", () => {
         JSON.stringify({
           choices: [
             {
-              message: body.tools
-                ? { role: "assistant", content: null, tool_calls: [toolCall] }
-                : { role: "assistant", content: "合成转录正文" },
+              message:
+                body.tool_choice === "none"
+                  ? { role: "assistant", content: '{"answer":"查询完成"}' }
+                  : body.tools
+                    ? {
+                        role: "assistant",
+                        content: null,
+                        tool_calls: [toolCall],
+                      }
+                    : { role: "assistant", content: "合成转录正文" },
             },
           ],
         }),
@@ -77,7 +84,20 @@ describe("AI provider protocol and failure boundaries", () => {
       await expect(
         vision(Buffer.from("synthetic-image"), "image/png"),
       ).resolves.toBe("合成转录正文");
-      expect(requests).toHaveLength(2);
+      await expect(
+        chat(
+          [{ role: "system", content: "Return JSON" }],
+          tools,
+          undefined,
+          "none",
+        ),
+      ).resolves.toMatchObject({ content: '{"answer":"查询完成"}' });
+      expect(requests).toHaveLength(3);
+      expect(requests[2]).toMatchObject({
+        tools,
+        tool_choice: "none",
+        response_format: { type: "json_object" },
+      });
       expect(requests[0]).toMatchObject({
         model: "gpt-6-luna",
         tools,

@@ -47,6 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           gh run download "$VALIDATION_RUN" --repo "$GITHUB_REPOSITORY" --name validated-container-images --dir .delivery/container-release
+          gh run download "$VALIDATION_RUN" --repo "$GITHUB_REPOSITORY" --name validated-container-sources --dir .delivery/container-release
           gzip -dc .delivery/container-release/validated-images.tar.gz | docker load
           for service in api web; do
             test "$(docker image inspect "shopmate-ai-$service:acceptance" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SOURCE_SHA"

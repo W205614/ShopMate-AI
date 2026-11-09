@@ -51,8 +51,9 @@ class ContainerSourceTests(unittest.TestCase):
                 receipt = sources.download(base + "/source.tar", target)
                 self.assertEqual(target.read_bytes(), payload)
                 self.assertEqual(receipt["sha256"], hashlib.sha256(payload).hexdigest())
-                with self.assertRaises(HTTPError):
+                with self.assertRaises(HTTPError) as failure:
                     sources.download(base + "/missing", Path(directory) / "missing")
+                failure.exception.close()
                 self.assertFalse((Path(directory) / "missing").exists())
         finally:
             server.shutdown()

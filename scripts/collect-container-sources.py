@@ -165,6 +165,8 @@ def collect(api, web, output):
             "docker",
             "run",
             "--rm",
+            "--env",
+            "DISTFILES_MIRROR=https://distfiles.alpinelinux.org/distfiles/v3.24",
             "--mount",
             f"type=bind,source={output.resolve()},target=/sources",
             "alpine:3.24",

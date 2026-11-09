@@ -264,20 +264,37 @@ jobs:
             frontend/test-results-maintenance
             frontend/test-results-ai-task
             frontend/test-results-production
-      - name: Collect corresponding container sources and notices
-        working-directory: .
-        run: |
-          python3 scripts/collect-container-sources.py --api shopmate-ai-api:acceptance --web shopmate-ai-web:acceptance --output .delivery/container-sources
-          tar -C .delivery -czf container-sources.tar.gz container-sources
-          sha256sum container-sources.tar.gz > container-sources.SHA256SUMS
       - name: Export validated container images
         working-directory: .
         run: docker image save shopmate-ai-api:acceptance shopmate-ai-web:acceptance | gzip > validated-images.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: validated-container-images
+          path: validated-images.tar.gz
+          retention-days: 1
+  sources:
+    needs: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-container-images
+          path: .delivery/container-release
+      - name: Load the validated images
+        run: gzip -dc .delivery/container-release/validated-images.tar.gz | docker load
+      - name: Collect corresponding container sources and notices
+        run: |
+          python3 scripts/collect-container-sources.py --api shopmate-ai-api:acceptance --web shopmate-ai-web:acceptance --output .delivery/container-sources
+          tar --exclude='container-sources/alpine/*/src' -C .delivery -czf container-sources.tar.gz container-sources
+          sha256sum container-sources.tar.gz > container-sources.SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-container-sources
           path: |
-            validated-images.tar.gz
             container-sources.tar.gz
             container-sources.SHA256SUMS
           retention-days: 1

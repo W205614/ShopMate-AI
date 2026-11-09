@@ -24,6 +24,8 @@ COPY backend/package*.json ./
 COPY backend/src ./src
 COPY shared /app/shared
 COPY LICENSE /app/LICENSE
+COPY THIRD_PARTY_NOTICES.md /app/licenses/THIRD_PARTY_NOTICES.md
+COPY third_party/sharp-libvips-1.3.4-NOTICES.txt /app/licenses/sharp-libvips-NOTICES.txt
 COPY backend/scripts ./scripts
 RUN mkdir -p /app/data /app/backups && chown node:node /app/data /app/backups
 USER node

@@ -15,7 +15,7 @@ git clone https://github.com/W205614/ShopMate-AI.git
 cd ShopMate-AI
 ```
 
-需要稳定源码时，在配置和首次构建前执行 `git switch --detach v0.1.1`；默认 `main` 用于后续开发。已有部署先按[生产指南](docs/production.md)准备匹配的恢复资料。
+需要稳定源码时，在配置和首次构建前执行 `git switch --detach v0.1.2`；默认 `main` 用于后续开发。已有部署先按[生产指南](docs/production.md)准备匹配的恢复资料。Linux/amd64 也可按[容器分发说明](docs/container-distribution.md)获取已验证的 API/Web Packages，避免本机构建。
 
 在项目根目录复制配置模板。Windows PowerShell：
 
@@ -74,7 +74,7 @@ Caddy 入口的已知依赖漏洞、固定配置下的 OpenVEX 评估及升级�
 
 微信 H5 支付链接遵循官方五分钟有效期；到期后先查单，再按原支付单号恢复链接，跳转前重新确认状态，详见[H5 链接刷新与限制](docs/integrations.md#h5-支付链接刷新)。
 
-功能实现与初次本地验收见[单店生产版验收报告](docs/production-acceptance-20261106.md)；物流并发修复与发布边界见[最新维护记录](docs/release-20261109.md)，首版完整交付及恢复记录见[v0.1.0 记录](docs/release-20261107.md)。
+功能实现与初次本地验收见[单店生产版验收报告](docs/production-acceptance-20261106.md)；容器分发见[最新维护记录](docs/release-v0.1.2.md)，物流并发修复见[v0.1.1 记录](docs/release-20261109.md)，首版完整交付及恢复记录见[v0.1.0 记录](docs/release-20261107.md)。
 
 ## 第一次体验
 

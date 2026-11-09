@@ -264,11 +264,20 @@ jobs:
             frontend/test-results-maintenance
             frontend/test-results-ai-task
             frontend/test-results-production
+      - name: Collect corresponding container sources and notices
+        working-directory: .
+        run: |
+          python3 scripts/collect-container-sources.py --api shopmate-ai-api:acceptance --web shopmate-ai-web:acceptance --output .delivery/container-sources
+          tar -C .delivery -czf container-sources.tar.gz container-sources
+          sha256sum container-sources.tar.gz > container-sources.SHA256SUMS
       - name: Export validated container images
         working-directory: .
         run: docker image save shopmate-ai-api:acceptance shopmate-ai-web:acceptance | gzip > validated-images.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: validated-container-images
-          path: validated-images.tar.gz
+          path: |
+            validated-images.tar.gz
+            container-sources.tar.gz
+            container-sources.SHA256SUMS
           retention-days: 1

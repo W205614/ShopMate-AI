@@ -32,6 +32,7 @@ ShopMate-AI/
 │   └── testing/              通过受限公开 API 组装验收快照的辅助代码
 ├── deploy/                   Nginx/Caddy、独立生产编排、可选监控及验收覆盖文件
 ├── scripts/                  仓库检查与宿主机维护脚本
+├── third_party/              随 API 镜像分发的上游原始许可通知
 ├── docs/
 │   ├── README.md             当前文档、验收报告与历史记录导航
 │   ├── archive/              已完成阶段的交付和设计记录
@@ -108,6 +109,8 @@ ShopMate-AI/
 根目录的 `scripts/check-docs.mjs` 是文档维护脚本：执行 `node scripts/check-docs.mjs`，检查 Git 跟踪和未忽略 Markdown 中本地 Markdown 链接及 HTML 图片/链接的目标文件是否存在，发现缺失则返回失败。它不检查锚点或外部网站可访问性。
 
 `scripts/production-preflight.mjs` 检查独立生产配置、私有文件、镜像与可选运行状态；`scripts/production-release.sh` 执行维护发布与受约束恢复；`scripts/production-edge-vex.mjs` 守护固定入口配置的临时安全评估。使用前阅读[生产指南](production.md)，这些脚本不读取或替换本机日常 `.env`。
+
+`scripts/collect-container-sources.py` 从已验收 API/Web 镜像读取真实组件版本，收集容器再分发所需的源文件、构建配方和许可。`.github/workflows/publish-containers.yml` 手动推广成功 CI 的同一镜像到 GHCR，分发和可见性检查见[容器分发](container-distribution.md)。
 
 ## 部署文件如何组合
 

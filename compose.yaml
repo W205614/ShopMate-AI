@@ -1,7 +1,7 @@
 name: shopmate-ai
 services:
   api:
-    image: shopmate-ai-api:local
+    image: ${API_IMAGE:-shopmate-ai-api:local}
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -55,7 +55,7 @@ services:
         max-file: "3"
     restart: unless-stopped
   web:
-    image: shopmate-ai-web:local
+    image: ${WEB_IMAGE:-shopmate-ai-web:local}
     build:
       context: .
       args:

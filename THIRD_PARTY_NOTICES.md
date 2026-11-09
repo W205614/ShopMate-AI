@@ -18,4 +18,6 @@ Libre Franklin 字体使用 SIL Open Font License 1.1，正文与作者声明位
 
 ## 容器再分发
 
-Dockerfile 使用官方 Node.js、Nginx/Alpine 基础镜像，API 另安装 Poppler、字体及 libvips 相关组件。它们包含 GPL、LGPL、OFL 等独立许可。若另行公开镜像或二进制，应针对实际镜像的包版本保留许可并准备对应源码及必要构建材料，履行相关再分发义务。本次 GitHub Release 仅发布项目源码，不发布容器镜像或 npm 包。使用依赖、镜像或素材时按各自原许可处理。
+Dockerfile 使用官方 Node.js、Nginx/Alpine 基础镜像，API 另安装 Poppler、字体及 libvips 相关组件。它们包含 GPL、LGPL、MPL、OFL 等独立许可。`v0.1.0`、`v0.1.1` 仅发布源码；从 `v0.1.2` 起，API/Web 镜像的分发流程另外收集实际版本的对应源码、Alpine 构建配方、补丁、许可与摘要，随对应 Release 提供。具体内容、获取与替换组件的方法见[容器分发说明](docs/container-distribution.md)。
+
+API 镜像另保留 sharp-libvips `v1.3.4` 的[完整第三方通知](third_party/sharp-libvips-1.3.4-NOTICES.txt)，原文来自其[上游版本](https://github.com/lovell/sharp-libvips/blob/v1.3.4/THIRD-PARTY-NOTICES.md)，SHA-256 为 `6f0d5086e3bcbee12bcdacf5878b31d1104002aeecaeb241d3fff466108082fe`。升级该包时须同步核对通知和源码收集流程，不手动改写上游许可。使用依赖、镜像或素材时按各自原许可处理。

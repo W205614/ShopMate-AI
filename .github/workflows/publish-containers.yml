@@ -1,0 +1,89 @@
+name: Publish validated containers
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing immutable version tag (vX.Y.Z)
+        required: true
+        type: string
+      validation_run:
+        description: Successful Application validation run for that exact commit
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: container-release-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      VALIDATION_RUN: ${{ inputs.validation_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify source tag and completed validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$VALIDATION_RUN" =~ ^[0-9]+$ ]]
+          sha=$(git rev-parse "$VERSION^{commit}")
+          test "$sha" = "$GITHUB_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATION_RUN" > /tmp/validation.json
+          jq -e --arg sha "$sha" '.head_sha == $sha and .status == "completed" and .conclusion == "success" and .path == ".github/workflows/validation.yml" and .event == "push"' /tmp/validation.json
+          echo "SOURCE_SHA=$sha" >> "$GITHUB_ENV"
+          echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/shopmate-ai" >> "$GITHUB_ENV"
+      - name: Obtain the tested images without rebuilding
+        run: |
+          set -euo pipefail
+          gh run download "$VALIDATION_RUN" --repo "$GITHUB_REPOSITORY" --name validated-container-images --dir .delivery/container-release
+          gzip -dc .delivery/container-release/validated-images.tar.gz | docker load
+          for service in api web; do
+            test "$(docker image inspect "shopmate-ai-$service:acceptance" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SOURCE_SHA"
+          done
+      - name: Verify the corresponding sources from the same validation
+        run: |
+          set -euo pipefail
+          cd .delivery/container-release
+          sha256sum --check container-sources.SHA256SUMS
+          mv container-sources.tar.gz "container-sources-$VERSION.tar.gz"
+          sha256sum "container-sources-$VERSION.tar.gz" > SHA256SUMS
+      - name: Stage source materials on a new draft Release
+        run: |
+          set -euo pipefail
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "ShopMate-AI $VERSION" --notes-file "docs/release-$VERSION.md"
+          gh release upload "$VERSION" --repo "$GITHUB_REPOSITORY" ".delivery/container-release/container-sources-$VERSION.tar.gz" .delivery/container-release/SHA256SUMS
+      - name: Publish immutable versioned API and Web packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          for service in api web; do
+            target="$IMAGE_PREFIX-$service:$VERSION"
+            repository="${IMAGE_PREFIX#ghcr.io/}-$service"
+            registry_token=$(curl --fail --silent --show-error --user "$GITHUB_ACTOR:$GH_TOKEN" --get --data-urlencode "scope=repository:$repository:pull,push" --data-urlencode service=ghcr.io https://ghcr.io/token | jq -er .token)
+            status=$(curl --silent --show-error --output /tmp/manifest.json --write-out '%{http_code}' -H "Authorization: Bearer $registry_token" -H 'Accept: application/vnd.docker.distribution.manifest.v2+json' "https://ghcr.io/v2/$repository/manifests/$VERSION")
+            test "$status" = 404 || { echo "Refusing to publish $target: manifest check returned HTTP $status" >&2; exit 1; }
+            docker tag "shopmate-ai-$service:acceptance" "$target"
+            docker push "$target"
+            docker image inspect "$target" --format '{{json .RepoDigests}}' >> .delivery/container-release/published-digests.jsonl
+          done
+          docker logout ghcr.io
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-publication-evidence
+          path: |
+            .delivery/container-release/SHA256SUMS
+            .delivery/container-release/published-digests.jsonl
+          if-no-files-found: ignore

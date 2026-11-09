@@ -17,5 +17,6 @@ LABEL org.opencontainers.image.source="https://github.com/W205614/ShopMate-AI" \
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
 COPY LICENSE /usr/share/nginx/html/licenses/shopmate.txt
+COPY THIRD_PARTY_NOTICES.md /usr/share/nginx/html/licenses/THIRD_PARTY_NOTICES.md
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1/api/health || exit 1
 EXPOSE 80

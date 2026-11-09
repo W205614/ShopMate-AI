@@ -244,7 +244,11 @@ function applyTrace(sql: DatabaseSync, row: Shipment, value: unknown) {
       "物流返回的运单不匹配",
       "LOGISTICS_TRACKING_MISMATCH",
     );
-  const previous = traceSchema.parse(JSON.parse(row.trace));
+  // A callback may have arrived while the query was waiting on the provider.
+  const latest = sql
+    .prepare("SELECT trace FROM external_shipments WHERE id=?")
+    .get(row.id)!;
+  const previous = traceSchema.parse(JSON.parse(String(latest.trace)));
   const events = [
     ...new Map(
       [...previous.data, ...trace.data].map((event) => [

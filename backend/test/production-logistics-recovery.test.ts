@@ -1,9 +1,14 @@
 import express, { type ErrorRequestHandler } from "express";
 import { createServer, type Server } from "node:http";
+import { createHash, createHmac } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { tokenHash } from "../src/auth";
 import { registerExternalRoutes } from "../src/production/external";
-import { enqueueShipment, runLogisticsJobs } from "../src/production/logistics";
+import {
+  enqueueShipment,
+  registerLogisticsWebhooks,
+  runLogisticsJobs,
+} from "../src/production/logistics";
 import { createPaymentFixture } from "./support/payment-fixture";
 
 let fixture: ReturnType<typeof createPaymentFixture>,
@@ -60,6 +65,7 @@ beforeEach(async () => {
   vi.stubEnv("KUAIDI100_SUBSCRIBE_URL", providerBase + "/subscribe");
   const instance = express();
   instance.use(express.json());
+  registerLogisticsWebhooks(instance, fixture.sql);
   registerExternalRoutes(instance, fixture.sql);
   const errors: ErrorRequestHandler = (error, _req, res, _next) =>
     res.status(error.status ?? 500).json({ code: error.code });
@@ -168,4 +174,70 @@ it("preserves the five-attempt subscription budget across interrupted workers", 
   });
   await runLogisticsJobs(fixture.sql);
   expect(subscribeCount).toBe(1);
+});
+
+it("retains a newer signed callback when an older query response arrives later", async () => {
+  const target = await shipment("SF-CONCURRENT");
+  const beforeOrder = fixture.sql
+    .prepare("SELECT data FROM biz_orders WHERE key=?")
+    .get(target.orderId)!.data;
+  let release!: () => void;
+  const requested = new Promise<void>((done) => {
+    queryStarted = done;
+  });
+  queryWait = new Promise<void>((done) => {
+    release = done;
+  });
+  const pending = refresh(target.orderId, target.id);
+  await requested;
+  try {
+    const param = JSON.stringify({
+      status: "polling",
+      lastResult: {
+        status: "200",
+        com: "shunfeng",
+        nu: "SF-CONCURRENT",
+        state: "3",
+        data: [{ time: "2026-11-06 14:00:00", context: "已签收" }],
+      },
+    });
+    const salt = createHmac("sha256", "x".repeat(32))
+      .update(target.id)
+      .digest("hex");
+    const sign = createHash("md5")
+      .update(param + salt)
+      .digest("hex");
+    const callback = await fetch(
+      base + `/api/webhooks/kuaidi100/${target.id}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ param, sign }),
+      },
+    );
+    expect(callback.status).toBe(200);
+  } finally {
+    release();
+  }
+  const response = await pending;
+  expect(response.status).toBe(200);
+  const result = await response.json();
+  expect(result.trace.state).toBe("3");
+  expect(result.trace.data).toEqual([
+    { time: "2026-11-06 14:00:00", context: "已签收" },
+    { time: "2026-11-06 12:00:00", context: "已揽收" },
+  ]);
+  const stored = fixture.sql
+    .prepare("SELECT trace FROM external_shipments WHERE id=?")
+    .get(target.id)!;
+  expect(JSON.parse(String(stored.trace))).toEqual(result.trace);
+  expect(await (await refresh(target.orderId, target.id)).json()).toEqual(
+    result,
+  );
+  expect(queryCount).toBe(1);
+  expect(
+    fixture.sql
+      .prepare("SELECT data FROM biz_orders WHERE key=?")
+      .get(target.orderId)!.data,
+  ).toBe(beforeOrder);
 });

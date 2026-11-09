@@ -773,7 +773,7 @@ export async function executeSupportTool(
         ...new Set(
           query
             .replace(/推荐|商品|一些|帮我|想买|有没有|家居好物/g, "")
-            .match(/[\p{Script=Han}]|[\p{L}\p{N}]+/gu) ?? [],
+            .match(/[\p{Script=Han}]+|[\p{L}\p{N}]+/gu) ?? [],
         ),
       ];
       return db.products

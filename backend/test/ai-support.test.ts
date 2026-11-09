@@ -39,6 +39,34 @@ afterEach(() => {
 });
 
 describe("AI support task and confirmation invariants", () => {
+  it.each([
+    ["保温杯", []],
+    ["水杯", ["p21"]],
+    ["马克杯", ["p05"]],
+  ])(
+    "matches the whole Chinese product keyword %s",
+    async (query, expected) => {
+      const run: any = await queued(String(query));
+      const products = await asUser(() =>
+        executeSupportTool(
+          sql,
+          run,
+          "search_products",
+          { query, maxPrice: 15000 },
+          new AbortController().signal,
+          {
+            sources: [],
+            products: new Set<string>(),
+            productCaps: new Map<string, number | undefined>(),
+            orders: new Set<string>(),
+            degraded: [],
+          },
+        ),
+      );
+      expect((products as { id: string }[]).map((p) => p.id)).toEqual(expected);
+    },
+  );
+
   it("corrects an invalid final shape within the existing provider-call budget", async () => {
     const run: any = await queued("帮我申请退款");
     const caller = vi

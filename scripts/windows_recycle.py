@@ -34,7 +34,7 @@ def checked_path(value: str | Path, allowed_root: Path) -> Path:
 def _native_recycle(paths: list[Path]) -> None:
     if os.name != "nt":
         raise OSError("Recycle-only execution requires Windows")
-    from ctypes import wintypes
+    import ctypes.wintypes as wintypes
 
     class GUID(ctypes.Structure):
         _fields_ = [("bytes", ctypes.c_ubyte * 16)]

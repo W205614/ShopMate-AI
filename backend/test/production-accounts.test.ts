@@ -473,6 +473,11 @@ describe("production account lifecycle through HTTP", () => {
         .get(admin.id)?.n,
     ).toBe(0);
     const pending = cookieOf(login, "shopmate_mfa");
+    expect(
+      login.headers
+        .getSetCookie()
+        .find((value) => value.startsWith(pending + ";")),
+    ).toMatch(/; Secure(?:;|$)/);
     const setup = await (
       await post("/api/auth/mfa/enroll", {}, pending)
     ).json();
@@ -545,6 +550,18 @@ describe("production account lifecycle through HTTP", () => {
     ).toBe(0);
     expect(sql.prepare("SELECT count(*) n FROM account_mfa").get()?.n).toBe(0);
   }, 20_000);
+  it("limits MFA verification requests by IP before checking a challenge", async () => {
+    expect(
+      (await post("/api/auth/mfa/verify", { code: "000000" })).status,
+    ).toBe(401);
+    sql
+      .prepare("UPDATE rate_limits SET count=60 WHERE key LIKE 'mfa-ip:%'")
+      .run();
+    for (const endpoint of ["confirm", "verify"])
+      expect(
+        (await post(`/api/auth/mfa/${endpoint}`, { code: "000000" })).status,
+      ).toBe(429);
+  });
   it("cancels incomplete MFA challenges and exposes no account existence through recovery responses", async () => {
     await createAccount(sql, { ...input, username: "owner" }, "admin");
     const login = await post("/api/auth/login", {

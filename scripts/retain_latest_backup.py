@@ -9,7 +9,6 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 
 from windows_recycle import checked_path, hidden_process_options, recycle_paths
 

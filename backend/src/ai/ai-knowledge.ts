@@ -14,7 +14,6 @@ import { reserveProviderRequest, withProviderBudget } from "./ai-budget";
 import { integerSetting } from "../config";
 import {
   tokenize,
-  splitSections,
   type DocumentSection,
   type KnowledgeChunk,
 } from "./ai-document-worker";

@@ -9,6 +9,15 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         postBanner: "/* Dependency licenses: /licenses/dependencies.md */",
+        codeSplitting: {
+          groups: [
+            {
+              name: "admin-ui",
+              test: /node_modules[\\/]element-plus/,
+              maxSize: 250_000,
+            },
+          ],
+        },
       },
     },
   },

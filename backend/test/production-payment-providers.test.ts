@@ -139,7 +139,7 @@ beforeAll(async () => {
       return;
     }
     const auth = Object.fromEntries(
-      [...String(req.headers.authorization).matchAll(/(\w+)="([^"]*)"/g)].map(
+      [...String(req.headers.authorization).matchAll(/\b(\w+)="([^"]*)"/g)].map(
         (match) => [match[1], match[2]],
       ),
     );

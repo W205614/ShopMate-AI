@@ -1,9 +1,9 @@
+import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { test, expect, TEST_ADMIN_PASSWORD } from "./fixtures";
 
 const password = "UserSecure123!";
-const unique = () =>
-  `member_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const unique = () => `member_${randomUUID().replaceAll("-", "").slice(0, 20)}`;
 async function register(
   page: Page,
   username = unique(),

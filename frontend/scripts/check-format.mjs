@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { lstat, readFile, writeFile } from "node:fs/promises";
+import { Buffer } from "node:buffer";
+import { constants } from "node:fs";
+import { open, lstat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { format, getFileInfo, resolveConfig } from "prettier";
 
@@ -34,24 +36,51 @@ for (const filepath of paths) {
     resolveConfig: false,
   });
   if (ignored) continue;
-  const stat = await lstat(filepath).catch((error) => {
-    if (error.code !== "ENOENT") throw error;
+  const file = await open(
+    filepath,
+    (write ? constants.O_RDWR : constants.O_RDONLY) |
+      (constants.O_NOFOLLOW ?? 0),
+  ).catch((error) => {
+    if (!["ENOENT", "EISDIR", "ELOOP"].includes(error.code)) throw error;
   });
-  if (!stat?.isFile()) continue;
-  if (python) {
-    pythonFiles.push(filepath);
-    continue;
+  if (!file) continue;
+  try {
+    if (
+      !(await file.stat()).isFile() ||
+      (await lstat(filepath)).isSymbolicLink()
+    )
+      continue;
+    if (python) {
+      pythonFiles.push(filepath);
+      continue;
+    }
+    const source = (await file.readFile("utf8")).replaceAll("\r\n", "\n");
+    const formatted = basic
+      ? source.replace(/[ \t]+$/gm, "").replace(/\n*$/, "\n")
+      : await format(source, { ...(await resolveConfig(filepath)), filepath });
+    if (formatted !== source) {
+      console.log(filepath);
+      if (write) {
+        const bytes = Buffer.from(formatted);
+        let offset = 0;
+        while (offset < bytes.length) {
+          const { bytesWritten } = await file.write(
+            bytes,
+            offset,
+            bytes.length - offset,
+            offset,
+          );
+          if (!bytesWritten)
+            throw new Error(`Incomplete format write: ${filepath}`);
+          offset += bytesWritten;
+        }
+        await file.truncate(bytes.length);
+      } else process.exitCode = 1;
+    }
+    checked++;
+  } finally {
+    await file.close();
   }
-  const source = (await readFile(filepath, "utf8")).replaceAll("\r\n", "\n");
-  const formatted = basic
-    ? source.replace(/[ \t]+$/gm, "").replace(/\n*$/, "\n")
-    : await format(source, { ...(await resolveConfig(filepath)), filepath });
-  if (formatted !== source) {
-    console.log(filepath);
-    if (write) await writeFile(filepath, formatted);
-    else process.exitCode = 1;
-  }
-  checked++;
 }
 if (pythonFiles.length) {
   execFileSync(

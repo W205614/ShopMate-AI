@@ -11,7 +11,7 @@ import type {
   Session,
   CartItem,
 } from "../../shared/domain/types";
-import { readDatabase, queryPage, queryRecord, tableFor } from "./database";
+import { readDatabase, queryPage, queryRecord } from "./database";
 import { findSession, HttpError } from "./auth";
 import { collectionPermission, demand, permits } from "./permissions";
 import { availableStock, reservedStock } from "./commerce-rules";

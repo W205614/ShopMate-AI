@@ -784,7 +784,7 @@ export function registerAccountRoutes(
       clearMfa(res, secure);
       res.cookie(MFA_COOKIE, token, {
         httpOnly: true,
-        secure,
+        secure: true,
         sameSite: "strict",
         path: "/api/auth",
         maxAge: FIVE_MINUTES,
@@ -849,6 +849,7 @@ export function registerAccountRoutes(
   });
   app.post("/api/auth/mfa/confirm", async (req, res) => {
     requireEnabled();
+    rateLimit(sql, `mfa-ip:${req.ip}`, 60, 15 * 60_000);
     const { code } = z.object({ code: codeSchema }).strict().parse(req.body),
       challenge = mfaChallenge(sql, req);
     if (!challenge.secret) throw new HttpError(400, "请先获取二次验证设置");
@@ -900,6 +901,7 @@ export function registerAccountRoutes(
   });
   app.post("/api/auth/mfa/verify", async (req, res) => {
     requireEnabled();
+    rateLimit(sql, `mfa-ip:${req.ip}`, 60, 15 * 60_000);
     const { code } = z.object({ code: codeSchema }).strict().parse(req.body),
       challenge = mfaChallenge(sql, req);
     sql

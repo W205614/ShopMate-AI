@@ -173,9 +173,9 @@ def collect(api, web, output):
             "sh",
             "-ec",
             "apk add --no-cache abuild git; "
-            "for recipe in /sources/alpine/*; do "
-            'cd "$recipe"; mkdir distfiles; '
-            'SRCDEST="$recipe/distfiles" abuild -F fetch verify; done',
+            + "for recipe in /sources/alpine/*; do "
+            + 'cd "$recipe"; mkdir distfiles; '
+            + 'SRCDEST="$recipe/distfiles" abuild -F fetch verify; done',
         ],
         check=True,
     )
@@ -302,7 +302,7 @@ def collect(api, web, output):
             api,
             "-ec",
             "find node_modules -type f \\( -iname '*license*' -o -iname '*notice*' -o -name package.json \\) > /tmp/notices; "
-            "tar -czf - -T /tmp/notices /usr/local/LICENSE",
+            + "tar -czf - -T /tmp/notices /usr/local/LICENSE",
         ]
     )
     (output / "npm-notices.tar.gz").write_bytes(notices)

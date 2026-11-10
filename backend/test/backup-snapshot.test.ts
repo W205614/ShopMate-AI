@@ -249,7 +249,7 @@ describe("bounded backup snapshots", () => {
   it("cleans only known owned copy and inspection families and preserves unexpected scratch contents", () => {
     const temporaryId = crypto.randomUUID(),
       directory = backupScratchDirectory(temporaryId);
-    mkdirSync(directory);
+    mkdirSync(directory, { mode: 0o700 });
     try {
       for (const file of [
         "snapshot.sqlite",

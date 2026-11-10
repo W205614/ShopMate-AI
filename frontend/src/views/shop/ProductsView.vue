@@ -70,8 +70,12 @@ const chips = computed(() => [
 ]);
 function update(patch: Record<string, string | undefined>) {
   const query: LocationQueryRaw = { ...route.query, page: undefined, ...patch };
-  for (const key of Object.keys(query)) if (!query[key]) delete query[key];
-  void router.push({ path: "/products", query });
+  void router.push({
+    path: "/products",
+    query: Object.fromEntries(
+      Object.entries(query).filter(([, value]) => value),
+    ),
+  });
 }
 function applyPrices() {
   const value = readCatalogueQuery({ min: min.value, max: max.value });

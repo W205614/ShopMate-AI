@@ -28,7 +28,7 @@ const shop = useShop(),
   route = useRoute(),
   router = useRouter(),
   activeId = ref(""),
-  drafts = ref<Record<string, string>>({}),
+  drafts = ref(new Map<string, string>()),
   detail = ref<SupportDetail | null>(null),
   aiEnabled = ref<boolean | null>(null),
   detailError = ref(""),
@@ -40,12 +40,15 @@ let alive = true,
   readSequence = 0,
   timer: ReturnType<typeof setTimeout> | undefined,
   proposalTimer: ReturnType<typeof setTimeout> | undefined;
-let draftVersions: Record<string, number> = {};
+let draftVersions = new Map<string, number>();
 const text = computed({
-  get: () => drafts.value[activeId.value] ?? "",
+  get: () => drafts.value.get(activeId.value) ?? "",
   set: (value: string) => {
-    drafts.value[activeId.value] = value;
-    draftVersions[activeId.value] = (draftVersions[activeId.value] ?? 0) + 1;
+    drafts.value.set(activeId.value, value);
+    draftVersions.set(
+      activeId.value,
+      (draftVersions.get(activeId.value) ?? 0) + 1,
+    );
   },
 });
 const conversations = computed(() =>
@@ -289,8 +292,8 @@ watch(
     stopPolling();
     readSequence++;
     activeId.value = "";
-    drafts.value = {};
-    draftVersions = {};
+    drafts.value = new Map();
+    draftVersions = new Map();
     detail.value = null;
     detailError.value = "";
     error.value = "";
@@ -358,16 +361,16 @@ async function send(value?: string) {
   }
   const target = capture(),
     sentDraft = text.value,
-    draftVersion = draftVersions[target.id];
+    draftVersion = draftVersions.get(target.id);
   if (await runScoped(() => api.sendMessage(target.id, content))) {
     if (
       alive &&
       epoch === target.epoch &&
       target.actor === shop.userSession?.id &&
-      draftVersions[target.id] === draftVersion &&
+      draftVersions.get(target.id) === draftVersion &&
       (value === undefined || sentDraft.trim() === content)
     )
-      drafts.value[target.id] = "";
+      drafts.value.set(target.id, "");
     if (current(target)) await refreshDetail();
   }
 }

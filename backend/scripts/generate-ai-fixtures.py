@@ -1,7 +1,6 @@
 """Regenerate synthetic AI acceptance files with Pillow, python-docx and ReportLab."""
 
 from pathlib import Path
-from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 from docx import Document
 from reportlab.pdfgen import canvas

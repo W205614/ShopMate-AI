@@ -1,6 +1,6 @@
 import express from "express";
 import { z } from "zod";
-import { marketingApi, publicReviews } from "./marketing";
+import { marketingApi } from "./marketing";
 import type { ErrorRequestHandler } from "express";
 import type { DatabaseSync } from "node:sqlite";
 import { ZodError } from "zod";

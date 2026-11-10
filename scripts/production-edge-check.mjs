@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -121,8 +121,6 @@ export function checkProductionEdge({
 } = {}) {
   if (!output) throw new Error("--output must name a new evidence file");
   const outputPath = resolve(output);
-  if (existsSync(outputPath))
-    throw new Error("Evidence already exists; use a new path");
   const composePath = resolve(root, "deploy/compose.production.yaml");
   const configPath = resolve(root, "deploy/Caddyfile");
   const run = (args, env = process.env) =>

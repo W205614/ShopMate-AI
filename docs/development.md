@@ -67,7 +67,7 @@ APP_ORIGINS=http://localhost:18090,http://127.0.0.1:18090
 更换管理员密码：编辑根目录 `.env` 中的 `ADMIN_PASSWORD`，然后执行以下命令。只改配置或重建容器不会更新已有密码；命令成功后撤销该管理员全部旧会话。
 
 ```powershell
-docker compose run --rm --no-deps api npm run admin:password
+docker compose run --rm --no-deps api node --import tsx src/admin-password.ts
 ```
 
 认证与权限细节见 [认证说明](authentication.md)。
@@ -88,7 +88,7 @@ npm --prefix frontend run dev -- --host 127.0.0.1
 
 后端默认监听 `127.0.0.1:3001`，Vite 使用 5173 并代理 `/api/`。后端启动脚本读取根目录 `.env`；本地数据在 `backend/data/shopmate.sqlite`，与 Docker 数据卷独立。
 
-本地处理 PDF 还需要 Poppler 的 `pdfinfo`、`pdftotext`、`pdftoppm` 位于启动后端进程的 `PATH` 中；安装后重新打开终端，用以下命令检查。Debian／Ubuntu 可安装 `poppler-utils`，macOS 可通过 Homebrew 安装 `poppler`，Windows 使用适用于本机的 Poppler 二进制包并将其工具目录加入 `PATH`。Docker API 镜像已安装 `poppler-utils`，无需在宿主机额外安装。
+本地处理 PDF 还需要 Poppler 的 `pdfinfo`、`pdftotext`、`pdftoppm` 位于启动后端进程的 `PATH` 中；安装后重新打开终端，用以下命令检查。Debian／Ubuntu 可安装 `poppler-utils`，macOS 可通过 Homebrew 安装 `poppler`，Windows 使用适用于本机的 Poppler 二进制包并将其工具目录加入 `PATH`。Docker API 镜像已包含 `pdfinfo`、`pdftotext`、`pdftoppm`，无需在宿主机额外安装。
 
 ```powershell
 pdfinfo -v
@@ -119,7 +119,7 @@ npm --prefix frontend run test:e2e
 
 本地范围包含未暂存和未忽略的新文件，并显式包含已存在的本机 `compose.override.yaml`。CI 使用 `--tracked`，只验证版本库中的文件。历史报告、测试样例、运行数据、第三方素材文件和凭据不参与格式化，排除项见[格式排除清单](../.prettierignore)。
 
-生产依赖审计使用 `npm --prefix backend audit --omit=dev` 和 `npm --prefix frontend audit --omit=dev`。
+完整依赖审计使用 `npm --prefix backend audit` 和 `npm --prefix frontend audit`，包含开发依赖。当前 CI 对所有严重级别设门禁，并对实际 API/Web 镜像执行全严重级别扫描；免费的 CodeQL `security-and-quality` 覆盖 JavaScript/TypeScript、Python 和 Actions。实际修复、误报处置及仅引用上游镜像的边界见[v0.1.4 维护记录](release-v0.1.4.md)。
 
 容器系统包和 Node.js 内置组件不属于项目 npm 锁文件的审计范围。更新 Dockerfile 中的官方基础镜像摘要后，应重新构建并扫描实际镜像；运行时安全公告还需核对对应 Node.js 补丁版本，不能只比较其内置库显示的版本号，因为安全修复可能回移植而不改库版本号。
 

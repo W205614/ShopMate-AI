@@ -104,8 +104,8 @@ npm --prefix backend run maintenance -- verify-replica 独立接收目录/已校
 
 ```powershell
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-docker compose exec api npm run maintenance -- backup "/app/backups/shopmate-manual-$stamp.sqlite"
-docker compose exec api npm run maintenance -- inspect "/app/backups/shopmate-manual-$stamp.sqlite"
+docker compose exec api node --import tsx src/maintenance.ts backup "/app/backups/shopmate-manual-$stamp.sqlite"
+docker compose exec api node --import tsx src/maintenance.ts inspect "/app/backups/shopmate-manual-$stamp.sqlite"
 ```
 
 升级前先停写并保留当前镜像标签、Compose 配置和挂载清单。使用已经构建但尚未启动服务的新镜像执行备份命令；该命令以只读连接打开原库，不触发业务迁移：
@@ -113,8 +113,8 @@ docker compose exec api npm run maintenance -- inspect "/app/backups/shopmate-ma
 ```powershell
 docker compose stop web api
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-docker compose run --rm --no-deps api npm run maintenance -- backup "/app/backups/shopmate-preupgrade-$stamp.sqlite" --reason=preupgrade
-docker compose run --rm --no-deps api npm run maintenance -- inspect "/app/backups/shopmate-preupgrade-$stamp.sqlite"
+docker compose run --rm --no-deps api node --import tsx src/maintenance.ts backup "/app/backups/shopmate-preupgrade-$stamp.sqlite" --reason=preupgrade
+docker compose run --rm --no-deps api node --import tsx src/maintenance.ts inspect "/app/backups/shopmate-preupgrade-$stamp.sqlite"
 ```
 
 确认备份摘要后再启动候选版本执行迁移，并核对账号、会话、订单金额、库存、流水和容器镜像 SHA。不要通过删除业务卷处理启动失败，也不要执行全局 volume prune。
@@ -124,7 +124,7 @@ docker compose run --rm --no-deps api npm run maintenance -- inspect "/app/backu
 ```powershell
 docker compose stop web api
 # 将下列文件名替换为已校验的具体备份，不使用通配符。
-docker compose run --rm --no-deps -e CONFIRM_RESTORE=STOPPED_AND_BACKED_UP api npm run maintenance -- restore /app/backups/shopmate-manual-YYYYMMDD-HHMMSS.sqlite /app/data/shopmate.sqlite
+docker compose run --rm --no-deps -e CONFIRM_RESTORE=STOPPED_AND_BACKED_UP api node --import tsx src/maintenance.ts restore /app/backups/shopmate-manual-YYYYMMDD-HHMMSS.sqlite /app/data/shopmate.sqlite
 docker compose up -d api web
 ```
 

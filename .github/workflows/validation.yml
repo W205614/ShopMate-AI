@@ -40,7 +40,8 @@ jobs:
         working-directory: .
         run: |
           node --check scripts/production-preflight.mjs
-          node --check scripts/production-edge-vex.mjs
+          node --check scripts/production-edge-check.mjs
+          node --check scripts/test-production-edge.mjs
           bash -n scripts/production-release.sh
           PRODUCTION_ENV_FILE="$GITHUB_WORKSPACE/.env.production.example" docker compose --env-file .env.production.example -f deploy/compose.production.yaml config --quiet
       - name: Start isolated SMTP and S3 protocol services
@@ -97,7 +98,9 @@ jobs:
       - name: Validate production edge and proxy configuration
         working-directory: .
         run: |
-          docker run --rm --network none -e DOMAIN=shop.example.test -e ACME_EMAIL=ops@example.test --mount "type=bind,source=$GITHUB_WORKSPACE/deploy/Caddyfile,target=/etc/caddy/Caddyfile,readonly" caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3 caddy validate --config /etc/caddy/Caddyfile
+          docker build -f deploy/edge/Dockerfile --build-arg VCS_REF="${{ github.sha }}" -t shopmate-ai-edge:acceptance .
+          CADDY_IMAGE=shopmate-ai-edge:acceptance node scripts/production-edge-check.mjs --output edge-config-evidence.json
+          node scripts/test-production-edge.mjs --image shopmate-ai-edge:acceptance --web-image shopmate-ai-web:acceptance --output edge-smoke-result.json
           docker run --rm --network none -e CADDY_IP=10.254.86.2 --mount "type=bind,source=$GITHUB_WORKSPACE/deploy/nginx.production.conf.template,target=/etc/nginx/templates/default.conf.template,readonly" shopmate-ai-web:acceptance nginx -t
       - name: Scan complete API image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -120,7 +123,7 @@ jobs:
       - name: Scan production HTTPS edge image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3
+          image-ref: shopmate-ai-edge:acceptance
           scanners: vuln
           format: json
           output: edge-vulnerabilities.json
@@ -132,36 +135,21 @@ jobs:
           name: container-vulnerability-reports
           path: "*-vulnerabilities.json"
           if-no-files-found: error
-      - name: Reject all API and Web image vulnerabilities
+      - name: Reject all API, Web and edge image vulnerabilities
         working-directory: .
         env:
           TRIVY_CACHE_DIR: ${{ github.workspace }}/.cache/trivy
         run: |
           trivy image --scanners vuln --skip-db-update --exit-code 1 shopmate-ai-api:acceptance
           trivy image --scanners vuln --skip-db-update --exit-code 1 shopmate-ai-web:acceptance
-      - name: Install the verified native edge VEX scanner
-        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
-        with:
-          version: v0.76.2
-      - name: Assess edge HIGH gate with verified configuration and native OpenVEX
-        working-directory: .
-        env:
-          TRIVY_CACHE_DIR: ${{ github.workspace }}/.cache/trivy
-        run: |
-          set -euo pipefail
-          edge_vex_dir=$(mktemp -d "$RUNNER_TEMP/shopmate-edge-vex.XXXXXX")
-          node scripts/production-edge-vex.mjs --output "$edge_vex_dir/edge.openvex.json"
-          cp "$edge_vex_dir/edge.openvex.json" edge-config.openvex.json
-          cp "$edge_vex_dir/edge.openvex.json.evidence.json" edge-config-evidence.json
-          cp "$edge_vex_dir/edge.openvex.json.adapted.json" edge-config-adapted.json
-          trivy image --scanners vuln --skip-db-update --severity HIGH,CRITICAL --exit-code 1 --vex "$edge_vex_dir/edge.openvex.json" --format json --output edge-assessed-vulnerabilities.json caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3
+          trivy image --scanners vuln --skip-db-update --exit-code 1 shopmate-ai-edge:acceptance
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: edge-configuration-vex-assessment
+          name: edge-configuration-check
           path: |
-            edge-config*.json
-            edge-assessed-vulnerabilities.json
+            edge-config-evidence.json
+            edge-smoke-result.json
           if-no-files-found: ignore
       - name: Verify proxy security headers and compressed request rejection
         working-directory: .

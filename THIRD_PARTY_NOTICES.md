@@ -20,6 +20,8 @@ Alipay SDK 使用基于上游 4.14.0 的本地 `4.14.0-shopmate.1` 补丁包。�
 
 ## 容器再分发
 
+当前源码另提供基于 Caddy 2.11.9 的依赖更新构建，保留全部标准模块；安全版本、Smallstep 官方提交及运行边界见 [HTTPS 入口说明](docs/security/production-edge-security.md)。Caddy 采用 Apache-2.0，不由本项目 MIT 重新授权。Go 编译器和实际编译模块的 LICENSE、NOTICE 等原始声明随该自建镜像保留在 `/usr/share/licenses/shopmate-edge/`，实际模块路径、版本与构建信息位于 `/usr/share/caddy/`；源码入口与锁定摘要见 [构建输入](deploy/edge)。Go 组件的对应源代码可按其中的模块路径、版本从 Go 官方代理获取，并由 go.sum/SumDB 校验；Alpine 原始组件继续适用各自许可及官方对应源码。本次未发布新的 edge 容器 Package，API/Web 既有分发范围不变。
+
 Dockerfile 使用官方 Node.js、Nginx/Alpine 基础镜像，API 另安装 Poppler、字体及 libvips 相关组件。它们包含 GPL、LGPL、MPL、OFL 等独立许可。`v0.1.0`、`v0.1.1` 仅发布源码；从 `v0.1.2` 起，API/Web 镜像的分发流程另外收集实际版本的对应源码、Alpine 构建配方、补丁、许可与摘要，随对应 Release 提供。具体内容、获取与替换组件的方法见[容器分发说明](docs/container-distribution.md)。
 
 API 镜像另保留 sharp-libvips `v1.3.4` 的[完整第三方通知](third_party/sharp-libvips-1.3.4-NOTICES.txt)，原文来自其[上游版本](https://github.com/lovell/sharp-libvips/blob/v1.3.4/THIRD-PARTY-NOTICES.md)，SHA-256 为 `6f0d5086e3bcbee12bcdacf5878b31d1104002aeecaeb241d3fff466108082fe`。升级该包时须同步核对通知和源码收集流程，不手动改写上游许可。使用依赖、镜像或素材时按各自原许可处理。

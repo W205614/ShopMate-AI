@@ -1,4 +1,3 @@
-export const reviewedEdgeImage: string;
 export const reviewedCaddyfileSha256: string;
 interface EdgeService {
   image: string;
@@ -18,7 +17,6 @@ export function validateEdgeInputs(
   configPath: string,
 ): { domain: string; email: string };
 export function validateEdgeImage(image: {
-  RepoDigests: string[];
   Architecture: string;
   Config: { Cmd?: string[]; Entrypoint?: string[] | null };
 }): void;
@@ -27,22 +25,7 @@ export function validateAdaptedEdge(
   domain: string,
   email: string,
 ): { handlers: string[]; normalizedHash: string };
-export function createEdgeVex(
-  evidence: { normalizedHash: string },
-  timestamp?: string,
-): {
-  statements: {
-    vulnerability: { name: string };
-    status: string;
-    justification: string;
-    products: {
-      "@id": string;
-      subcomponents: { "@id": string }[];
-    }[];
-  }[];
-  [key: string]: unknown;
-};
-export function guardEdgeVex(options: {
+export function checkProductionEdge(options: {
   envFile?: string;
   output: string;
 }): Record<string, unknown>;

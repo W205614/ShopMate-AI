@@ -80,7 +80,8 @@ MONITOR_WEBHOOK_URL=填写自己的HTTPS告警接收地址
 
 ```sh
 sudo install -d -m 0700 -o 1000 -g 1000 /srv/shopmate-ai/runtime/prometheus /srv/shopmate-ai/runtime/alertmanager
-docker compose --env-file .env.production -f deploy/compose.production.yaml --profile observability up -d --wait
+docker compose --env-file .env.production -f deploy/compose.production.yaml build edge
+docker compose --env-file .env.production -f deploy/compose.production.yaml --profile observability up -d --no-build --wait
 ```
 
 默认 Alertmanager 接收器名为 `unconfigured`，只接收内部规则，不投递外部消息。将配置复制到私有文件，配置实际接收器并设置 `ALERTMANAGER_CONFIG_PATH` 后才能验收投递。Prometheus/Alertmanager 均无公网端口，可通过内部网络或 SSH 隧道按需检查。
@@ -108,7 +109,7 @@ docker compose --env-file .env.production -f deploy/compose.production.yaml --pr
 
 ## 开发验证入口
 
-容器安全检查保留完整原始扫描。HTTPS 入口的一项依赖漏洞仅在镜像、配置和有效模块检查通过后使用受限 OpenVEX；[入口安全评估与复跑说明](security/production-edge-vex.md)列出源码证据、当前原始扫描结果和失效条件。API、Web 的 HIGH/CRITICAL 门禁保持原规则。
+HTTPS 入口使用[依赖更新版 Caddy 构建与原始扫描](security/production-edge-security.md)，先构建本地 edge 镜像，再运行上述命令或维护发布脚本。该修复属于当前源码，已发布的 v0.1.4 不含此入口；API/Web 的已验证镜像可继续使用原版本。API、Web、edge 均对所有严重级别执行原始扫描门禁，不使用 VEX 或忽略规则获得通过。
 
 账号、支付、回调、存储等确定性 HTTP／协议验证进入现有后端测试；`deploy/compose.external-acceptance.yaml` 用独立的 18125/18126/18127 端口提供 Mailpit SMTP、邮件 API 和 Adobe S3Mock。后端设置 `MAILPIT_SMTP_PORT=18125`、`MAILPIT_API_URL=http://127.0.0.1:18126`、`S3MOCK_ENDPOINT=http://127.0.0.1:18127` 后运行本地服务测试。未提供这些变量时相关用例会跳过；完成适配器验收需启动上述服务并补跑。
 

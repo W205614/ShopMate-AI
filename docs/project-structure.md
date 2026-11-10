@@ -108,7 +108,7 @@ ShopMate-AI/
 
 根目录的 `scripts/check-docs.mjs` 是文档维护脚本：执行 `node scripts/check-docs.mjs`，检查 Git 跟踪和未忽略 Markdown 中本地 Markdown 链接及 HTML 图片/链接的目标文件是否存在，发现缺失则返回失败。它不检查锚点或外部网站可访问性。
 
-`scripts/production-preflight.mjs` 检查独立生产配置、私有文件、镜像与可选运行状态；`scripts/production-release.sh` 执行维护发布与受约束恢复；`scripts/production-edge-vex.mjs` 守护固定入口配置的临时安全评估。使用前阅读[生产指南](production.md)，这些脚本不读取或替换本机日常 `.env`。
+`scripts/production-preflight.mjs` 检查独立生产配置、私有文件、镜像与可选运行状态；`scripts/production-release.sh` 执行维护发布与受约束恢复；`scripts/production-edge-check.mjs` 验证入口真实有效配置，`scripts/test-production-edge.mjs` 在隔离内部网络中验证本地证书 TLS 与代理行为。依赖更新版 Caddy 的入口和锁文件在 `deploy/edge/`。使用前阅读[生产指南](production.md)，这些脚本不读取或替换本机日常 `.env`，不生成漏洞豁免。
 
 `scripts/collect-container-sources.py` 从已验收 API/Web 镜像读取真实组件版本，收集容器再分发所需的源文件、构建配方和许可。`.github/workflows/publish-containers.yml` 手动推广成功 CI 的同一镜像到 GHCR，分发和可见性检查见[容器分发](container-distribution.md)。
 

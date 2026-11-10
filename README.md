@@ -96,7 +96,7 @@ docker compose up -d --build --wait
 
 本地协议与功能验证已完成，真实平台接入按[验收清单](docs/integrations.md#本地验证与实网验收)进行。后台“接入状态”展示配置和运行数据。首次运行使用下面的演示流程；生产环境使用独立 `.env.production` 和生产 Compose，本机备份配置单独保留。
 
-Caddy 入口的已知依赖漏洞、固定配置下的 OpenVEX 评估及升级条件见[HTTPS 入口安全评估](docs/security/production-edge-vex.md)。
+Caddy 入口的依赖修复、构建与全部严重级别扫描见[HTTPS 入口安全说明](docs/security/production-edge-security.md)。当前源码提供修复构建入口；已发布 v0.1.4 的历史镜像与说明仍保留原版本边界。
 
 微信 H5 支付链接遵循官方五分钟有效期；到期后先查单，再按原支付单号恢复链接，跳转前重新确认状态，详见[H5 链接刷新与限制](docs/integrations.md#h5-支付链接刷新)。
 

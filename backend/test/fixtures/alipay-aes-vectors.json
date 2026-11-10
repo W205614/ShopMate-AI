@@ -1,0 +1,65 @@
+{
+  "upstream": "alipay-sdk@4.14.0",
+  "vectors": [
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZg==",
+      "text": "",
+      "ciphertext": "N3Ii4GGpJMWRzZwn6hY+1A=="
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZg==",
+      "text": "支付宝 AES / ShopMate 测试",
+      "ciphertext": "OdPXjbUcoEF+mGQthzpMDfGt3wsgDxxdsUomD6PB62g="
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZg==",
+      "text": "0123456789abcdef",
+      "ciphertext": "cnJ+iB7c/QEApxhoeQm1ZbK1BDCaLhZGeh0WxMZ4WIA="
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZg==",
+      "text": "{\"amount\":\"1.00\",\"note\":\"合成验收\"}",
+      "ciphertext": "LlqaObIo7czEZH7AN/CNq78i/KlFvyqCJvqxuO5gW0/D7cl4muOlK6WBDeuT/0sC"
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3",
+      "text": "",
+      "ciphertext": "DGdTta4MJQgKttDjLjGNMg=="
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3",
+      "text": "支付宝 AES / ShopMate 测试",
+      "ciphertext": "Uglv6mNkjuuk/8pUmA9e1E4kmStJZUjBaXH108Yli7I="
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3",
+      "text": "0123456789abcdef",
+      "ciphertext": "2mwOKcaSciXmH1kNtOp49wbbmCrwEyRHdet4lRaXStA="
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3",
+      "text": "{\"amount\":\"1.00\",\"note\":\"合成验收\"}",
+      "ciphertext": "Uj7Zn721PuxYVwhLs5i3kOZBVA4o/FBqja5SsEY6dKlWRzxK34nJM9E/nkMTob6k"
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+      "text": "",
+      "ciphertext": "iqNiQf3o3wVNwyXGxpW4ng=="
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+      "text": "支付宝 AES / ShopMate 测试",
+      "ciphertext": "7yhnqckiX4MbvPoxZS3NXhGGbQ1wj5Y9r3lGv+UmNCA="
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+      "text": "0123456789abcdef",
+      "ciphertext": "+DyaYNwM25ghn3nW1dsWNRhWclz0EUq0zBE9AaMduUs="
+    },
+    {
+      "key": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+      "text": "{\"amount\":\"1.00\",\"note\":\"合成验收\"}",
+      "ciphertext": "vzmBHmI7uou+F+S6yFZP/+uhyKuSSzuzuA6qWGuoIFO6c6kdLlWwEz8r3XBhLfVy"
+    }
+  ]
+}

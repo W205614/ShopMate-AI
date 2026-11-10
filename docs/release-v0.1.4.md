@@ -7,6 +7,8 @@
 - 将前端构建工具链的 minimatch 定向覆盖至 11.0.5，修复 GHSA-g3hv-75wg-m249；锁文件由 npm 重新生成。没有降低 ESLint 或更换业务依赖。
 - 增加公开仓库免费的 CodeQL `security-and-quality` 分析，覆盖 JavaScript/TypeScript、Python 和 Actions。启用 Dependabot 告警，依赖审计涵盖开发依赖，API/Web 镜像漏洞门禁涵盖全部严重级别。未启用收费的 GitHub Code Quality。
 - 更新并固定官方 Actions 提交，使用 Node.js 24 Action 运行时。
+- 固定 Trivy 0.76.2，识别当前 Alpine 生命周期；逐版本审查 npm 安装脚本，仅允许 esbuild 的本机工具校验，禁用在 Node.js 24 无需执行的旧 Node.js 版本选择脚本。
+- 支付宝 SDK 保留上游 4.14.0 的签名、HTTP 和证书实现，仅以 Node 内置 crypto 替换停止维护的 crypto-js AES 辅助函数。原 SDK 的互操作向量覆盖两种模块格式、三种密钥长度及空文本、中文和整块输入；许可、源补丁与确定的本地构建输入随源码提供。
 - MFA 挑战 Cookie 固定使用 Secure；确认和验证入口共用按 IP 的 60 次/15 分钟限额，保留单挑战最多五次的约束。生产模式仍要求 HTTPS 和 `COOKIE_SECURE=true`。
 - 客服草稿使用 Map 保存，商品筛选从查询条目构造结果；清理未使用导入和隐式字符串拼接，修正测试标识与签名头解析，格式工具通过同一文件句柄读写。
 - 拆分 Element Plus 后台脚本，处理原先大于 500 kB 的构建警告，保留模块副作用的执行顺序、原有后台组件和中文语言配置。

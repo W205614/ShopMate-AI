@@ -14,7 +14,9 @@ Libre Franklin 字体使用 SIL Open Font License 1.1，正文与作者声明位
 
 主要运行依赖使用 MIT、ISC、BSD 或 Apache-2.0 等许可。`jszip` 的双许可选择 MIT；`sharp` 使用 Apache-2.0，其预编译 libvips 及相关本机组件还包含 LGPL 及其他许可，详见 [sharp 许可](https://github.com/lovell/sharp/blob/main/LICENSE)与 [sharp-libvips](https://github.com/lovell/sharp-libvips)。不将这些本机库解释为项目自有 MIT 代码。
 
-锁文件也记录平台可选包和构建工具。Lightning CSS 的 MPL-2.0 适用于其本身，未作为服务端组件或独立二进制随本次源码 Release 发布；其上游源码见 [Lightning CSS](https://github.com/parcel-bundler/lightningcss)。没有直接复制第三方项目源码作为本项目自有模块的记录；后续引入源码时应逐文件保留来源和许可。
+Alipay SDK 使用基于上游 4.14.0 的本地 `4.14.0-shopmate.1` 补丁包。仅将两个 AES 文本辅助函数从停止维护的 crypto-js 改为 Node 内置 crypto，保留原协议、签名及请求实现；随包补齐上游原始 MIT 许可。上游归档、摘要、源补丁和重建方式见[修改说明](third_party/alipay-sdk/CHANGES.md)与[原许可](third_party/alipay-sdk/LICENSE)。该依赖只随应用镜像交付，没有发布到 npm。
+
+锁文件也记录平台可选包和构建工具。Lightning CSS 的 MPL-2.0 适用于其本身，未作为服务端组件或独立二进制随本次源码 Release 发布；其上游源码见 [Lightning CSS](https://github.com/parcel-bundler/lightningcss)。
 
 ## 容器再分发
 

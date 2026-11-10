@@ -1,0 +1,51 @@
+--- a/src/util.ts
++++ b/src/util.ts
+@@ -1,10 +1,9 @@
+ import { debuglog } from 'node:util';
+-import { createSign, createVerify, randomUUID } from 'node:crypto';
++import { createSign, createVerify, randomUUID, createCipheriv, createDecipheriv } from 'node:crypto';
+ import type { Readable } from 'node:stream';
+ import type { ReadableStream } from 'node:stream/web';
+ import { YYYYMMDDHHmmss } from 'utility';
+ import snakeCaseKeys from 'snakecase-keys';
+-import CryptoJS from 'crypto-js';
+ import type { AlipaySdkConfig } from './types.js';
+ 
+ const debug = debuglog('alipay-sdk:util');
+@@ -17,26 +16,24 @@
+ // https://opendocs.alipay.com/common/02mse3#NodeJS%20%E8%A7%A3%E5%AF%86%E7%A4%BA%E4%BE%8B
+ // 初始向量的方法, 全部为0. 这里的写法适合于其它算法,针对AES算法的话,IV值一定是128位的(16字节)
+ // https://opendocs.alipay.com/open-v3/054l3e?pathHash=5d1dc939#%E8%AF%B7%E6%B1%82%E6%8A%A5%E6%96%87%E5%8A%A0%E5%AF%86
+-const IV = CryptoJS.enc.Hex.parse('00000000000000000000000000000000');
++const IV = Buffer.alloc(16);
+ 
+ function parseKey(aesKey: string) {
+-  return {
+-    iv: IV,
+-    key: CryptoJS.enc.Base64.parse(aesKey),
+-  };
++  const key = Buffer.from(aesKey, 'base64');
++  return { iv: IV, key, algorithm: `aes-${key.byteLength * 8}-cbc` };
+ }
+ 
+ export function aesEncryptText(plainText: string, aesKey: string) {
+-  const { iv, key } = parseKey(aesKey);
+-  const encryptedText = CryptoJS.AES.encrypt(plainText, key, { iv }).toString();
+-  return encryptedText;
++  const { iv, key, algorithm } = parseKey(aesKey);
++  const cipher = createCipheriv(algorithm, key, iv);
++  return Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]).toString('base64');
+ }
+ 
+ export function aesDecryptText(encryptedText: string, aesKey: string) {
+-  const { iv, key } = parseKey(aesKey);
+-  const bytes = CryptoJS.AES.decrypt(encryptedText, key, { iv });
+-  const plainText = bytes.toString(CryptoJS.enc.Utf8);
+-  return plainText;
++  const { iv, key, algorithm } = parseKey(aesKey);
++  const decipher = createDecipheriv(algorithm, key, iv);
++  const plain = Buffer.concat([decipher.update(encryptedText, 'base64'), decipher.final()]);
++  return new TextDecoder('utf-8', { fatal: true }).decode(plain);
+ }
+ 
+ // 先加密后加签，aesKey 是支付宝开放平台返回的 base64 格式加密 key

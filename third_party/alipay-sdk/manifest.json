@@ -1,0 +1,12 @@
+{
+  "upstream": "alipay-sdk@4.14.0",
+  "upstreamUrl": "https://registry.npmjs.org/alipay-sdk/-/alipay-sdk-4.14.0.tgz",
+  "upstreamSha256": "51c22fbf391202ee256437688affe94134ebf5a2dd65d27ac5a647d1270130df",
+  "licenseUrl": "https://github.com/alipay/alipay-sdk-nodejs-all/blob/v4.14.0/LICENSE.txt",
+  "licenseSha256": "09d4cdb131ba283054e4f5100652c3a8d337895a904dde6868a1d3d34627eb0c",
+  "compiler": "typescript@6.0.3",
+  "output": "backend/vendor/alipay-sdk-4.14.0-shopmate.1.tgz",
+  "sha256": "4c67578b096d890cddb4099aae6b5db91a3139f1ec8e90bdd4af1bee5e6ef5dd",
+  "sourcePatchSha256": "8963b27a0fa0a3e26863658309d14332737dd9a46c4e9a6ebcde9f6e5be5d644",
+  "files": 43
+}

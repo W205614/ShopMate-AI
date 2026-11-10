@@ -12,14 +12,14 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check documentation links
         working-directory: .
         run: node scripts/check-docs.mjs
       - name: Check latest-backup retention safety
         working-directory: .
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -68,10 +68,10 @@ jobs:
         if: always()
         working-directory: .
         run: docker compose -p shopmate-external-ci -f deploy/compose.external-acceptance.yaml down
-      - run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
+      - run: npm audit --audit-level=low --registry=https://registry.npmjs.org
         working-directory: backend
       - run: npm run typecheck
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
       - name: Install Python formatter
@@ -81,7 +81,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      - run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
+      - run: npm audit --audit-level=low --registry=https://registry.npmjs.org
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - name: Verify production account and payment browser flows over isolated HTTPS
@@ -125,19 +125,19 @@ jobs:
           output: edge-vulnerabilities.json
           exit-code: "0"
           skip-setup-trivy: true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: container-vulnerability-reports
           path: "*-vulnerabilities.json"
           if-no-files-found: error
-      - name: Reject high and critical image vulnerabilities
+      - name: Reject all API and Web image vulnerabilities
         working-directory: .
         env:
           TRIVY_CACHE_DIR: ${{ github.workspace }}/.cache/trivy
         run: |
-          trivy image --scanners vuln --skip-db-update --severity HIGH,CRITICAL --exit-code 1 shopmate-ai-api:acceptance
-          trivy image --scanners vuln --skip-db-update --severity HIGH,CRITICAL --exit-code 1 shopmate-ai-web:acceptance
+          trivy image --scanners vuln --skip-db-update --exit-code 1 shopmate-ai-api:acceptance
+          trivy image --scanners vuln --skip-db-update --exit-code 1 shopmate-ai-web:acceptance
       - name: Install the verified native edge VEX scanner
         uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
         with:
@@ -154,7 +154,7 @@ jobs:
           cp "$edge_vex_dir/edge.openvex.json.evidence.json" edge-config-evidence.json
           cp "$edge_vex_dir/edge.openvex.json.adapted.json" edge-config-adapted.json
           trivy image --scanners vuln --skip-db-update --severity HIGH,CRITICAL --exit-code 1 --vex "$edge_vex_dir/edge.openvex.json" --format json --output edge-assessed-vulnerabilities.json caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: edge-configuration-vex-assessment
@@ -241,7 +241,7 @@ jobs:
           AI_QUALITY_SUITE: holdout
           AI_ACCEPTANCE_REPORT: .delivery/ai-quality-holdout-ci.json
         run: node backend/scripts/ai-quality.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: ai-quality-contract-report
@@ -253,7 +253,7 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:18104
           E2E_AI_TASK_FIXTURE: "1"
         run: npm run test:e2e -- e2e/ai-task-experience.spec.ts --output=test-results-ai-task
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: browser-test-results
@@ -267,7 +267,7 @@ jobs:
       - name: Export validated container images
         working-directory: .
         run: docker image save shopmate-ai-api:acceptance shopmate-ai-web:acceptance | gzip > validated-images.tar.gz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: validated-container-images
           path: validated-images.tar.gz
@@ -276,11 +276,11 @@ jobs:
     needs: frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: validated-container-images
           path: .delivery/container-release
@@ -291,7 +291,7 @@ jobs:
           python3 scripts/collect-container-sources.py --api shopmate-ai-api:acceptance --web shopmate-ai-web:acceptance --output .delivery/container-sources
           tar --exclude='container-sources/alpine/*/src' -C .delivery -czf container-sources.tar.gz container-sources
           sha256sum container-sources.tar.gz > container-sources.SHA256SUMS
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: validated-container-sources
           path: |

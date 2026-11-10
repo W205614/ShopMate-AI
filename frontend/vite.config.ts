@@ -9,6 +9,7 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         postBanner: "/* Dependency licenses: /licenses/dependencies.md */",
+        strictExecutionOrder: true,
         codeSplitting: {
           groups: [
             {

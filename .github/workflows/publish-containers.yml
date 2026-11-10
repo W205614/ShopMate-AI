@@ -84,6 +84,7 @@ jobs:
         if: always()
         with:
           name: container-publication-evidence
+          include-hidden-files: true
           path: |
             .delivery/container-release/SHA256SUMS
             .delivery/container-release/published-digests.jsonl

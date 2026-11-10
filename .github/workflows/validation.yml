@@ -247,6 +247,7 @@ jobs:
         with:
           name: ai-quality-contract-report
           path: .delivery/ai-quality-*-ci*.json
+          include-hidden-files: true
           if-no-files-found: ignore
       - name: Verify task answers and reload with synthetic providers
         working-directory: frontend

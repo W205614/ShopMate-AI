@@ -37,6 +37,8 @@ docker compose --env-file .env.production -f deploy/compose.production.yaml buil
 
 需要 Docker BuildKit 及访问 Docker Hub、Go 官方模块代理/SumDB 和 Alpine 签名仓库的网络；无需宿主安装 Go。Go 编译器与上游 Caddy 运行层均固定摘要，zlib 固定为 1.4-r0，Go 依赖由 go.mod/go.sum 固定并校验。第三方 Go 许可、NOTICE 与实际构建信息保存在镜像的 `/usr/share/licenses/shopmate-edge/`、`/usr/share/caddy/build-info.txt`、`/usr/share/caddy/modules.txt`。
 
+API/Web 的 `VCS_REF` 不用于 edge 源码标记。上述手动构建默认将 edge revision 标为 `local`；需要记录确切来源时，显式追加 `--build-arg VCS_REF="$(git rev-parse HEAD)"`。CI 使用目标提交 SHA，不能把已发布 API/Web 的旧提交当作新 edge 的源码。
+
 本次没有新增 Registry 包或生产部署。`CADDY_IMAGE` 可指向使用者自行验证的其他镜像，但版本变化后仍须对实际镜像复扫和运行验收。发布脚本要求镜像已获取或构建；不要让它尝试从 Docker Hub 拉取尚未发布的本地镜像名。完整生产配置、恢复与平台条件见[生产指南](../production.md)。
 
 ## 不使用例外的验证

@@ -43,8 +43,6 @@ services:
     build:
       context: ..
       dockerfile: deploy/edge/Dockerfile
-      args:
-        VCS_REF: ${VCS_REF:-local}
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}

@@ -124,5 +124,7 @@ manifest = {
     "sourcePatchSha256": hashlib.sha256(patch.encode()).hexdigest(),
     "files": len(files),
 }
-(materials / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+(materials / "manifest.json").write_text(
+    json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n"
+)
 print(json.dumps(manifest, indent=2))

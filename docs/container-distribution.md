@@ -7,8 +7,8 @@ API 和 Web 镜像适用于 Linux/amd64，分别发布到 `ghcr.io/w205614/shopm
 克隆项目、从 `.env.example` 初始化 `.env`，按 [README](../README.md#快速部署) 设置管理员密码和数据目录。在 `.env` 中增加以下两行即可直接使用公开镜像，无需安装 Node.js/npm 或本机构建，也无需 GitHub 登录：
 
 ```dotenv
-API_IMAGE=ghcr.io/w205614/shopmate-ai-api:v0.1.4
-WEB_IMAGE=ghcr.io/w205614/shopmate-ai-web:v0.1.4
+API_IMAGE=ghcr.io/w205614/shopmate-ai-api:v0.1.5
+WEB_IMAGE=ghcr.io/w205614/shopmate-ai-web:v0.1.5
 ```
 
 ```sh

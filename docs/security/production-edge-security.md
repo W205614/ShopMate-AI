@@ -2,6 +2,8 @@
 
 核对日期：2026-11-10。固定上游 `caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3` 的原始扫描包含 2 HIGH、4 MEDIUM、1 UNKNOWN。官方最新正式 [Caddy 2.11.9](https://github.com/caddyserver/caddy/releases/tag/v2.11.9) 仍包含这些旧依赖，不能将“拉取最新版”视作修复。
 
+2026-11-12 补充：下文零发现与 Go 1.27.3 的运行结果属于 2026-11-10 历史验证。新的 CI 扫描发现 Go 标准库 CVE-2026-97054，当前构建输入已更新至固定摘要的 Go 1.27.4；具体边界见文末增补，不将历史零发现结果延用为今天的扫描结论。
+
 ## 最小修复输入
 
 使用[官方支持的源码包装入口](https://caddyserver.com/docs/build)，保留 Caddy 2.11.9 及全部标准模块，仅更新安全依赖；入口、锁文件和镜像构建见 [deploy/edge](../../deploy/edge)。未修改 Caddy 的 HTTP/TLS 业务实现，没有用修改版本字符串、移除标准模块或 VEX 获得通过。
@@ -71,3 +73,13 @@ CI 构建同一 edge 输入，保留完整原始报告，对 API/Web/edge 的所
 本机镜像 Image ID：`sha256:9fd0da2e5aafada398b9814f794294b40d971eb6f54f6c26c0394f72eb6e3a4b`，本地验证标签为 `shopmate-ai-edge:patched`。CI 会从相同锁定输入独立构建，并保留目标提交的原始扫描与运行结果；CI 的实际结果以 [Application validation](https://github.com/W205614/ShopMate-AI/actions/workflows/validation.yml) 为准。本机通过不代表公网证书、真实生产部署或生产容量验收。
 
 首次模块下载连接中断、OpenSSL 缺少系统配置，以及 Docker Desktop 内部网络端口映射限制的夹具失败记录均保留；没有将这些初次失败改述为首次通过。夹具现在使用自身 OpenSSL 配置和容器内校验，不修改主机证书信任或开放额外网络。
+
+## 2026-11-12 Go 标准库安全增补
+
+[CI 43136001580](https://github.com/W205614/ShopMate-AI/actions/runs/43136001580) 的 API/Web 扫描通过，edge 的原始完整报告新增 1 项 UNKNOWN：CVE-2026-97054，实际二进制使用 Go 1.27.3。硬门禁按预期失败，没有过滤该项。
+
+[Go 官方漏洞记录](https://github.com/golang/vulndb/blob/master/data/osv/GO-2026-6859.json)说明，HTTP/1 服务在并发读取请求体、写响应头并超过 MaxBytesReader 限制时可能因竞态崩溃，修复边界为 1.26.11、1.27.4。[Go 发布记录](https://go.dev/doc/devel/release#go1.27.4)确认 1.27.4 已正式发布。这里直接更新编译器并重建标准库，不以特定代理配置是否触发该竞态作为豁免依据。
+
+构建输入改为官方 `golang:1.27.4@sha256:5e8afd493a7124a8586e134d9b532731161d4b9becf9dee5a5956b107426f93d`；Caddy 版本、标准模块、Go 模块锁文件、CGO=0 和运行层保持原有约定。配置、TLS 和全严重级别扫描仍由同一验证工作流执行，实际结果以对应提交为准。
+
+本次仍是源码维护，没有发布 edge Package、覆盖既有 API/Web 镜像或部署生产；默认本机 demo 不使用 Caddy。生产使用者需从修复后的源码重新构建并验收 edge，不能只更新文档而继续使用旧二进制。

@@ -126,8 +126,9 @@ export function renderGroundedAnswer(input: {
   }
   for (const source of input.sources) {
     const selected = quotes.filter((quote) => quote.sourceId === source.id);
+    if (!selected.length) throw new Error("AI_SOURCE_QUOTE_REQUIRED");
     facts.push(
-      `已发布资料摘录（${source.title}）：\n${selected.length ? selected.map((quote) => quote.text).join("\n") : source.text}`,
+      `已发布资料摘录（${source.title}）：\n${selected.map((quote) => quote.text).join("\n")}`,
     );
   }
   const view = input.presentation?.productView ?? "details";

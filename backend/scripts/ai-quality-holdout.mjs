@@ -88,6 +88,7 @@ export const holdoutCases = [
     {
       answerable: true,
       facts: ["定制", "不支持"],
+      forbidden: ["包邮", "运费", "工作日", "24小时"],
       source: "policy",
       sourceFacts: ["定制", "不支持"],
       noProposal: true,
@@ -101,6 +102,7 @@ export const holdoutCases = [
     {
       answerable: true,
       facts: ["2|两|二", "工作日", "不承诺"],
+      forbidden: ["定制", "无理由", "包邮", "运费"],
       source: "policy",
       sourceFacts: ["工作日", "不承诺"],
       noProposal: true,

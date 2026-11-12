@@ -194,6 +194,32 @@ describe("AI support task and confirmation invariants", () => {
     },
   );
 
+  it("ranks matching storage products first for a compound Chinese search", async () => {
+    const run: any = await queued("100元以内推荐桌面收纳用品");
+    const products = (await asUser(() =>
+      executeSupportTool(
+        sql,
+        run,
+        "search_products",
+        { query: "桌面收纳用品", maxPrice: 10000 },
+        new AbortController().signal,
+        {
+          sources: [],
+          products: new Set<string>(),
+          productCaps: new Map<string, number | undefined>(),
+          orders: new Set<string>(),
+          degraded: [],
+        },
+      ),
+    )) as { id: string; skus: { price: number; availableStock: number }[] }[];
+    expect(products[0]?.id).toBe("p08");
+    expect(
+      products[0]?.skus.some(
+        (sku) => sku.price <= 10000 && sku.availableStock > 0,
+      ),
+    ).toBe(true);
+  });
+
   it("corrects an invalid final shape within the existing provider-call budget", async () => {
     const run: any = await queued("帮我申请退款");
     const caller = vi

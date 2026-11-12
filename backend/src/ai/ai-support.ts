@@ -30,6 +30,7 @@ import { audit, enqueue } from "../runtime";
 import { releaseSnapshot, type DatabaseReadScope } from "../storage";
 import { reserveConsultation, withProviderBudget } from "./ai-budget";
 import { renderGroundedAnswer, answerPresentationSchema } from "./ai-answer";
+import { tokenize } from "./ai-document-worker";
 
 type Source = {
   id: string;
@@ -769,12 +770,17 @@ export async function executeSupportTool(
         })
         .strict()
         .parse(raw);
+      const search = query
+        .replace(/推荐|商品|一些|帮我|想买|有没有|家居好物/g, "")
+        .toLowerCase();
       const terms = [
-        ...new Set(
-          query
-            .replace(/推荐|商品|一些|帮我|想买|有没有|家居好物/g, "")
-            .match(/[\p{Script=Han}]+|[\p{L}\p{N}]+/gu) ?? [],
-        ),
+        ...new Set([
+          ...(search.match(/[\p{Script=Han}]+|[\p{L}\p{N}]+/gu) ?? []),
+          // Reuse knowledge segmentation without introducing single-character matches.
+          ...tokenize(search)
+            .split(" ")
+            .filter((term) => term.length > 1),
+        ]),
       ];
       return db.products
         .filter(
@@ -799,6 +805,7 @@ export async function executeSupportTool(
                 db.categories.find((c) => c.id === p.categoryId)?.name ?? "",
               ]
                 .join(" ")
+                .toLowerCase()
                 .includes(t)
                 ? 1
                 : 0),
@@ -827,7 +834,20 @@ const finalSchema = z
     orderId: z.string().optional(),
     presentation: answerPresentationSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (answer) =>
+      answer.replyKind !== "grounded" ||
+      (answer.citations.every((sourceId) =>
+        answer.presentation?.sourceQuotes?.some(
+          (quote) => quote.sourceId === sourceId,
+        ),
+      ) &&
+        (answer.presentation?.sourceQuotes ?? []).every((quote) =>
+          answer.citations.includes(quote.sourceId),
+        )),
+    "AI_SOURCE_QUOTE_REQUIRED",
+  );
 export async function processSupportRun(
   sql: DatabaseSync,
   runId: string,
@@ -920,7 +940,7 @@ async function processBudgetedSupportRun(
       {
         role: "system",
         content:
-          "最终JSON还需声明replyKind：clarify（缺少参数）、grounded（事实答复）或handoff（无法确认或越权）。answer不直接展示，事实由服务端生成。可选presentation控制表达：productView为details、compare或recommend；focus为description、material、price、stock的非空数组，按用户所问选择，比较与推荐须保留price，推荐还须保留description或material说明差异；missingFields为product、sku、quantity、order、reason、items数组，仅追问当前真正缺失的信息，不重复询问已知订单；sourceQuotes为[{sourceId,text}]，只能逐字摘录本轮已选引用中的完整相关句子，保留实体、单位、条件和否定词，不能拼接改写。比较时逐一查询相关商品，推荐先search_products按用户预算及需求检索，再选择有货商品。政策答复必须先search_knowledge；没有依据使用handoff。只保留直接回答本次问题所必需的最少引用；逐项检查所问的每个子问题。用户指定某份资料或政策时，限定在该资料范围内，不附加没有被询问的操作FAQ或售后流程。商品和订单必须返回本轮已查到的标识，禁止猜测。",
+          "最终JSON还需声明replyKind：clarify（缺少参数）、grounded（事实答复）或handoff（无法确认或越权）。answer不直接展示，事实由服务端生成。可选presentation控制表达：productView为details、compare或recommend；focus为description、material、price、stock的非空数组，按用户所问选择，比较与推荐须保留price，推荐还须保留description或material说明差异；missingFields为product、sku、quantity、order、reason、items数组，仅追问当前真正缺失的信息，不重复询问已知订单；grounded答复的每个引用都必须在presentation.sourceQuotes中给出[{sourceId,text}]，只能逐字摘录本轮已选引用中的完整相关句子，保留实体、单位、条件和否定词，不能拼接改写。sourceQuotes仅用于citations中的知识来源ID，商品及订单事实由服务端渲染，不填sourceQuotes。比较时逐一查询相关商品，推荐先search_products按用户预算及需求检索，再选择有货商品。政策答复必须先search_knowledge；没有依据使用handoff。只保留直接回答本次问题所必需的最少引用；逐项检查所问的每个子问题。用户指定某份资料或政策时，限定在该资料范围内，不附加没有被询问的操作FAQ或售后流程。商品和订单必须返回本轮已查到的标识，禁止猜测。",
       },
       {
         role: "system",
@@ -1091,7 +1111,7 @@ async function processBudgetedSupportRun(
         messages.push({
           role: "user",
           content:
-            "回答格式校验失败。请只返回JSON对象，字段为replyKind（clarify、grounded或handoff）、answer（非空字符串）、citations和productIds（字符串数组），可选presentation仅使用规定的枚举及逐字摘录。只有已查询的本人订单才可添加字符串orderId，否则省略该字段；不要返回null、额外字段或代码块。信息不足时选择clarify，不要猜测业务参数。",
+            "回答格式校验失败。请只返回JSON对象，字段为replyKind（clarify、grounded或handoff）、answer（非空字符串）、citations和productIds（字符串数组）。grounded引用的每个来源必须在presentation.sourceQuotes中提供直接回答问题的完整原句，例如presentation:{sourceQuotes:[{sourceId:已选引用ID,text:相关完整原句}]}；sourceId只能是citations中已选的知识来源ID，商品及订单不填sourceQuotes；不要把sourceQuotes放在顶层，不要摘录整段无关政策。只有已查询的本人订单才可添加字符串orderId，否则省略该字段；不要返回null、额外字段或代码块。信息不足时选择clarify，不要猜测业务参数。",
         });
         continue;
       }

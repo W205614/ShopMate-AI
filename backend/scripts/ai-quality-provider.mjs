@@ -121,6 +121,22 @@ export function syntheticChat(messages) {
       return sources.length
         ? final(sources.map((s) => s.text).join("\n"), {
             citations: sources.map((s) => s.id),
+            presentation: {
+              sourceQuotes: sources.flatMap((source) => {
+                const relevant = /定制/.test(question)
+                  ? /定制/
+                  : /审核|到账/.test(question)
+                    ? /审核|到账/
+                    : undefined;
+                return (
+                  relevant
+                    ? source.text
+                        .split(/(?<=[。！？；])\s*/u)
+                        .filter((text) => relevant.test(text))
+                    : [source.text]
+                ).map((text) => ({ sourceId: source.id, text: text.trim() }));
+              }),
+            },
           })
         : final("无法从已发布资料确认，请转人工。");
     }

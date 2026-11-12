@@ -104,6 +104,35 @@ it("asks only for the specified missing fields while ignoring arbitrary model wo
   expect(last(run.conversation_id).text).not.toMatch(/订单|个人资料|售后原因/);
 });
 
+it("corrects product IDs used as knowledge quotes within the existing call budget", async () => {
+  const run = await queued("p01");
+  const caller = vi
+    .fn()
+    .mockResolvedValueOnce({
+      role: "assistant",
+      content: JSON.stringify({
+        replyKind: "grounded",
+        answer: "商品推荐",
+        productIds: ["p01"],
+        presentation: {
+          sourceQuotes: [{ sourceId: "p01", text: "商品描述并非知识引用。" }],
+        },
+      }),
+    })
+    .mockResolvedValueOnce({
+      role: "assistant",
+      content: JSON.stringify({
+        replyKind: "grounded",
+        answer: "根据商品资料回答",
+        productIds: ["p01"],
+      }),
+    });
+  await processSupportRun(sql, String(run.id), caller);
+  expect(caller).toHaveBeenCalledTimes(2);
+  expect(last(run.conversation_id).replyKind).toBe("grounded");
+  expect(last(run.conversation_id).productIds).toEqual(["p01"]);
+});
+
 it("compares queried products with exact server prices and a computed price difference", async () => {
   const run = await queued("p01");
   let count = 0;
@@ -204,6 +233,21 @@ it("selects whole source sentences and rejects removing negations, conditions or
       },
     }),
   ).not.toContain("99");
+  expect(() => renderGroundedAnswer(base)).toThrow("AI_SOURCE_QUOTE_REQUIRED");
+  expect(() =>
+    renderGroundedAnswer({
+      ...base,
+      sources: [
+        ...base.sources,
+        { id: "shipping", title: "运费", text: "未满99元收取8元运费。" },
+      ],
+      presentation: {
+        sourceQuotes: [
+          { sourceId: "policy", text: "定制款不支持无理由退货。" },
+        ],
+      },
+    }),
+  ).toThrow("AI_SOURCE_QUOTE_REQUIRED");
   for (const text of [
     "支持无理由退货。",
     "99元包邮，未满收取8元运费。",
@@ -239,7 +283,11 @@ it("quotes published policy evidence without accepting a contradictory model par
         ],
       };
     const response = JSON.parse(
-      String((messages.at(-1) as { content: string }).content),
+      String(
+        (messages as { role: string; content: string }[]).findLast(
+          (message) => message.role === "tool",
+        )!.content,
+      ),
     );
     expect(response.sources.length).toBeGreaterThan(0);
     return {
@@ -248,10 +296,23 @@ it("quotes published policy evidence without accepting a contradictory model par
         replyKind: "grounded",
         answer: "无条件终身退款",
         citations: response.sources.map((source: { id: string }) => source.id),
+        ...(calls > 2
+          ? {
+              presentation: {
+                sourceQuotes: response.sources.map(
+                  (source: { id: string; text: string }) => ({
+                    sourceId: source.id,
+                    text: source.text,
+                  }),
+                ),
+              },
+            }
+          : {}),
       }),
     };
   });
   const answer = last(run.conversation_id);
+  expect(calls).toBe(3);
   expect(answer.citations!.length).toBeGreaterThan(0);
   for (const source of answer.citations!)
     expect(answer.text).toContain(source.text);

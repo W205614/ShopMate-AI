@@ -100,7 +100,7 @@ Caddy 入口的依赖修复、构建与全部严重级别扫描见[HTTPS 入口�
 
 微信 H5 支付链接遵循官方五分钟有效期；到期后先查单，再按原支付单号恢复链接，跳转前重新确认状态，详见[H5 链接刷新与限制](docs/integrations.md#h5-支付链接刷新)。
 
-功能实现与初次本地验收见[单店生产版验收报告](docs/production-acceptance-20261106.md)；AI 定向修复与入口安全更新见[最新维护记录](docs/release-v0.1.5.md)，上一版工程质量变更见[v0.1.4 记录](docs/release-v0.1.4.md)，AI 循环收敛与镜像启动入口见[v0.1.3 记录](docs/release-v0.1.3.md)，中文商品检索与容器分发见[v0.1.2 记录](docs/release-v0.1.2.md)，物流并发修复见[v0.1.1 记录](docs/release-20261109.md)，首版完整交付及恢复记录见[v0.1.0 记录](docs/release-20261107.md)。
+功能实现与初次本地验收见[单店生产版验收报告](docs/acceptance/production-acceptance-20261106.md)；AI 定向修复与入口安全更新见[最新维护记录](docs/releases/release-v0.1.5.md)，上一版工程质量变更见[v0.1.4 记录](docs/releases/release-v0.1.4.md)，AI 循环收敛与镜像启动入口见[v0.1.3 记录](docs/releases/release-v0.1.3.md)，中文商品检索与容器分发见[v0.1.2 记录](docs/releases/release-v0.1.2.md)，物流并发修复见[v0.1.1 记录](docs/releases/release-20261109.md)，首版完整交付及恢复记录见[v0.1.0 记录](docs/releases/release-20261107.md)。
 
 ## 第一次体验
 
@@ -143,7 +143,7 @@ docs/        开发说明、业务规则、验收报告和历史证据
 
 追踪刚才的下单流程，可从[结算页面](frontend/src/views/shop/CheckoutView.vue)进入[前端 API 调用](frontend/src/services/api.ts)，再看[后端 HTTP 入口](backend/src/app.ts)和[订单事务](backend/src/commerce.ts)。其他模块和脚本见[项目结构与阅读顺序](docs/project-structure.md)。
 
-请求和数据流见[架构与运行边界](docs/architecture.md)，调用入口见[HTTP 接口总览](docs/api.md)。本地开发与测试见[开发指南](docs/development.md#本地开发)，生产发布从[上线核对](docs/production.md#上线核对)开始，本轮变更与发布证据见[发布记录](docs/release-v0.1.5.md)。
+请求和数据流见[架构与运行边界](docs/architecture.md)，调用入口见[HTTP 接口总览](docs/api.md)。本地开发与测试见[开发指南](docs/development.md#本地开发)，生产发布从[上线核对](docs/production.md#上线核对)开始，本轮变更与发布证据见[发布记录](docs/releases/release-v0.1.5.md)。
 
 业务规则、AI 知识库、压测条件、故障记录及历史发布统一从[文档导航](docs/README.md)查阅。参与开发前阅读[贡献说明](CONTRIBUTING.md)；安全问题通过[GitHub 私密报告](SECURITY.md)提交。
 

@@ -19,23 +19,27 @@ const context = await browser.newContext({
 if (!process.env.ADMIN_PASSWORD)
   throw new Error("Set ADMIN_PASSWORD before capturing authenticated pages");
 const page = await context.newPage();
-async function capture(path, name, fullPage = true) {
+async function capture(path, name, fullPage = true, quality) {
   await page.goto(path);
   await page.locator("h1").first().waitFor();
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(500); // Finish Element Plus's initial tag transition before photographing it.
-  await page.screenshot({ path: destination + name + ".png", fullPage });
+  await page.screenshot(
+    quality
+      ? { path: destination + name + ".jpg", quality, fullPage }
+      : { path: destination + name + ".png", fullPage },
+  );
 }
-await capture("/", "storefront-desktop");
+await capture("/", "storefront-desktop", true, 88);
 await page.screenshot({
   path: destination + "storefront-desktop-fold.jpg",
   quality: 85,
   fullPage: false,
 });
 await page.setViewportSize({ width: 768, height: 1024 });
-await capture("/", "storefront-tablet");
+await capture("/", "storefront-tablet", true, 88);
 await page.setViewportSize({ width: 390, height: 844 });
-await capture("/", "storefront-mobile");
+await capture("/", "storefront-mobile", true, 88);
 await page.setViewportSize({ width: 1440, height: 1000 });
 await capture("/products/p01", "product");
 await page.goto("/admin/login");

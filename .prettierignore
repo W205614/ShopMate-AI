@@ -1,16 +1,10 @@
 # Historical reports, measurements, test inputs and public third-party files.
 /docs/archive/
+/docs/acceptance/
+/docs/releases/
 /docs/qa/
 /docs/screenshots/
 /docs/visual-*.json
-/docs/ai-acceptance.md
-/docs/default-config-acceptance.md
-/docs/final-acceptance-*.md
-/docs/optimization-*.md
-/docs/release-*.md
-/docs/reliability-acceptance.md
-/docs/role-acceptance-*.md
-/docs/stability-hardening.md
 /backend/test/fixtures/
 /frontend/public/licenses/
 /frontend/public/images/*

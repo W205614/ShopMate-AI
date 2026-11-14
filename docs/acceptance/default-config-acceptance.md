@@ -4,13 +4,13 @@
 
 ## 发现的问题与修复
 
-修复前的万笔订单预检产生 100 个 HTTP 504。全程 P95 为 206 ms，掩盖了备份期间的停顿：自动备份任务耗时 48,096 ms，重叠请求窗口 P95 为 6,789 ms、P99 为 15,009 ms。预检只设置 90 秒，包含请求收尾实际为 96.358 秒；备份后的完整观测窗口未被负载覆盖，因此该结果判定失败，不计入通过数据。[失败原始报告](qa/default-config-20261018/baseline-large-failed.json)
+修复前的万笔订单预检产生 100 个 HTTP 504。全程 P95 为 206 ms，掩盖了备份期间的停顿：自动备份任务耗时 48,096 ms，重叠请求窗口 P95 为 6,789 ms、P99 为 15,009 ms。预检只设置 90 秒，包含请求收尾实际为 96.358 秒；备份后的完整观测窗口未被负载覆盖，因此该结果判定失败，不计入通过数据。[失败原始报告](../qa/default-config-20261018/baseline-large-failed.json)
 
 原因是备份副本的 SHA、SQLite 完整性、业务摘要和 8 份备份的保留校验在 API 主线程同步执行，在本机 Windows 绑定目录上阻塞了请求处理。现将复制、校验及保留清理移入单个备份子进程，无等待队列，默认 120 秒截止；异常或超时终止后只清理本次暂存文件。子进程使用只读 WAL 固定快照，复制后立即释放源库读事务，再处理副本与保留清理。固定快照的依据见 [SQLite 隔离说明](https://sqlite.org/isolation.html)；持续写入造成备份复制重启的风险见 [SQLite 备份说明](https://sqlite.org/backup.html)。
 
 复核还发现每次备份会遗留临时副本和已淘汰文件的 WAL/SHM 侧文件。新备份仅将本次独占临时副本转为 DELETE 日志模式，再计算清单，使后续只读检查无需生成侧文件；清理限定本次暂存 UUID 或已校验并选中淘汰的精确备份路径。源库保持 WAL，不扫删未知孤儿文件或仍保留的备份侧文件，参见 [SQLite 只读数据库建议](https://sqlite.org/wal.html#read_only_databases)。
 
-新增 `backup_started`、`backup_completed`、`backup_failed` 日志，以请求无关的 `backupId`、文件名和阶段关联，不记录凭据或数据库正文。只有有效副本创建后才标记当天成功；保留清理失败与创建失败分别处理，详见[运维手册](reliability.md#备份检查与离线恢复)。
+新增 `backup_started`、`backup_completed`、`backup_failed` 日志，以请求无关的 `backupId`、文件名和阶段关联，不记录凭据或数据库正文。只有有效副本创建后才标记当天成功；保留清理失败与创建失败分别处理，详见[运维手册](../reliability.md#备份检查与离线恢复)。
 
 验收脚本同时修正了日志收尾校验：通过 Nginx 响应的实际请求 ID 确认日志已接收，避免 Nginx 覆盖客户端 ID 后误报。原始报告保留观察器错误及实际发生的 504，二者分别记录。
 
@@ -56,13 +56,13 @@
 
 两组最终命令记录分别为 52,088 和 32,763 条；历史订单、订单行、库存变动和流水未被本次负载增加或改写。金额核对使用整数分，万笔订单及其收款流水均为合成历史数据。两组恢复文件 SHA 分别为 `8b32f9a21f0bef3eaefb1d703a99611f1d09185c85e34f0490e12c34359acc8c`、`4d382e1310c92524fa39a90148e27a24de9121ecb560a6e5ea735920d6f54daf`，与各自备份相同。
 
-机器可读证据：[配置与汇总](qa/default-config-20261018/summary.json)、[小数据负载](qa/default-config-20261018/load-small.json)、[万笔订单负载](qa/default-config-20261018/load-large.json)、[小数据恢复核对](qa/default-config-20261018/verification-small.json)、[万笔恢复核对](qa/default-config-20261018/verification-large.json)、[小数据守恒与两库比较](qa/default-config-20261018/invariants-small.json)、[万笔守恒与两库比较](qa/default-config-20261018/invariants-large.json)。这些文件只包含配置白名单、数量、统计及摘要，不提交数据库、备份或凭据。
+机器可读证据：[配置与汇总](../qa/default-config-20261018/summary.json)、[小数据负载](../qa/default-config-20261018/load-small.json)、[万笔订单负载](../qa/default-config-20261018/load-large.json)、[小数据恢复核对](../qa/default-config-20261018/verification-small.json)、[万笔恢复核对](../qa/default-config-20261018/verification-large.json)、[小数据守恒与两库比较](../qa/default-config-20261018/invariants-small.json)、[万笔守恒与两库比较](../qa/default-config-20261018/invariants-large.json)。这些文件只包含配置白名单、数量、统计及摘要，不提交数据库、备份或凭据。
 
 完整后端回归 126 项及类型检查已通过，包括真实备份子进程、WAL 并发写、错误后重试、超时／终止、旧格式侧文件清理、备份窗口统计及代理请求 ID 关联。交付门槛还包括最终提交 SHA 的 GitHub Actions 全部检查：前后端类型检查、前端 lint／构建／单元、浏览器回归、容器闭环与生产依赖审计。交付回复给出准确最终 SHA 和 CI 链接，不以旧提交的绿色检查替代。
 
 ## 复跑
 
-需要本机 Node.js 24、`npm --prefix backend ci` 和可用 Docker。以下命令在仓库根目录执行，项目名、端口和目录必须本次专用；第二组另用新项目、新备份目录、18095 端口及 `LOAD_HISTORY=10000`。Linux 绑定目录须先按[部署说明](../README.md#3-启动服务)设置属主权限。
+需要本机 Node.js 24、`npm --prefix backend ci` 和可用 Docker。以下命令在仓库根目录执行，项目名、端口和目录必须本次专用；第二组另用新项目、新备份目录、18095 端口及 `LOAD_HISTORY=10000`。Linux 绑定目录须先按[部署说明](../../README.md#3-启动服务)设置属主权限。
 
 ```powershell
 $loadProject = 'shopmate-reliability-default-new-small'
@@ -91,16 +91,16 @@ if ($LASTEXITCODE) { throw '压测未达到门槛，保存报告并排查' }
 
 逐条检查 Docker 命令退出码，任一失败即停止。不要叠加会关闭日志和备份的 `compose.acceptance.yaml`。负载脚本会检查项目标签、端口、卷、独立备份绑定目录、内存／PID／日志限制；禁止日常端口 18086。造数、预置备份与验证都只针对独立环境。
 
-保留报告后，通过维护 `inspect` 命令逐份校验剩余 7 份备份，再将自动备份恢复到新的离线目标，比较备份与恢复副本摘要及业务守恒；不要覆盖日常业务库。恢复命令与停写要求见[运维手册](reliability.md#备份检查与离线恢复)。
+保留报告后，通过维护 `inspect` 命令逐份校验剩余 7 份备份，再将自动备份恢复到新的离线目标，比较备份与恢复副本摘要及业务守恒；不要覆盖日常业务库。恢复命令与停写要求见[运维手册](../reliability.md#备份检查与离线恢复)。
 
-负载结束后可用[只读守恒脚本](../backend/scripts/verify-load-invariants.mjs)核对合成种子的 21 项约束；它只适用于 `seed-load.ts` 生成的这两种数据集。脚本输出数量和摘要，不输出账号、地址或业务正文。服务运行期间通过只读事务核对数据；如需停写快照，先排空并停止服务：
+负载结束后可用[只读守恒脚本](../../backend/scripts/verify-load-invariants.mjs)核对合成种子的 21 项约束；它只适用于 `seed-load.ts` 生成的这两种数据集。脚本输出数量和摘要，不输出账号、地址或业务正文。服务运行期间通过只读事务核对数据；如需停写快照，先排空并停止服务：
 
 ```powershell
 docker cp backend/scripts/verify-load-invariants.mjs "${env:LOAD_CONTAINER}:/tmp/verify-load-invariants.mjs"
 docker exec -e SHOPMATE_ENV=acceptance -e LOAD_TEST_ALLOWED=1 -e "LOAD_HISTORY=$env:LOAD_HISTORY" $env:LOAD_CONTAINER node /tmp/verify-load-invariants.mjs
 ```
 
-恢复副本也使用同一脚本和准确 `DATABASE_PATH` 检查；另用[两库只读比较脚本](../backend/scripts/compare-database-snapshots.mjs)比较自动备份与其恢复副本，核对账户会话、旧 JSON、业务字段、SKU、外键和完整性，并额外比较两个文件 SHA。不要拿负载结束后的在线库与负载中较早的备份要求字节相同，购物车和命令结果仍会继续增长。
+恢复副本也使用同一脚本和准确 `DATABASE_PATH` 检查；另用[两库只读比较脚本](../../backend/scripts/compare-database-snapshots.mjs)比较自动备份与其恢复副本，核对账户会话、旧 JSON、业务字段、SKU、外键和完整性，并额外比较两个文件 SHA。不要拿负载结束后的在线库与负载中较早的备份要求字节相同，购物车和命令结果仍会继续增长。
 
 停止本次验收容器可使用：
 

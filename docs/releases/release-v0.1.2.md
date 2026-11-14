@@ -14,7 +14,7 @@
 
 本轮补齐 API/Web 的容器分发入口：日常 Compose 可以通过 `API_IMAGE`、`WEB_IMAGE` 使用已验证镜像，默认源码构建方式继续可用。新增手动发布工作流，要求目标 Tag 与成功验证 CI 的提交一致，推广同一验收镜像，拒绝主动覆盖已有版本。
 
-镜像分发材料包括实际 Alpine 包及构建配方/源文件、Node.js 与 Nginx 源码、sharp-libvips 组件源码和构建脚本、依赖许可与摘要。准备失败会中止发布，不把根项目 MIT 或漏洞扫描结果当成第三方分发许可。获取方式及发布步骤见[容器分发](container-distribution.md)。
+镜像分发材料包括实际 Alpine 包及构建配方/源文件、Node.js 与 Nginx 源码、sharp-libvips 组件源码和构建脚本、依赖许可与摘要。准备失败会中止发布，不把根项目 MIT 或漏洞扫描结果当成第三方分发许可。获取方式及发布步骤见[容器分发](../container-distribution.md)。
 
 目标为公开 [v0.1.2 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.2) 和 [API](https://github.com/users/W205614/packages/container/package/shopmate-ai-api)、[Web](https://github.com/users/W205614/packages/container/package/shopmate-ai-web) 两个 GHCR Packages，平台为 Linux/amd64。最终发布摘要、CI、本机升级结果在 Release 和本机交付记录中核实；本说明不提前代表发布或验收成功。
 

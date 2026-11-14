@@ -8,7 +8,7 @@
 
 业务 JSON 已迁移为按领域、按记录的 SQLite 表，保留不可改写的旧 JSON 证据。金额快照、账号和会话、旧订单库存规则不重建。新客户端使用身份初始化、分领域查询和 SQL 筛选分页；兼容全量读取接口仍标记弃用。写请求默认必须有请求标识，商品和配置修改校验版本；仅旧测试夹具显式启用无标识兼容模式。
 
-新功能覆盖配送运费、满减择优、积分与退款冲回、供应商与分批采购入库、退货隔离和质检、五类员工权限、本人通知、财务差异核对、操作审计、持久化任务以及一致备份恢复。具体规则见 [经营规则](commerce-v4.md)，故障处置见 [运维手册](reliability.md)。
+新功能覆盖配送运费、满减择优、积分与退款冲回、供应商与分批采购入库、退货隔离和质检、五类员工权限、本人通知、财务差异核对、操作审计、持久化任务以及一致备份恢复。具体规则见 [经营规则](../commerce-v4.md)，故障处置见 [运维手册](../reliability.md)。
 
 浏览器回归同时检查了原有商品、购物车、优惠券、交易履约、售后、评价及人工客服。发现的问题包括分页数据误当全量计数、已领券模板超出初始化上限、待评价上下文遗漏、身份切换后的表单草稿、购买直达结算和流水关联上下文；均作为回归项处理。
 
@@ -69,7 +69,7 @@
 | 50 并发错误密码 | 10 个 401、40 个预期 429，恢复后健康且无 OOM |
 | 恢复后的交易财务核对 | 平衡；模拟收款、退款与对应流水一致 |
 
-机器可读证据：[汇总](qa/reliability-v4/summary.json)、[小数据负载](qa/reliability-v4/load-small.json)、[万笔订单负载](qa/reliability-v4/load-large.json)、[两组守恒核对](qa/reliability-v4/load-invariants.json)、[故障演练](qa/reliability-v4/fault.json)、[迁移恢复](qa/reliability-v4/migration.json)、[容器浏览器](qa/reliability-v4/browser-summary.json)、[分页索引诊断](qa/reliability-v4/order-pagination-diagnosis.json)。
+机器可读证据：[汇总](../qa/reliability-v4/summary.json)、[小数据负载](../qa/reliability-v4/load-small.json)、[万笔订单负载](../qa/reliability-v4/load-large.json)、[两组守恒核对](../qa/reliability-v4/load-invariants.json)、[故障演练](../qa/reliability-v4/fault.json)、[迁移恢复](../qa/reliability-v4/migration.json)、[容器浏览器](../qa/reliability-v4/browser-summary.json)、[分页索引诊断](../qa/reliability-v4/order-pagination-diagnosis.json)。
 
 
 ## 运行和交付边界

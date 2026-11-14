@@ -28,9 +28,9 @@
 | 监控                    | 通过                                                       | 独立监控令牌只读、不可用于业务写入；指标包括支付待核对、退款、回调、对账差异、通知、任务积压及本地／远端备份；Prometheus 11 条规则通过 promtool 检查                                       |
 | 依赖及容器扫描          | 见下文                                                     | 原始扫描与固定配置的评估结果分别列出                                                                                                                                                       |
 
-可复跑入口：[生产指南](production.md)、[供应商接入与故障恢复](integrations.md)、[边缘服务安全评估](security/production-edge-vex.md)。完整本地原始日志保留在仓库 `.delivery/production-*` 与独立压测目录；远端 CI 状态见对应提交的 GitHub Actions。
+可复跑入口：[生产指南](../production.md)、[供应商接入与故障恢复](../integrations.md)、[边缘服务安全评估](../security/production-edge-vex.md)。完整本地原始日志保留在仓库 `.delivery/production-*` 与独立压测目录；远端 CI 状态见对应提交的 GitHub Actions。
 
-[结构化验收摘要](qa/production-20261106.json)记录两组镜像、分位延迟、四组守恒检查、安全评估和实际限制。最终 API 还通过无网络、无公开端口、无业务卷挂载的独立启动检查，数据库为业务版本 5；容器内三项 Poppler 二进制版本检查通过，宿主 PDF 处理单测仍为跳过。所有本次测试服务均已停止。
+[结构化验收摘要](../qa/production-20261106.json)记录两组镜像、分位延迟、四组守恒检查、安全评估和实际限制。最终 API 还通过无网络、无公开端口、无业务卷挂载的独立启动检查，数据库为业务版本 5；容器内三项 Poppler 二进制版本检查通过，宿主 PDF 处理单测仍为跳过。所有本次测试服务均已停止。
 
 ## 修复过程中的失败记录
 
@@ -48,7 +48,7 @@
 
 固定 Caddy 2.11.9 镜像的完整原始扫描为 **1 HIGH、2 MEDIUM、3 UNKNOWN**。其中 `CVE-2026-116587` 涉及未修补的 go-jose/v3 私有 RSA JWK 解析。根据上游源码与实际有效配置，该路径在当前只有公网 ACME 客户端和代理、禁用管理接口且未启用 ACME 服务端的部署中不可达；上游依赖尚未修补，本轮按固定部署配置评估该路径。
 
-CI 保留原始扫描，只在固定镜像、Caddyfile、生产 Compose、启动命令及有效模块配置全部通过 guard 后生成临时 OpenVEX，由 Trivy 原生匹配消费。正确配置评估后 HIGH／CRITICAL 为 0，仍保留 2 MEDIUM 和 3 UNKNOWN；改错镜像摘要或子组件版本时仍检出 HIGH 并失败。任何相关配置或镜像变更都需重新评估，详见[完整证据及命令](security/production-edge-vex.md)。
+CI 保留原始扫描，只在固定镜像、Caddyfile、生产 Compose、启动命令及有效模块配置全部通过 guard 后生成临时 OpenVEX，由 Trivy 原生匹配消费。正确配置评估后 HIGH／CRITICAL 为 0，仍保留 2 MEDIUM 和 3 UNKNOWN；改错镜像摘要或子组件版本时仍检出 HIGH 并失败。任何相关配置或镜像变更都需重新评估，详见[完整证据及命令](../security/production-edge-vex.md)。
 
 ## 万单容量与备份窗口
 

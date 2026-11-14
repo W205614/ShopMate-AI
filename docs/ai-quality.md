@@ -2,7 +2,7 @@
 
 本流程面向校招展示与本机使用。协议回归、真实模型任务结果和人工评分分别保存。
 
-2026-11-12 的中文商品检索与政策摘录修复及定向真实复测边界见 [AI 定向修复](ai-fix-20261112.md)。
+2026-11-12 的中文商品检索与政策摘录修复及定向真实复测边界见 [AI 定向修复](releases/ai-fix-20261112.md)。
 
 ## 两套问题
 
@@ -13,7 +13,7 @@
 
 ## 隔离运行
 
-沿用 [既有复跑方法](final-acceptance-20261021.md#复跑与交付边界) 创建独立项目、端口、空卷和凭据。禁止日常 18086 入口及日常卷。免费矩阵使用 `compose.quality.yaml`；获准的真实模型使用 `compose.quality-live.yaml`。选择新问题集时，给运行器增加：
+沿用 [既有复跑方法](acceptance/final-acceptance-20261021.md#复跑与交付边界) 创建独立项目、端口、空卷和凭据。禁止日常 18086 入口及日常卷。免费矩阵使用 `compose.quality.yaml`；获准的真实模型使用 `compose.quality-live.yaml`。选择新问题集时，给运行器增加：
 
 ```powershell
 $env:AI_QUALITY_SUITE = 'holdout'

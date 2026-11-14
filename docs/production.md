@@ -105,7 +105,7 @@ docker compose --env-file .env.production -f deploy/compose.production.yaml --pr
 5. 通过发布脚本执行维护、备份、排空、启动和运行核验；核对公网健康、登录/MFA、订单读取及当前接入状态。首轮真实渠道联调单独记录扣款、通知、退款、物流和收件结果。
 6. 检查内部监控只读访问、任务积压、备份和告警接收；真实远端副本及跨主机恢复必须另行演练。将完成项、失败、回退前提和最终运行或停止状态写入发布记录。
 
-本轮交付变更和发布核验入口见[2026-11-06 发布记录](release-20261106.md)。历史结果见[文档验收导航](README.md#验收报告与证据)，漏洞报告流程见[SECURITY](../SECURITY.md)。
+本轮交付变更和发布核验入口见[2026-11-06 发布记录](releases/release-20261106.md)。历史结果见[文档验收导航](README.md#验收报告与证据)，漏洞报告流程见[SECURITY](../SECURITY.md)。
 
 ## 开发验证入口
 
@@ -115,4 +115,4 @@ HTTPS 入口使用[依赖更新版 Caddy 构建与原始扫描](security/product
 
 生产浏览器验证先构建 `frontend/dist`，再在 `frontend/` 执行 `npx playwright test --config playwright.production.config.ts`。专用配置启动仅监听回环的 HTTPS 内存数据库夹具，使用合成身份、密钥和边界服务，不读取实际 `.env`；仅此测试配置允许自签名证书。普通浏览器套件不运行这些生产夹具用例。
 
-容量回归沿用[稳定性专项的隔离与造数流程](stability-hardening.md#复跑)。新增 `STABILITY_PROFILE=production-baseline` 仅选择一档 20 并发、600 秒、无额外思考时间；未设置时保留原完整阶段，不能同时开启 `STABILITY_SMOKE`。仍需独立 `shopmate-reliability-*` 项目、1809x 端口、万笔历史订单和 50 个合成工作账号，并核对日志、资源、备份窗口及只读守恒结果。该负载使用模拟交易与隔离故障模型，结果按此请求组成和部署环境记录。
+容量回归沿用[稳定性专项的隔离与造数流程](acceptance/stability-hardening.md#复跑)。新增 `STABILITY_PROFILE=production-baseline` 仅选择一档 20 并发、600 秒、无额外思考时间；未设置时保留原完整阶段，不能同时开启 `STABILITY_SMOKE`。仍需独立 `shopmate-reliability-*` 项目、1809x 端口、万笔历史订单和 50 个合成工作账号，并核对日志、资源、备份窗口及只读守恒结果。该负载使用模拟交易与隔离故障模型，结果按此请求组成和部署环境记录。

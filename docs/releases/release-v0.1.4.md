@@ -19,13 +19,13 @@
 
 本地定向检查覆盖账号 MFA、支付供应商签名、备份快照、维护与读取路由，以及前端请求恢复和密码不落盘约束。最终成功 CI 已完成干净构建、核心交易与权限浏览器流程、API/Web 全级别扫描。2026-11-10 已从公开 GHCR 匿名拉取同一制品，在无 node_modules 的新克隆目录中通过 `pull`、`up --no-build --wait` 启动；健康、首页、后台和两个许可入口 HTTP 200，只读目录浏览器 1/1 通过。
 
-生产 HTTPS 模板仅引用上游固定 Caddy 镜像，本次不构建或重新分发 Caddy。2026-11-10 对该上游摘要的原始扫描仍有 2 HIGH、4 MEDIUM、1 UNKNOWN；现有配置约束和 OpenVEX 评估不等于依赖修补，不计作零漏洞。详见[入口安全评估](security/production-edge-vex.md)。API/Web 自身的扫描与该上游结果分别报告；本次不承诺生产入口安全验收或生产部署。
+生产 HTTPS 模板仅引用上游固定 Caddy 镜像，本次不构建或重新分发 Caddy。2026-11-10 对该上游摘要的原始扫描仍有 2 HIGH、4 MEDIUM、1 UNKNOWN；现有配置约束和 OpenVEX 评估不等于依赖修补，不计作零漏洞。详见[入口安全评估](../security/production-edge-vex.md)。API/Web 自身的扫描与该上游结果分别报告；本次不承诺生产入口安全验收或生产部署。
 
-AI 控制器、工具协议和调用预算沿用 v0.1.3，复用 2026-11-09 隔离合成数据下商品搜索、详情、最终回答的单场景真实证据。本次不新增付费模型请求，不将该证据扩大为所有模型和问题类型的质量保证。真实商户支付、通知和公网部署沿用[外部接入验收边界](integrations.md#本地验证与实网验收)。
+AI 控制器、工具协议和调用预算沿用 v0.1.3，复用 2026-11-09 隔离合成数据下商品搜索、详情、最终回答的单场景真实证据。本次不新增付费模型请求，不将该证据扩大为所有模型和问题类型的质量保证。真实商户支付、通知和公网部署沿用[外部接入验收边界](../integrations.md#本地验证与实网验收)。
 
 ## 分发与本机升级
 
-已发布一个正式 [v0.1.4 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.4) 和既有公开 Linux/amd64 [API](https://github.com/users/W205614/packages/container/package/shopmate-ai-api)、[Web](https://github.com/users/W205614/packages/container/package/shopmate-ai-web) Packages。发布流程推广最终成功 CI 的同一镜像，不重新构建，不覆盖旧标签或更新 latest。Release 随附对应源码材料和 SHA-256 摘要，获取与许可说明见[容器分发](container-distribution.md)。
+已发布一个正式 [v0.1.4 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.4) 和既有公开 Linux/amd64 [API](https://github.com/users/W205614/packages/container/package/shopmate-ai-api)、[Web](https://github.com/users/W205614/packages/container/package/shopmate-ai-web) Packages。发布流程推广最终成功 CI 的同一镜像，不重新构建，不覆盖旧标签或更新 latest。Release 随附对应源码材料和 SHA-256 摘要，获取与许可说明见[容器分发](../container-distribution.md)。
 
 已有日常环境升级前保留一致快照、配置和恢复资料，使用同一已验收镜像核对健康、页面及数据库，再恢复原来的停止状态。自动备份和副本策略维持原状。本机日常环境已升级到同一 v0.1.4 镜像，两个服务 healthy，五个 HTTP 入口及只读目录浏览器 1/1 通过。停止后数据库完整性 `ok`、外键错误 0，78 表中 77 表摘要一致，仅后台调度表 `job_queue` 变化；原配置、挂载、禁用自动备份策略不变，验收后恢复停止。升级前后完整数据副本、手动备份与配置恢复材料保留在本机。
 

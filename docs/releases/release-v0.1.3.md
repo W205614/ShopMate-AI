@@ -18,8 +18,8 @@
 
 ## Packages 启动与升级
 
-[README](../README.md#快速部署) 提供克隆、复制 `.env.example`、设置管理员密码及两个镜像变量、拉取、`up --no-build --wait` 的完整步骤。镜像为公开 Linux/amd64 API/Web Packages，无需 GitHub 登录、本机 Node.js/npm 或自行编译。首次启动的备份目录权限和已有数据升级要求沿用原说明；源码构建另列入口。
+[README](../../README.md#快速部署) 提供克隆、复制 `.env.example`、设置管理员密码及两个镜像变量、拉取、`up --no-build --wait` 的完整步骤。镜像为公开 Linux/amd64 API/Web Packages，无需 GitHub 登录、本机 Node.js/npm 或自行编译。首次启动的备份目录权限和已有数据升级要求沿用原说明；源码构建另列入口。
 
-目标为正式 [v0.1.3 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.3)、[API Package](https://github.com/users/W205614/packages/container/package/shopmate-ai-api) 和 [Web Package](https://github.com/users/W205614/packages/container/package/shopmate-ai-web)。通过最终 CI 验收的同一镜像直接推广，随 Release 提供对应源码与摘要材料，详见[容器分发](container-distribution.md)。
+目标为正式 [v0.1.3 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.3)、[API Package](https://github.com/users/W205614/packages/container/package/shopmate-ai-api) 和 [Web Package](https://github.com/users/W205614/packages/container/package/shopmate-ai-web)。通过最终 CI 验收的同一镜像直接推广，随 Release 提供对应源码与摘要材料，详见[容器分发](../container-distribution.md)。
 
 本机升级保留原数据、配置、账号和恢复资料，自动备份策略维持原状，原先停止的容器验收后恢复停止。真实商户渠道、公网生产部署和容量验收仍沿用既有边界；本次不操作生产环境。

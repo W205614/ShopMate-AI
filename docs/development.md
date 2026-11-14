@@ -119,7 +119,7 @@ npm --prefix frontend run test:e2e
 
 本地范围包含未暂存和未忽略的新文件，并显式包含已存在的本机 `compose.override.yaml`。CI 使用 `--tracked`，只验证版本库中的文件。历史报告、测试样例、运行数据、第三方素材文件和凭据不参与格式化，排除项见[格式排除清单](../.prettierignore)。
 
-完整依赖审计使用 `npm --prefix backend audit` 和 `npm --prefix frontend audit`，包含开发依赖。当前 CI 对所有严重级别设门禁，并对实际 API/Web 镜像执行全严重级别扫描；免费的 CodeQL `security-and-quality` 覆盖 JavaScript/TypeScript、Python 和 Actions。实际修复、误报处置及仅引用上游镜像的边界见[v0.1.4 维护记录](release-v0.1.4.md)。
+完整依赖审计使用 `npm --prefix backend audit` 和 `npm --prefix frontend audit`，包含开发依赖。当前 CI 对所有严重级别设门禁，并对实际 API/Web 镜像执行全严重级别扫描；免费的 CodeQL `security-and-quality` 覆盖 JavaScript/TypeScript、Python 和 Actions。实际修复、误报处置及仅引用上游镜像的边界见[v0.1.4 维护记录](releases/release-v0.1.4.md)。
 
 容器系统包和 Node.js 内置组件不属于项目 npm 锁文件的审计范围。更新 Dockerfile 中的官方基础镜像摘要后，应重新构建并扫描实际镜像；运行时安全公告还需核对对应 Node.js 补丁版本，不能只比较其内置库显示的版本号，因为安全修复可能回移植而不改库版本号。
 

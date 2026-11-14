@@ -35,6 +35,8 @@ ShopMate-AI/
 ├── third_party/              随 API 镜像分发的上游原始许可通知
 ├── docs/
 │   ├── README.md             当前文档、验收报告与历史记录导航
+│   ├── releases/             版本发布、安全维护与定向修复记录
+│   ├── acceptance/           分阶段验收、专项负载与交付报告
 │   ├── archive/              已完成阶段的交付和设计记录
 │   ├── qa/                   报告引用的原始证据与代表截图
 │   └── screenshots/          README/报告引用的界面图片
@@ -69,32 +71,32 @@ ShopMate-AI/
 
 下表列出 `backend/scripts/` 的全部脚本。带造数、业务写入或故障注入的工具只用于其文档要求的独立验收环境；不因脚本存在就默认执行。
 
-| 脚本                                                               | 用途与前提                                                                                                                        |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `monitor.ts`                                                       | 宿主机健康、容器、磁盘、任务和备份观测，可单次或持续运行；配置告警与维护静默见[运行观测](monitoring.md)                           |
-| `reset-mfa.ts`                                                     | 离线管理 MFA 恢复；显式数据库、停机标记及恢复码丢失前提见[账号接入](integrations.md#邮件短信与账号验证)                           |
-| `verify-security-headers.mjs`                                      | 用 `SECURITY_BASE_URL` 指定独立本机验收入口，检查页面／资源／API／404安全头、压缩请求拒绝与后续健康；不使用账号凭据或写入业务数据 |
-| `ai-acceptance.mjs`                                                | 真实供应商 AI 验收，上传合成文档并创建账号/交易，产生模型费用；要求显式开启及独立本机端口，见[AI 验收](ai-acceptance.md)          |
-| `generate-ai-fixtures.py`                                          | 重新生成 `backend/test/fixtures/ai/` 合成样例；依赖 Pillow、python-docx、ReportLab 和脚本指定的中文字体                           |
-| `fault-acceptance.ts`                                              | 独立容器的破坏性故障验收；校验端口、容器标签及写入开关，见[v4 验收](reliability-acceptance.md)                                    |
-| `load.ts`                                                          | 固定并发的读取/购物车混合负载，可结合独立容器记录资源与备份窗口；见[默认配置验收](default-config-acceptance.md)                   |
-| `load-observation.ts`                                              | 负载驱动共用的有界采样、延迟和备份窗口计算模块，无独立 I/O 或定时器                                                               |
-| `production-load-observer.ts`                                      | 负载驱动共用的 Docker 资源、日志和备份观测模块，用于核对探测请求标识与备份窗口                                                    |
-| `seed-load.ts`                                                     | 在新隔离数据库生成负载账号及 0/10000 笔历史订单数据；拒绝复用已有负载账号                                                         |
-| `prepare-load-backups.ts`                                          | 在隔离服务停机、新备份目录为空时预置 7 份备份，用于保留清理和负载验证                                                             |
-| `verify-load-invariants.mjs`                                       | 对负载合成数据执行只读守恒核对；仅适用于规定的 0/10000 历史订单数据集                                                             |
-| `compare-database-snapshots.mjs`                                   | 使用只读连接和快照事务比较数据库的账户、业务及关系数据，可用于备份/恢复或迁移对照                                                 |
-| `migration-rehearsal.ts`                                           | 输入显式离线快照和新演练目录，只迁移新副本并验证备份、恢复及数据一致性                                                            |
-| `seed-stability.ts`                                                | 复用历史负载种子，补充独立用户及工作集，供交易混合稳定性专项验收                                                                  |
-| `stability-load.ts`                                                | 有思考时间的多用户交易负载与耐久验收，校验独立 Compose 项目和端口，见[稳定性专项](stability-hardening.md)                         |
-| `stability-provider.ts`                                            | 隔离网络中的故障供应商，轮换返回 429、无效 JSON、超时和 503，用于故障隔离验证                                                     |
-| `ai-quality.mjs`、`ai-quality-cases.mjs`、`ai-quality-holdout.mjs` | 原40条协议契约与独立12条任务问题，记录来源、误拒答、解决率与待填人工评分，见[AI质量验证](ai-quality.md)                           |
-| `reconciliation-load.ts`                                           | 显式启用后创建独立文件库，测量历史数据增长时的真实核对接口与重叠健康探测，不访问日常库                                            |
-| `ai-quality-provider.mjs`、`ai-acceptance-provider.mjs`            | 确定性假服务及认证预算代理；真实代理持久限制100次／20分钟，不用于日常客服服务                                                     |
-| `seed-role-maintenance.ts`                                         | 只为显式允许且没有普通用户／订单的新隔离库生成25条失败通知夹具，不是修复工具                                                      |
-| `verify-stability.ts`                                              | 对隔离验收数据库捕获基线和只读核验，不迁移、不关闭过期订单、不修复数据                                                            |
+| 脚本                                                               | 用途与前提                                                                                                                          |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `monitor.ts`                                                       | 宿主机健康、容器、磁盘、任务和备份观测，可单次或持续运行；配置告警与维护静默见[运行观测](monitoring.md)                             |
+| `reset-mfa.ts`                                                     | 离线管理 MFA 恢复；显式数据库、停机标记及恢复码丢失前提见[账号接入](integrations.md#邮件短信与账号验证)                             |
+| `verify-security-headers.mjs`                                      | 用 `SECURITY_BASE_URL` 指定独立本机验收入口，检查页面／资源／API／404安全头、压缩请求拒绝与后续健康；不使用账号凭据或写入业务数据   |
+| `ai-acceptance.mjs`                                                | 真实供应商 AI 验收，上传合成文档并创建账号/交易，产生模型费用；要求显式开启及独立本机端口，见[AI 验收](acceptance/ai-acceptance.md) |
+| `generate-ai-fixtures.py`                                          | 重新生成 `backend/test/fixtures/ai/` 合成样例；依赖 Pillow、python-docx、ReportLab 和脚本指定的中文字体                             |
+| `fault-acceptance.ts`                                              | 独立容器的破坏性故障验收；校验端口、容器标签及写入开关，见[v4 验收](acceptance/reliability-acceptance.md)                           |
+| `load.ts`                                                          | 固定并发的读取/购物车混合负载，可结合独立容器记录资源与备份窗口；见[默认配置验收](acceptance/default-config-acceptance.md)          |
+| `load-observation.ts`                                              | 负载驱动共用的有界采样、延迟和备份窗口计算模块，无独立 I/O 或定时器                                                                 |
+| `production-load-observer.ts`                                      | 负载驱动共用的 Docker 资源、日志和备份观测模块，用于核对探测请求标识与备份窗口                                                      |
+| `seed-load.ts`                                                     | 在新隔离数据库生成负载账号及 0/10000 笔历史订单数据；拒绝复用已有负载账号                                                           |
+| `prepare-load-backups.ts`                                          | 在隔离服务停机、新备份目录为空时预置 7 份备份，用于保留清理和负载验证                                                               |
+| `verify-load-invariants.mjs`                                       | 对负载合成数据执行只读守恒核对；仅适用于规定的 0/10000 历史订单数据集                                                               |
+| `compare-database-snapshots.mjs`                                   | 使用只读连接和快照事务比较数据库的账户、业务及关系数据，可用于备份/恢复或迁移对照                                                   |
+| `migration-rehearsal.ts`                                           | 输入显式离线快照和新演练目录，只迁移新副本并验证备份、恢复及数据一致性                                                              |
+| `seed-stability.ts`                                                | 复用历史负载种子，补充独立用户及工作集，供交易混合稳定性专项验收                                                                    |
+| `stability-load.ts`                                                | 有思考时间的多用户交易负载与耐久验收，校验独立 Compose 项目和端口，见[稳定性专项](acceptance/stability-hardening.md)                |
+| `stability-provider.ts`                                            | 隔离网络中的故障供应商，轮换返回 429、无效 JSON、超时和 503，用于故障隔离验证                                                       |
+| `ai-quality.mjs`、`ai-quality-cases.mjs`、`ai-quality-holdout.mjs` | 原40条协议契约与独立12条任务问题，记录来源、误拒答、解决率与待填人工评分，见[AI质量验证](ai-quality.md)                             |
+| `reconciliation-load.ts`                                           | 显式启用后创建独立文件库，测量历史数据增长时的真实核对接口与重叠健康探测，不访问日常库                                              |
+| `ai-quality-provider.mjs`、`ai-acceptance-provider.mjs`            | 确定性假服务及认证预算代理；真实代理持久限制100次／20分钟，不用于日常客服服务                                                       |
+| `seed-role-maintenance.ts`                                         | 只为显式允许且没有普通用户／订单的新隔离库生成25条失败通知夹具，不是修复工具                                                        |
+| `verify-stability.ts`                                              | 对隔离验收数据库捕获基线和只读核验，不迁移、不关闭过期订单、不修复数据                                                              |
 
-`docs/qa/stability-20261020/force-backup-due.mjs` 是专项证据附带的备份到期模拟工具，保留在报告目录以便回溯；其修改行为和隔离限制见[专项复跑说明](stability-hardening.md#复跑)。常规密码与数据库维护使用 `backend/package.json` 的 `admin:password`、`maintenance` 命令，入口位于 `backend/src/`。
+`docs/qa/stability-20261020/force-backup-due.mjs` 是专项证据附带的备份到期模拟工具，保留在报告目录以便回溯；其修改行为和隔离限制见[专项复跑说明](acceptance/stability-hardening.md#复跑)。常规密码与数据库维护使用 `backend/package.json` 的 `admin:password`、`maintenance` 命令，入口位于 `backend/src/`。
 
 ## 前端脚本索引
 
@@ -143,8 +145,8 @@ Windows 宿主机的 `scripts/retain_latest_backup.py` 验证备份后保留最�
 | 前后端 `test-results/`、前端 `test-results-container/`、`test-results-operations/`、`playwright-report/` | 自动测试输出，已忽略；有失败需先保留定位证据                                                                               |
 | `.taste-skill/`                                                                                          | 历史视觉工作流的本地目录，整体忽略，包含 `inspect/`、`page-audit/`、`assets/` 等输出；设计方向源记录已归入 `docs/archive/` |
 | `.delivery/`                                                                                             | 本地交付过程材料，已忽略；其中备份、回滚和失败证据需核对后分别处理                                                         |
-| `docs/qa/`、`docs/screenshots/`、`backend/test/fixtures/ai/`                                             | 已跟踪的报告证据、界面图片和合成测试输入，继续保留                                                                         |
+| `docs/qa/`、`docs/screenshots/`、`docs/releases/`、`docs/acceptance/`、`backend/test/fixtures/ai/`       | 已跟踪的报告证据、界面图片、发布与验收记录和合成测试输入，继续保留                                                        |
 
-本地清理以可重建的构建和测试输出为主；数据库、环境配置、备份、回滚材料和报告引用文件需要先核对用途与引用。后续新增当前说明放在 `docs/`，已完成阶段的记录放在 `docs/archive/`，并更新[文档导航](README.md)。
+本地清理以可重建的构建和测试输出为主；数据库、环境配置、备份、回滚材料和报告引用文件需要先核对用途与引用。后续新增当前操作说明放在 `docs/` 根目录，版本发布与维护记录放 `docs/releases/`，分阶段验收与专项负载报告放 `docs/acceptance/`，已完成阶段的记录放 `docs/archive/`，并更新[文档导航](README.md)。
 
 2026-10-20 结构整理时，清理了本地 `frontend/dist/`、`test-results/`、`test-results-container/`、`test-results-operations/` 四个生成目录，共 139 个文件、17,389,289 字节。清理前已打包 ZIP 并逐文件验证 SHA-256；归档和结果保存在被忽略的 `.delivery/structure-cleanup-20261020/`，其中 `result.json` 记录归档摘要、删除范围、受保护文件哈希及运行状态。该本地凭证不随仓库分发。

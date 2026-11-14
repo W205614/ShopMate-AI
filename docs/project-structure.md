@@ -102,7 +102,7 @@ ShopMate-AI/
 
 | 脚本                                | 用途与输出                                                                                                                                 |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `frontend/scripts/capture.mjs`      | 拍摄商城、商品和已登录后台截图，要求管理员凭据；写入已跟踪的 `docs/screenshots/`，运行后需要检查图片差异                                   |
+| `frontend/scripts/capture.mjs`      | 拍摄商城、商品和已登录后台截图，要求管理员凭据；商城图写入已跟踪的 `docs/screenshots/`，商品与后台预览图仅本地生成并被 `.gitignore` 忽略   |
 | `frontend/scripts/capture-auth.mjs` | 拍摄用户登录、后台登录和手机注册页面；写入 `docs/screenshots/`                                                                             |
 | `frontend/scripts/audit-pages.mjs`  | `before`/`after` 页面截图与布局测量，输出到被忽略的 `.taste-skill/page-audit/`；会操作账号、订单、咨询等流程，应使用独立验收部署及测试账号 |
 
@@ -145,7 +145,7 @@ Windows 宿主机的 `scripts/retain_latest_backup.py` 验证备份后保留最�
 | 前后端 `test-results/`、前端 `test-results-container/`、`test-results-operations/`、`playwright-report/` | 自动测试输出，已忽略；有失败需先保留定位证据                                                                               |
 | `.taste-skill/`                                                                                          | 历史视觉工作流的本地目录，整体忽略，包含 `inspect/`、`page-audit/`、`assets/` 等输出；设计方向源记录已归入 `docs/archive/` |
 | `.delivery/`                                                                                             | 本地交付过程材料，已忽略；其中备份、回滚和失败证据需核对后分别处理                                                         |
-| `docs/qa/`、`docs/screenshots/`、`docs/releases/`、`docs/acceptance/`、`backend/test/fixtures/ai/`       | 已跟踪的报告证据、界面图片、发布与验收记录和合成测试输入，继续保留                                                        |
+| `docs/qa/`、`docs/screenshots/`、`docs/releases/`、`docs/acceptance/`、`backend/test/fixtures/ai/`       | 已跟踪的报告证据、界面图片、发布与验收记录和合成测试输入，继续保留                                                         |
 
 本地清理以可重建的构建和测试输出为主；数据库、环境配置、备份、回滚材料和报告引用文件需要先核对用途与引用。后续新增当前操作说明放在 `docs/` 根目录，版本发布与维护记录放 `docs/releases/`，分阶段验收与专项负载报告放 `docs/acceptance/`，已完成阶段的记录放 `docs/archive/`，并更新[文档导航](README.md)。
 

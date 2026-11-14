@@ -18,4 +18,10 @@ backend/test-results/
 backend/.e2e/
 backups/
 .delivery/
+.workbuddy/
+# capture.mjs 的本地预览产物，文档不引用，需要时重拍
+docs/screenshots/product.png
+docs/screenshots/admin-desktop.png
+docs/screenshots/admin-mobile.png
+docs/screenshots/admin-products.png
 .DS_Store

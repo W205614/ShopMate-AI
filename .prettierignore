@@ -4,7 +4,6 @@
 /docs/releases/
 /docs/qa/
 /docs/screenshots/
-/docs/visual-*.json
 /backend/test/fixtures/
 /frontend/public/licenses/
 /frontend/public/images/*

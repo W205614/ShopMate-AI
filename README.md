@@ -100,17 +100,19 @@ Caddy 入口的依赖修复、构建与全部严重级别扫描见[HTTPS 入口�
 
 微信 H5 支付链接遵循官方五分钟有效期；到期后先查单，再按原支付单号恢复链接，跳转前重新确认状态，详见[H5 链接刷新与限制](docs/integrations.md#h5-支付链接刷新)。
 
-功能实现与初次本地验收见[单店生产版验收报告](docs/acceptance/production-acceptance-20261106.md)；AI 定向修复与入口安全更新见[最新维护记录](docs/releases/release-v0.1.5.md)，上一版工程质量变更见[v0.1.4 记录](docs/releases/release-v0.1.4.md)，AI 循环收敛与镜像启动入口见[v0.1.3 记录](docs/releases/release-v0.1.3.md)，中文商品检索与容器分发见[v0.1.2 记录](docs/releases/release-v0.1.2.md)，物流并发修复见[v0.1.1 记录](docs/releases/release-20261109.md)，首版完整交付及恢复记录见[v0.1.0 记录](docs/releases/release-20261107.md)。
+单店产品的初次验收见[单店生产版验收报告](docs/acceptance/production-acceptance-20261106.md)。当前版本的商城、支付及售后改动见 [v0.1.6 发布说明](docs/releases/release-v0.1.6.md)，历次发布可从[文档导航](docs/README.md)查阅。
 
 ## 第一次体验
 
 新商城已包含商品、分类和 FAQ。用第一笔订单体验顾客和运营人员如何配合：
 
-1. 在商城[注册顾客账号](http://localhost:18086/register)，选择有库存的商品规格，进入结算，填写收货地址并完成模拟支付。记下订单号。
-2. 另开标签页，用刚配置的管理员账号登录后台。在“订单管理”找到该订单，填入模拟承运商和单号后发货。
-3. 回到商城的订单详情，刷新后核对物流信息，确认收货。
+1. 在商城[注册顾客账号](http://localhost:18086/register)。库存和价格筛选会显示符合条件的商品规格。选好规格和数量后，可在商品页选省份试算运费，进入结算后按实际地址与优惠重新报价。
+2. 完成模拟支付并记下订单号。另开标签页，用刚配置的管理员账号登录后台。在“订单管理”找到订单，填入模拟承运商和单号后发货。运营首页可查看待发货、售后审核和人工接待的超时情况。
+3. 回到商城核对物流并确认收货。若售后需要寄回商品或人工客服需要补充信息，可从置顶的待处理通知进入对应申请或会话。
 
-想体验 AI 客服，可按[模型配置说明](docs/ai-support.md#模型配置)在服务端配置密钥并重新启动。顾客登录后可从商品或本人订单发起咨询；加购、取消待付款订单和申请售后都需要顾客确认。
+![v0.1.6 商城按价格和库存筛选后展示匹配的商品规格](docs/screenshots/v016-catalogue.jpg)
+
+想体验 AI 客服，可按[模型配置说明](docs/ai-support.md#模型配置)在服务端配置密钥并重新启动。顾客登录后可从商品或本人订单发起咨询。选购时可提供预算和用途，推荐卡片会链接到具体规格。加购、取消待付款订单和申请售后都要经顾客确认。v0.1.6 的 AI 验收使用合成模型响应，覆盖工具调用、显示规格和确认流程。
 
 ## 运行架构
 
@@ -127,7 +129,7 @@ flowchart LR
 
 ![v0.1.4 运营后台的商品与规格库存管理](docs/screenshots/v014-admin-products.jpg)
 
-两张画面均来自本次公开 v0.1.4 镜像的隔离演示实例，使用种子商品与合成配置；没有使用日常业务数据。来源和图片许可见[素材说明](docs/assets.md#版本运行截图)。
+商城首页和商品管理画面来自 v0.1.4 的隔离演示实例，商品筛选画面来自 v0.1.6 公开镜像的隔离实例。截图使用种子商品和合成配置。来源和图片许可见[素材说明](docs/assets.md#版本运行截图)。
 
 ## 从哪里读源码
 
@@ -143,7 +145,7 @@ docs/        开发说明、业务规则、验收报告和历史证据
 
 追踪刚才的下单流程，可从[结算页面](frontend/src/views/shop/CheckoutView.vue)进入[前端 API 调用](frontend/src/services/api.ts)，再看[后端 HTTP 入口](backend/src/app.ts)和[订单事务](backend/src/commerce.ts)。其他模块和脚本见[项目结构与阅读顺序](docs/project-structure.md)。
 
-请求和数据流见[架构与运行边界](docs/architecture.md)，调用入口见[HTTP 接口总览](docs/api.md)。本地开发与测试见[开发指南](docs/development.md#本地开发)，生产发布从[上线核对](docs/production.md#上线核对)开始，本轮变更与发布证据见[发布记录](docs/releases/release-v0.1.5.md)。
+请求和数据流见[架构与运行边界](docs/architecture.md)，调用入口见[HTTP 接口总览](docs/api.md)。本地开发和测试见[开发指南](docs/development.md#本地开发)，生产发布从[上线核对](docs/production.md#上线核对)开始。
 
 业务规则、AI 知识库、压测条件、故障记录及历史发布统一从[文档导航](docs/README.md)查阅。参与开发前阅读[贡献说明](CONTRIBUTING.md)；安全问题通过[GitHub 私密报告](SECURITY.md)提交。
 

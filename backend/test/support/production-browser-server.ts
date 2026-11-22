@@ -384,14 +384,16 @@ controls.get("/reconciliation", (_req, res) => {
   });
 });
 host.use("/__acceptance/control", controls);
-host.get("/__acceptance/checkout/:id", (req, res) =>
-  res.type("html").send(
-    `<html lang="zh-CN"><meta charset="utf-8"><title>隔离支付验收</title><h1>隔离支付验收收银台</h1><p>此页面不连接真实支付平台，不会扣款。</p><p>测试支付单：${z
-      .string()
-      .regex(/^SMp[a-f0-9]{28}$/)
-      .parse(req.params.id)}</p><a href="/orders">返回商城订单</a></html>`,
-  ),
-);
+host.get("/__acceptance/checkout/:id", (req, res) => {
+  z.string()
+    .regex(/^SMp[a-f0-9]{28}$/)
+    .parse(req.params.id);
+  res
+    .type("html")
+    .send(
+      '<html lang="zh-CN"><meta charset="utf-8"><title>隔离支付验收</title><h1>隔离支付验收收银台</h1><p>此页面不连接真实支付平台，不会扣款。</p><a href="/orders">返回商城订单</a></html>',
+    );
+});
 host.use((req, res, next) =>
   req.path.startsWith("/api/") ? api(req, res, next) : next(),
 );

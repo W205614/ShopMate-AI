@@ -21,7 +21,7 @@ RUN --mount=type=cache,id=shopmate-edge-go-mod,target=/go/pkg/mod --mount=type=c
 COPY LICENSE /out/licenses/shopmate-ai/LICENSE
 
 FROM caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3
-RUN apk add --no-cache --upgrade zlib=1.4-r0
+RUN apk add --no-cache --upgrade zlib=1.4-r0 'libcrypto3>=3.5.9-r1' 'libssl3>=3.5.9-r1'
 COPY --from=build /out/caddy /usr/bin/caddy
 COPY --from=build /out/licenses/ /usr/share/licenses/shopmate-edge/
 COPY --from=build /out/build-info.txt /out/modules.txt /usr/share/caddy/

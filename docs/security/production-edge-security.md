@@ -4,6 +4,8 @@
 
 2026-11-12 补充：下文零发现与 Go 1.27.3 的运行结果属于 2026-11-10 历史验证。新的 CI 扫描发现 Go 标准库 CVE-2026-97054，当前构建输入已更新至固定摘要的 Go 1.27.4；具体边界见文末增补，不将历史零发现结果延用为今天的扫描结论。
 
+2026-11-22 补充：v0.1.6 的生产入口构建把 Alpine `libcrypto3` 和 `libssl3` 升到至少 3.5.9-r1，覆盖发布候选扫描在这两个包中发现的 5 个 CVE。构建继续校验 Go 模块，包含 OpenTelemetry `sdk/log` v1.47.0 和 `klauspost/compress` v1.20.4。Web 的 Nginx 更新独立随 API/Web 发布。参见 [Alpine v3.24 安全数据库](https://secdb.alpinelinux.org/v3.24/main.json)和 [v0.1.6 说明](../releases/release-v0.1.6.md)。
+
 ## 最小修复输入
 
 使用[官方支持的源码包装入口](https://caddyserver.com/docs/build)，保留 Caddy 2.11.9 及全部标准模块，仅更新安全依赖；入口、锁文件和镜像构建见 [deploy/edge](../../deploy/edge)。未修改 Caddy 的 HTTP/TLS 业务实现，没有用修改版本字符串、移除标准模块或 VEX 获得通过。

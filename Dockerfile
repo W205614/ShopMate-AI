@@ -7,7 +7,7 @@ COPY frontend/ ./
 COPY shared/ /app/shared/
 RUN npm run build
 
-FROM nginx:stable-alpine-slim@sha256:dede8895648b461178c3bc604f7eed4423efe5220b2c4d839f5eb3d34ac3f8f7
+FROM nginx:1.30.7-alpine-slim@sha256:8c950211a641ec5b23f265450517001f6bcca533666120ebe36cb4cff3d00a55
 ARG ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine
 RUN sed -i "s#https://dl-cdn.alpinelinux.org/alpine#${ALPINE_MIRROR%/}#g" /etc/apk/repositories \
     && apk --timeout 60 update && apk --timeout 60 upgrade && rm -rf /var/cache/apk/*

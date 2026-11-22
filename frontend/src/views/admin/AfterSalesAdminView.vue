@@ -6,7 +6,8 @@ import { api } from "../../services/api";
 import { afterSaleLabels, money, dateTime } from "../../domain/types";
 import type { AfterSale } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
-import { useAdminQuery, useAdminPagination } from "./useAdminList";
+import { useAdminQuery, useAdminPagination, waitAge } from "./useAdminList";
+import TaskWaitFilter from "../../components/admin/TaskWaitFilter.vue";
 import { afterSaleState } from "../../domain/afterSaleState";
 import { eventLabel } from "../../components/shop/commerceLabels";
 import { request, refreshState } from "../../services/repository";
@@ -20,6 +21,7 @@ const shop = useShop(),
   query = filters.field("q", { replace: true }),
   orderId = filters.field("orderId"),
   status = filters.field("status", { values: Object.keys(afterSaleLabels) }),
+  wait = filters.field("wait", { values: ["all", "soon", "overdue"] }),
   selectedId = filters.field("detail", { resetPage: false }),
   dialog = computed({
     get: () => !!selectedId.value,
@@ -72,12 +74,15 @@ const allowedActions = computed(() => ({
   refund: !!state.value?.canRefund && permitted("refund"),
 }));
 const assignment = computed(() => {
-  if (state.value?.canApprove && !permitted("approve"))
+  if (state.value?.canApprove)
     return "当前申请待客服审核，请由客服或店主批准或拒绝。";
-  if (state.value?.canReceive && !permitted("receive"))
+  if (state.value?.canReturn)
+    return "等待顾客寄回商品并提交运单，收到退货后交由仓储确认。";
+  if (state.value?.canReceive)
     return "当前退货待仓储确认收货，请由仓储或店主处理。";
-  if (state.value?.canRefund && !permitted("refund"))
-    return "当前申请待财务退款，请由财务或店主处理。";
+  if (selected.value?.refundPending)
+    return "财务已提交退款，等待支付渠道确认。";
+  if (state.value?.canRefund) return "当前申请待财务退款，请由财务或店主处理。";
   return "";
 });
 function loadLatestNote() {
@@ -229,10 +234,17 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
           :label="label"
           :value="key"
       /></el-select>
+      <TaskWaitFilter
+        v-if="
+          status === 'requested' &&
+          shop.adminSession?.permissions?.includes('support')
+        "
+        v-model="wait"
+      />
       <el-button
         @click="
           filters.update(
-            { q: '', orderId: '', status: '' },
+            { q: '', orderId: '', status: '', wait: '' },
             { resetPage: true },
           )
         "
@@ -253,7 +265,15 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
         prop="id"
         label="售后编号"
         min-width="160"
-      /><el-table-column label="关联订单" min-width="160"
+      /><el-table-column
+        v-if="wait && status === 'requested'"
+        label="等待时长"
+        min-width="115"
+      >
+        <template #default="{ row }">{{
+          waitAge(row.createdAt)
+        }}</template> </el-table-column
+      ><el-table-column label="关联订单" min-width="160"
         ><template #default="{ row }"
           ><RouterLink
             :to="{ path: '/admin/orders', query: { detail: row.orderId } }"

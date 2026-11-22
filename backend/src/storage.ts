@@ -1,6 +1,8 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
-import type { Database } from "../../shared/domain/types";
+import type { Database, Settings } from "../../shared/domain/types";
 import type { MemberSummary } from "../../shared/domain/operations";
+import { availableStockSql, stockAvailabilityFrom } from "./stock-availability";
+import { taskQueue, taskWaitWindow } from "./task-wait";
 
 type RecordValue = Record<string, unknown>;
 type StoredRow = { key: string; position: number; data: string };
@@ -565,6 +567,7 @@ export interface PageOptions {
   to?: string;
   favoriteUserId?: string;
   locateId?: string;
+  wait?: "all" | "soon" | "overdue";
   claimEndsAfter?: string;
   sort?:
     | "newest"
@@ -595,6 +598,37 @@ export function queryPage<T>(
     pageSize = Math.min(100, Math.max(1, Math.trunc(options.pageSize ?? 20)));
   const filters: string[] = [],
     args: SQLInputValue[] = [];
+  const matchSku =
+    domain === "products" &&
+    (options.inStock || options.min !== undefined || options.max !== undefined);
+  let skuQuery = "";
+  const tableSource = matchSku
+    ? `${table} JOIN matched ON matched_product=key AND ordinal=1`
+    : table;
+  const productPrice = matchSku
+    ? "matched_price"
+    : `(SELECT min(price) FROM product_skus WHERE product_id=${table}.key)`;
+  if (matchSku) {
+    const skuFilters: string[] = [];
+    if (options.inStock) {
+      skuFilters.push(`${availableStockSql}>0`);
+      args.push(new Date().toISOString());
+    }
+    if (options.min !== undefined) {
+      skuFilters.push("s.price>=?");
+      args.push(options.min);
+    }
+    if (options.max !== undefined) {
+      skuFilters.push("s.price<=?");
+      args.push(options.max);
+    }
+    skuQuery = `WITH matched AS (
+      SELECT s.product_id AS matched_product,s.id AS matched_sku,s.price AS matched_price,
+        row_number() OVER (PARTITION BY s.product_id ORDER BY s.price,s.id) AS ordinal
+      ${options.inStock ? stockAvailabilityFrom : "FROM product_skus s"}
+      WHERE ${skuFilters.join(" AND ")}
+    ) `;
+  }
   if (domain === "ledger" && options.transactionMode) {
     filters.push("coalesce(json_extract(data,'$.transactionMode'),'demo')=?");
     args.push(options.transactionMode);
@@ -702,51 +736,67 @@ export function queryPage<T>(
     filters.push("date(created_at,'+8 hours')<=?");
     args.push(options.to);
   }
-  if (domain === "products") {
-    for (const [value, operator] of [
-      [options.min, ">="],
-      [options.max, "<="],
-    ] as const)
-      if (value !== undefined) {
-        filters.push(
-          `(SELECT min(price) FROM product_skus WHERE product_id=${table}.key) ${operator} ?`,
-        );
-        args.push(value);
-      }
-    if (options.inStock) {
-      filters.push(
-        `EXISTS(SELECT 1 FROM product_skus s WHERE s.product_id=${table}.key AND s.stock > (SELECT coalesce(sum(i.quantity),0) FROM order_items i JOIN biz_orders o ON o.key=i.order_id WHERE i.sku_id=s.id AND o.status='pending' AND json_extract(o.data,'$.inventoryPolicy')='reserved-v1' AND json_extract(o.data,'$.expiresAt')>?))`,
-      );
-      args.push(new Date().toISOString());
+  const queue = options.wait ? taskQueue(domain, options.status) : undefined;
+  if (queue && options.wait !== "all") {
+    const window = taskWaitWindow(
+      queue.minutesKey,
+      queryRecord<Settings>(sql, "settings", "singleton"),
+    );
+    if (options.wait === "overdue") {
+      filters.push(`${queue.since}<=?`);
+      args.push(window.overdue);
+    } else {
+      filters.push(`${queue.since}>? AND ${queue.since}<=?`);
+      args.push(window.overdue, window.soon);
     }
   }
   const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
   const total = Number(
     (
       sql
-        .prepare(`SELECT count(*) AS total FROM ${table} ${where}`)
+        .prepare(
+          `${skuQuery}SELECT count(*) AS total FROM ${tableSource} ${where}`,
+        )
         .get(...args) as { total: number }
     ).total,
   );
-  const order =
-    domain === "conversations" && (!options.sort || options.sort === "newest")
-      ? "CASE status WHEN 'waiting' THEN 0 WHEN 'human' THEN 1 WHEN 'bot' THEN 2 WHEN 'closed' THEN 3 ELSE 4 END,created_at DESC,key DESC"
-      : ["asc", "desc"].includes(options.sort ?? "")
-        ? `${domain === "products" ? `(SELECT min(price) FROM product_skus WHERE product_id=${table}.key)` : domain === "categories" ? "json_extract(data,'$.sort')" : domain === "ledger" ? "amount" : domain === "inventory" ? "json_extract(data,'$.delta')" : "created_at"} ${options.sort === "asc" ? "ASC" : "DESC"},key ASC`
-        : options.sort === "oldest"
-          ? "created_at ASC,key ASC"
-          : options.sort === "position"
-            ? "position ASC,key ASC"
-            : domain === "products" &&
-                ["priceAsc", "price-asc", "priceDesc", "price-desc"].includes(
-                  options.sort ?? "",
-                )
-              ? `(SELECT min(price) FROM product_skus WHERE product_id=${table}.key) ${["priceAsc", "price-asc"].includes(options.sort!) ? "ASC" : "DESC"},key ASC`
-              : domain === "products" && options.sort === "featured"
-                ? "json_extract(data,'$.featured') DESC,position ASC,key ASC"
-                : domain === "products" && options.sort === "sales"
-                  ? `(SELECT coalesce(sum(i.quantity-i.refunded_quantity),0) FROM order_items i JOIN biz_orders o ON o.key=i.order_id WHERE i.product_id=${table}.key AND o.status IN ('paid','shipped','completed')) DESC,key ASC`
-                  : "created_at DESC,key DESC";
+  const notificationAction =
+    domain === "notifications"
+      ? `(EXISTS (
+      SELECT 1 FROM biz_after_sales sale
+      WHERE sale.key=json_extract(${table}.data,'$.afterSaleId')
+        AND sale.user_id=${table}.user_id AND sale.status='approved'
+        AND json_extract(sale.data,'$.requiresReturn')=1
+  ) OR EXISTS (
+      SELECT 1 FROM biz_conversations c
+      WHERE c.key=json_extract(${table}.data,'$.conversationId')
+        AND c.user_id=${table}.user_id AND c.status='human'
+        AND json_extract(c.data,'$.awaitingCustomerMessageId')=json_extract(${table}.data,'$.actionMessageId')
+  ))`
+      : "";
+  const order = notificationAction
+    ? "action_required DESC, created_at DESC,key DESC"
+    : queue
+      ? `${queue.since} IS NULL,${queue.since} ASC,key ASC`
+      : domain === "conversations" &&
+          (!options.sort || options.sort === "newest")
+        ? "CASE status WHEN 'waiting' THEN 0 WHEN 'human' THEN 1 WHEN 'bot' THEN 2 WHEN 'closed' THEN 3 ELSE 4 END,created_at DESC,key DESC"
+        : ["asc", "desc"].includes(options.sort ?? "")
+          ? `${domain === "products" ? productPrice : domain === "categories" ? "json_extract(data,'$.sort')" : domain === "ledger" ? "amount" : domain === "inventory" ? "json_extract(data,'$.delta')" : "created_at"} ${options.sort === "asc" ? "ASC" : "DESC"},key ASC`
+          : options.sort === "oldest"
+            ? "created_at ASC,key ASC"
+            : options.sort === "position"
+              ? "position ASC,key ASC"
+              : domain === "products" &&
+                  ["priceAsc", "price-asc", "priceDesc", "price-desc"].includes(
+                    options.sort ?? "",
+                  )
+                ? `${productPrice} ${["priceAsc", "price-asc"].includes(options.sort!) ? "ASC" : "DESC"},key ASC`
+                : domain === "products" && options.sort === "featured"
+                  ? "json_extract(data,'$.featured') DESC,position ASC,key ASC"
+                  : domain === "products" && options.sort === "sales"
+                    ? `(SELECT coalesce(sum(i.quantity-i.refunded_quantity),0) FROM order_items i JOIN biz_orders o ON o.key=i.order_id WHERE i.product_id=${table}.key AND o.status IN ('paid','shipped','completed')) DESC,key ASC`
+                    : "created_at DESC,key DESC";
   const pages = Math.max(1, Math.ceil(total / pageSize));
   let actualPage = Math.min(page, pages),
     located: boolean | undefined;
@@ -762,10 +812,19 @@ export function queryPage<T>(
   const items = (
     sql
       .prepare(
-        `SELECT data FROM ${table} ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
+        `${skuQuery}SELECT data${matchSku ? ",matched_sku" : ""}${notificationAction ? `,${notificationAction} AS action_required` : ""} FROM ${tableSource} ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
       )
-      .all(...args, pageSize, (actualPage - 1) * pageSize) as { data: string }[]
-  ).map((row) => JSON.parse(row.data) as T);
+      .all(...args, pageSize, (actualPage - 1) * pageSize) as {
+      data: string;
+      matched_sku?: string;
+      action_required?: number | null;
+    }[]
+  ).map((row) => {
+    const item = JSON.parse(row.data);
+    if (row.matched_sku) item.matchedSkuId = row.matched_sku;
+    if (row.action_required) item.actionRequired = true;
+    return item as T;
+  });
   let totals:
     | { payment: string; refund: string; purchase: string; net: string }
     | undefined;

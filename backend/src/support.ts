@@ -33,6 +33,17 @@ export const supportApi: Pick<
     return transact((db) => {
       const uid = userId();
       if (context.orderId) ownedOrder(db, context.orderId);
+      if (context.afterSaleId)
+        requireThat(
+          context.orderId &&
+            db.afterSales.some(
+              (sale) =>
+                sale.id === context.afterSaleId &&
+                sale.orderId === context.orderId &&
+                sale.userId === uid,
+            ),
+          "售后单不存在或不属于这笔订单",
+        );
       const product = context.productId
         ? db.products.find((p) => p.id === context.productId && p.active)
         : undefined;
@@ -43,9 +54,10 @@ export const supportApi: Pick<
         id: conversationId,
         userId: uid,
         ...context,
-        title:
-          product?.name ??
-          (context.orderId ? `订单 ${context.orderId}` : "购物与服务咨询"),
+        title: context.afterSaleId
+          ? `售后单 ${context.afterSaleId}`
+          : (product?.name ??
+            (context.orderId ? `订单 ${context.orderId}` : "购物与服务咨询")),
         status: "bot",
         createdAt: now(),
         messages: [
@@ -90,6 +102,7 @@ export const supportApi: Pick<
         text: message.trim(),
         createdAt: now(),
       });
+      delete conversation.awaitingCustomerMessageId;
       if (conversation.status !== "bot") return;
       if (aiConfig().enabled) {
         enqueueSupportRun(
@@ -181,15 +194,16 @@ export const supportApi: Pick<
       ensureSupportSchema(requestContext.getStore()!.sql);
       cancelSupportWork(requestContext.getStore()!.sql, conversationId);
       conversation.status = "waiting";
+      conversation.waitingSince = now();
       conversation.messages.push({
         id: id("msg-"),
         role: "assistant",
         text: "已转入演示人工服务队列。你可以继续补充问题，客服接入后的回复会在此同步显示。",
-        createdAt: now(),
+        createdAt: conversation.waitingSince,
       });
     });
   },
-  async replyConversation(conversationId, message) {
+  async replyConversation(conversationId, message, needsReply) {
     await transact((db) => {
       admin();
       const conversation = db.conversations.find(
@@ -201,8 +215,10 @@ export const supportApi: Pick<
       );
       requireThat(text(message, 1000), "回复不能为空且不能超过 1000 字");
       conversation.status = "human";
+      const messageId = id("msg-");
+      if (needsReply) conversation.awaitingCustomerMessageId = messageId;
       conversation.messages.push({
-        id: id("msg-"),
+        id: messageId,
         role: "agent",
         text: message.trim(),
         createdAt: now(),

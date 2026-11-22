@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DeliveryEstimate from "../../components/shop/DeliveryEstimate.vue";
 import { useCommerceMode } from "../../services/commerceMode";
 const { production } = useCommerceMode();
 import { computed, ref, watch, onUnmounted } from "vue";
@@ -30,13 +31,21 @@ const product = computed(() =>
   ),
   sku = computed(
     () =>
-      product.value?.skus.find((s) => s.id === selected.value) ??
-      product.value?.skus[0],
+      product.value?.skus.find(
+        (s) => s.id === (selected.value || route.query.sku),
+      ) ?? product.value?.skus[0],
   ),
   favorite = computed(
     () => !!shop.db.favorites[shop.userId]?.includes(String(route.params.id)),
   );
 const related = ref<Product[]>([]);
+const skuUnavailable = computed(
+  () =>
+    !selected.value &&
+    typeof route.query.sku === "string" &&
+    product.value &&
+    !product.value.skus.some((sku) => sku.id === route.query.sku),
+);
 let recommendationSequence = 0;
 watch(
   [() => product.value?.id, () => product.value?.categoryId],
@@ -61,16 +70,13 @@ watch(
 onUnmounted(() => {
   recommendationSequence++;
 });
-watch(
-  () => route.params.id,
-  () => {
-    selected.value = "";
-    image.value = 0;
-    quantity.value = 1;
-    error.value = "";
-    notice.value = "";
-  },
-);
+watch([() => route.params.id, () => route.query.sku], () => {
+  selected.value = "";
+  image.value = 0;
+  quantity.value = 1;
+  error.value = "";
+  notice.value = "";
+});
 function requireLogin(redirect = route.fullPath) {
   if (shop.user) return true;
   router.push({ path: "/login", query: { redirect } });
@@ -103,6 +109,7 @@ function buyNow() {
       productId: product.value.id,
       skuId: sku.value.id,
       quantity: String(quantity.value),
+      ...(shop.deliveryProvince ? { province: shop.deliveryProvince } : {}),
     },
   });
   if (requireLogin(destination.fullPath)) router.push(destination.fullPath);
@@ -158,6 +165,7 @@ async function toggleFavorite() {
         </div>
         <div class="sku-picker">
           <h2>选择规格</h2>
+          <p v-if="skuUnavailable" role="status">原规格已下架，请重新选择。</p>
           <div>
             <button
               v-for="s in product.skus"
@@ -197,6 +205,15 @@ async function toggleFavorite() {
             </button>
           </div>
         </div>
+        <details v-if="product.active && sku?.stock" class="product-policies">
+          <summary>配送与收货 · 试算运费</summary>
+          <DeliveryEstimate
+            v-model="shop.deliveryProvince"
+            :product-id="product.id"
+            :sku-id="sku.id"
+            :quantity="quantity"
+          />
+        </details>
         <div class="purchase-actions">
           <button
             class="button secondary-button"

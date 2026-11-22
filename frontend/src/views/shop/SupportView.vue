@@ -146,7 +146,11 @@ async function select(id: string) {
     query: { ...route.query, conversationId: id || undefined },
   });
 }
-async function start(context?: { productId?: string; orderId?: string }) {
+async function start(context?: {
+  productId?: string;
+  orderId?: string;
+  afterSaleId?: string;
+}) {
   if (!shop.user) {
     await router.push({ path: "/login", query: { redirect: route.fullPath } });
     return;
@@ -210,6 +214,11 @@ function proposalStatus(proposal: SupportProposal) {
     ? "expired"
     : proposal.status;
 }
+function recommendationSku(choice: { productId: string; skuId: string }) {
+  return products.value
+    .find((p) => p.id === choice.productId)
+    ?.skus.find((sku) => sku.id === choice.skuId);
+}
 function scheduleProposalExpiry() {
   clearTimeout(proposalTimer);
   proposalTimer = undefined;
@@ -259,12 +268,14 @@ async function initialize() {
     return;
   }
   const productId = String(route.query.productId ?? ""),
-    orderId = String(route.query.orderId ?? "");
+    orderId = String(route.query.orderId ?? ""),
+    afterSaleId = String(route.query.afterSaleId ?? "");
   if (productId || orderId) {
     const existing = conversations.value.find(
       (c) =>
         c.status !== "closed" &&
         c.productId === (productId || undefined) &&
+        c.afterSaleId === (afterSaleId || undefined) &&
         c.orderId === (orderId || undefined),
     );
     if (existing) await select(existing.id);
@@ -272,6 +283,7 @@ async function initialize() {
       await start({
         productId: productId || undefined,
         orderId: orderId || undefined,
+        afterSaleId: afterSaleId || undefined,
       });
   } else if (!activeId.value && conversations.value[0])
     await select(conversations.value[0].id);
@@ -354,9 +366,17 @@ async function send(value?: string) {
       await router.push({ path: "/login", query: { redirect: "/support" } });
       return;
     }
+    const owner = capture();
     const oldDraft = text.value;
     const created = await start();
-    if (!created || activeId.value !== created || !conversation.value) return;
+    if (
+      !created ||
+      !alive ||
+      activeId.value !== created ||
+      epoch !== owner.epoch ||
+      shop.userSession?.id !== owner.actor
+    )
+      return;
     if (!text.value) text.value = oldDraft;
   }
   const target = capture(),
@@ -461,6 +481,24 @@ async function send(value?: string) {
           >订单 {{ order.id }} · {{ orderLabels[order.status] }} ·
           {{ money(order.total) }} <ArrowUpRight :size="17"
         /></RouterLink>
+        <RouterLink
+          v-if="conversation?.afterSaleId"
+          :to="{
+            path: '/after-sales',
+            query: { id: conversation.afterSaleId },
+          }"
+          class="chat-order-context"
+          >售后单 {{ conversation.afterSaleId }}</RouterLink
+        >
+        <p
+          v-if="
+            conversation?.status === 'human' &&
+            conversation.awaitingCustomerMessageId
+          "
+          class="action-notice"
+        >
+          客服正在等你补充信息，请查看最近的人工回复。
+        </p>
         <div ref="messagesEl" class="chat-messages" aria-live="polite">
           <template v-if="conversation?.messages.length"
             ><article
@@ -504,7 +542,50 @@ async function send(value?: string) {
                     <p>{{ citation.text }}</p>
                   </blockquote>
                 </details>
-                <div v-if="m.productIds?.length" class="chat-recommendations">
+                <div
+                  v-if="m.recommendations?.length"
+                  class="chat-recommendations"
+                >
+                  <article
+                    v-for="choice in m.recommendations"
+                    :key="choice.skuId"
+                    class="commerce-list-card"
+                  >
+                    <strong>{{ choice.productName }}</strong>
+                    <p>
+                      {{ choice.skuName }} · 推荐时 {{ money(choice.price) }}
+                    </p>
+                    <p
+                      v-if="recommendationSku(choice)?.stock === 0"
+                      class="secondary"
+                    >
+                      该规格已售罄。
+                    </p>
+                    <p
+                      v-else-if="
+                        recommendationSku(choice) &&
+                        recommendationSku(choice)?.price !== choice.price
+                      "
+                      class="secondary"
+                    >
+                      当前价格 {{ money(recommendationSku(choice)!.price) }}
+                    </p>
+                    <p>{{ choice.reason }}</p>
+                    <RouterLink
+                      :to="{
+                        path: `/products/${choice.productId}`,
+                        query: { sku: choice.skuId },
+                      }"
+                      class="text-link"
+                      >查看该规格</RouterLink
+                    >
+                    <small>价格与库存以商品页为准。</small>
+                  </article>
+                </div>
+                <div
+                  v-else-if="m.productIds?.length"
+                  class="chat-recommendations"
+                >
                   <template v-for="id in m.productIds" :key="id"
                     ><ProductCard
                       v-if="products.find((p) => p.id === id)"

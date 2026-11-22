@@ -235,6 +235,17 @@ function applyPrices() {
                 : "没有找到符合条件的商品，请调整关键词、分类或价格范围。"
             }}
           </p>
+          <div v-if="chips.length" class="button-row">
+            <button
+              v-for="chip in chips"
+              :key="chip.key"
+              type="button"
+              class="text-link"
+              @click="update({ [chip.key]: undefined })"
+            >
+              试试不限{{ chip.label }}
+            </button>
+          </div>
           <RouterLink to="/products" class="button">查看全部商品</RouterLink>
         </div>
         <nav v-if="pages > 1" class="pagination" aria-label="商品分页">

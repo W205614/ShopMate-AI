@@ -223,6 +223,7 @@ export const catalogApi: Pick<
         );
       checkVersion(db.settings, baseline.version);
       db.settings = {
+        ...db.settings,
         ...clone(input),
         version: (db.settings.version ?? 1) + 1,
       };

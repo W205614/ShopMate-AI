@@ -133,14 +133,43 @@ test("立即购买用券、部分退款、余量退货退款守恒，购物车�
   const secondSale = (await state(page)).afterSales.find(
     (a) => a.id !== firstSale.id,
   )!;
-  await action(page, "processAfterSale", secondSale.id, "approve");
-  await page.goto("/after-sales");
+  await post(page, "/api/actions/processAfterSale", {
+    args: [secondSale.id, "approve"],
+    requestId: crypto.randomUUID(),
+  });
+  const chat = await action(page, "createConversation", { orderId });
+  await action(page, "transferConversation", chat);
+  await post(page, "/api/actions/replyConversation", {
+    args: [chat, "请核对订单动态"],
+    requestId: crypto.randomUUID(),
+  });
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        "/api/collections/notifications?role=user",
+      );
+      const result = await response.json();
+      return result.items?.[0]?.actionRequired;
+    })
+    .toBe(true);
+  await page.goto("/notifications");
+  const nextAction = page.locator(".commerce-list-card").first();
+  await expect(nextAction).toContainText("需要操作 · 退货已审核通过");
+  await nextAction.getByRole("button", { name: "查看售后进度" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/after-sales\\?id=${secondSale.id}`),
+  );
   const record = page
     .locator(".order-block")
     .filter({ hasText: "验收余下商品退货退款与尾差" });
   await record.getByLabel("模拟退货单号").fill("RETURN12345");
   await record.getByRole("button", { name: "提交退货单号" }).click();
   await expect(record.getByText("退货运输中", { exact: true })).toBeVisible();
+  await expect(record.getByText(/最新进度/)).toBeVisible();
+  await record.getByRole("link", { name: "咨询进度" }).click();
+  await expect(
+    page.getByRole("link", { name: `售后单 ${secondSale.id}`, exact: true }),
+  ).toBeVisible();
   await expect(record.getByRole("button", { name: "撤销申请" })).toHaveCount(0);
   await action(page, "processAfterSale", secondSale.id, "receive");
   await action(page, "processAfterSale", secondSale.id, "refund");

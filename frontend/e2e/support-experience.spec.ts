@@ -168,6 +168,7 @@ test("失败后转人工隐藏重试，用户可继续补充并收到人工回�
     page.getByRole("button", { name: "重试本轮", exact: true }),
   ).toHaveCount(0);
   expect(retries).toBe(0);
+  await page.unrouteAll({ behavior: "wait" });
   await admin.close();
 });
 
@@ -264,4 +265,72 @@ test("甲会话确认结果迟到不向乙泄露成功或错误，返回甲保�
   }
   expect(submissions).toBe(2);
   expect(completed).toBe(true);
+});
+
+test("离开会话后收到未读通知，直达原人工回复并标记已读", async ({ page }) => {
+  const id = await action(page, "createConversation", { productId: "p01" });
+  await action(page, "transferConversation", id);
+  await page.goto("/products");
+  await login(page, "admin");
+  const reply = {
+    args: [id, "这是原会话中的人工回复。"],
+    requestId: crypto.randomUUID(),
+  };
+  for (let i = 0; i < 2; i++) {
+    const response = await page.request.post("/api/actions/replyConversation", {
+      headers,
+      data: reply,
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+  }
+  const unread = page.getByRole("link", { name: "站内通知，1 条未读" });
+  await expect(unread).toBeVisible({ timeout: 20_000 });
+  await unread.click();
+  await page.getByRole("button", { name: "查看客服回复" }).click();
+  await expect(page).toHaveURL(new RegExp(`conversationId=${id}`));
+  await expect(page.locator(".message-agent").last()).toContainText(
+    "这是原会话中的人工回复。",
+  );
+  await expect(
+    page.getByRole("link", { name: "站内通知", exact: true }),
+  ).toBeVisible();
+});
+
+test("客服请求补充信息后通知置顶，顾客回复后解除待办", async ({ page }) => {
+  const id = await action(page, "createConversation", { productId: "p01" });
+  await action(page, "transferConversation", id);
+  await login(page, "admin");
+  await page.goto(`/admin/support?detail=${id}`);
+  await page
+    .getByPlaceholder("输入人工回复。发送后会话转为人工接待。")
+    .fill("请补充想要的商品规格。");
+  await page.getByText("需要顾客补充信息", { exact: true }).click();
+  await expect(
+    page.getByRole("checkbox", { name: "需要顾客补充信息" }),
+  ).toBeChecked();
+  await page.getByRole("button", { name: "发送回复", exact: true }).click();
+  await expect(
+    page.getByText("请补充想要的商品规格。", { exact: true }).last(),
+  ).toBeVisible();
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        "/api/collections/notifications?role=user",
+      );
+      return (await response.json()).items?.[0]?.actionRequired;
+    })
+    .toBe(true);
+  await page.goto("/notifications");
+  const card = page.locator(".commerce-list-card").first();
+  await expect(card).toContainText("需要操作 · 客服需要你补充信息");
+  await card.getByRole("button", { name: "查看客服回复" }).click();
+  await expect(page.getByText(/客服正在等你补充信息/)).toBeVisible();
+  await page.getByLabel("输入咨询内容").fill("我想要雾白标准版。");
+  await page.getByRole("button", { name: "发送消息", exact: true }).click();
+  await expect(page.locator(".message-user").last()).toContainText(
+    "我想要雾白标准版。",
+  );
+  await page.goto("/notifications");
+  await expect(card).toContainText("客服需要你补充信息");
+  await expect(card).not.toContainText("需要操作");
 });

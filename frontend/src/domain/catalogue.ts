@@ -30,6 +30,7 @@ export function readCatalogueQuery(query: LocationQuery) {
 }
 
 export const productPrice = (product: Product) =>
+  product.skus.find((sku) => sku.id === product.matchedSkuId)?.price ??
   Math.min(...product.skus.map((sku) => sku.price));
 
 export function catalogueCategories(
@@ -58,13 +59,9 @@ export function searchProducts(
     .filter(Boolean);
   const categoryNames = new Map(categories.map((c) => [c.id, c.name]));
   return products
-    .filter((p) => {
-      if (!p.active || query.invalidRange) return false;
-      if (query.category && p.categoryId !== query.category) return false;
-      if (query.inStock && !p.skus.some((sku) => sku.stock > 0)) return false;
-      const price = productPrice(p);
-      if (query.min !== undefined && price < query.min) return false;
-      if (query.max !== undefined && price > query.max) return false;
+    .flatMap((p) => {
+      if (!p.active || query.invalidRange) return [];
+      if (query.category && p.categoryId !== query.category) return [];
       const text = [
         p.name,
         p.subtitle,
@@ -76,7 +73,19 @@ export function searchProducts(
         .join(" ")
         .normalize("NFKC")
         .toLowerCase();
-      return words.every((word) => text.includes(word));
+      if (!words.every((word) => text.includes(word))) return [];
+      if (!query.inStock && query.min === undefined && query.max === undefined)
+        return [p];
+      if (p.matchedSkuId) return [p];
+      const match = p.skus
+        .filter(
+          (sku) =>
+            (!query.inStock || sku.stock > 0) &&
+            (query.min === undefined || sku.price >= query.min) &&
+            (query.max === undefined || sku.price <= query.max),
+        )
+        .sort((a, b) => a.price - b.price || a.id.localeCompare(b.id))[0];
+      return match ? [{ ...p, matchedSkuId: match.id }] : [];
     })
     .sort((a, b) => {
       if (query.sort === "price-asc") return productPrice(a) - productPrice(b);

@@ -7,6 +7,7 @@ import { supportApi } from "../src/support";
 import { ensureSupportSchema } from "../src/ai/ai-schema";
 import { ensureKnowledgeSchema } from "../src/ai/ai-knowledge";
 import { executeSupportTool, processSupportRun } from "../src/ai/ai-support";
+import { renderGroundedAnswer } from "../src/ai/ai-answer";
 
 type Run = Parameters<typeof executeSupportTool>[1];
 let sql: DatabaseSync;
@@ -15,9 +16,9 @@ const asUser = <T>(work: () => T) =>
     { sql, user: { id: "u1", name: "顾客", role: "user" }, admin: null },
     work,
   );
-async function queued(orderId?: string) {
+async function queued(orderId?: string, message = "请查询订单") {
   const id = await asUser(() => supportApi.createConversation({ orderId }));
-  await asUser(() => supportApi.sendMessage(id, "请查询订单"));
+  await asUser(() => supportApi.sendMessage(id, message));
   return sql
     .prepare("SELECT * FROM support_runs WHERE conversation_id=?")
     .get(id) as Run;
@@ -65,6 +66,107 @@ afterEach(() => {
   sql.close();
   vi.useRealTimers();
   vi.unstubAllEnvs();
+});
+
+it("renders a policy exception and rejects a quote that removes its negation", () => {
+  const source = {
+    id: "policy-test",
+    title: "合成退货政策",
+    text: "普通商品可以申请退货。定制商品不支持无理由退货。",
+  };
+  const answer = (text: string) =>
+    renderGroundedAnswer({
+      kind: "grounded",
+      presentation: { sourceQuotes: [{ sourceId: source.id, text }] },
+      sources: [source],
+      products: [],
+      afterSales: [],
+      proposals: [],
+    });
+  expect(answer("定制商品不支持无理由退货。")).toContain(
+    "定制商品不支持无理由退货。",
+  );
+  expect(() => answer("支持无理由退货。")).toThrow("AI_INVALID_SOURCE_QUOTE");
+});
+
+it.each([10000, 8000])(
+  "grounds recommendations in an available SKU within %i cents",
+  async (budget) => {
+    const db = readDatabase(sql);
+    const product = db.products.find((p) => p.id === "p01")!;
+    const sku = product.skus[1]!;
+    Object.assign(product.skus[0]!, { price: 7_000, stock: 0 });
+    Object.assign(sku, { price: 8_900, stock: 3 });
+    writeDatabase(sql, db);
+    const run = await queued(
+      undefined,
+      `推荐${budget / 100}元以内有货的${product.name}`,
+    );
+    const caller = vi
+      .fn()
+      .mockResolvedValueOnce({
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "recommend-search",
+            type: "function",
+            function: {
+              name: "search_products",
+              arguments: JSON.stringify({
+                query: product.name,
+                maxPrice: budget,
+              }),
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        role: "assistant",
+        content: JSON.stringify({
+          replyKind: budget >= sku.price ? "grounded" : "handoff",
+          answer: "请看结果。",
+          productIds: budget >= sku.price ? [product.id] : [],
+          presentation: { productView: "recommend" },
+        }),
+      });
+    await processSupportRun(sql, run.id, caller);
+    const answer = readDatabase(sql)
+      .conversations.find((c) => c.id === run.conversation_id)!
+      .messages.at(-1)!;
+    if (budget >= sku.price) {
+      expect(answer.recommendations).toEqual([
+        {
+          productId: product.id,
+          productName: product.name,
+          skuId: sku.id,
+          skuName: sku.name,
+          price: 8900,
+          reason: product.description,
+        },
+      ]);
+    } else {
+      expect(answer.recommendations).toBeUndefined();
+      expect(answer.text).toContain("要放宽预算，还是调整选购条件");
+    }
+  },
+);
+
+it("asks only for the missing shopping budget", async () => {
+  const run = await queued(undefined, "想买适合通勤的耳机，请先问我预算");
+  await processSupportRun(sql, run.id, async () => ({
+    role: "assistant",
+    content: JSON.stringify({
+      replyKind: "clarify",
+      answer: "请补充预算。",
+      presentation: { missingFields: ["budget"] },
+    }),
+  }));
+  expect(
+    readDatabase(sql)
+      .conversations.find((c) => c.id === run.conversation_id)!
+      .messages.at(-1)?.text,
+  ).toBe("请补充预算。");
 });
 
 it("supplies unambiguous Beijing dates for both owned-order tools, including a UTC day rollover", async () => {

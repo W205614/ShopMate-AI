@@ -38,6 +38,10 @@ export interface Refund {
   createdAt: string;
   updatedAt: string;
 }
+export type CustomerPaymentState = Pick<
+  Payment,
+  "status" | "closeRequested" | "createdAt"
+>;
 export interface ProductionCapabilities {
   mode: "demo" | "production";
   paymentChannels: PaymentChannel[];

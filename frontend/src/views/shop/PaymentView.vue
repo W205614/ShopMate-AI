@@ -81,6 +81,7 @@ async function pay() {
         v-if="
           order.status === 'pending' && order.transactionMode === 'production'
         "
+        :key="order.id"
         :order-id="order.id"
         :expired="expired"
       />

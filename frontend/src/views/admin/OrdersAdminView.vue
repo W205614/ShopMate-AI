@@ -12,7 +12,8 @@ import {
 } from "../../domain/types";
 import type { Order } from "../../domain/types";
 import { useAdminAction, localDate } from "./useAdmin";
-import { useAdminQuery, useAdminPagination } from "./useAdminList";
+import { useAdminQuery, useAdminPagination, waitAge } from "./useAdminList";
+import TaskWaitFilter from "../../components/admin/TaskWaitFilter.vue";
 import { eventLabel } from "../../components/shop/commerceLabels";
 import { canOpenAdminPath } from "../../router";
 import "../../styles/commerce-flow.css";
@@ -30,6 +31,7 @@ const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
   query = filters.field("q", { replace: true }),
   status = filters.field("status", { values: Object.keys(orderLabels) }),
+  wait = filters.field("wait", { values: ["all", "soon", "overdue"] }),
   from = filters.field("from"),
   to = filters.field("to"),
   selectedId = filters.field("detail", { resetPage: false }),
@@ -140,8 +142,16 @@ async function submit() {
           v-for="(label, key) in orderLabels"
           :key="key"
           :label="label"
-          :value="key" /></el-select
-      ><label class="admin-filter-date"
+          :value="key"
+      /></el-select>
+      <TaskWaitFilter
+        v-if="
+          status === 'paid' &&
+          shop.adminSession?.permissions?.includes('warehouse')
+        "
+        v-model="wait"
+      />
+      <label class="admin-filter-date"
         >下单开始日期<el-input
           v-model="from"
           type="date"
@@ -156,7 +166,7 @@ async function submit() {
       <el-button
         @click="
           filters.update(
-            { q: '', status: '', from: '', to: '' },
+            { q: '', status: '', from: '', to: '', wait: '' },
             { resetPage: true },
           )
         "
@@ -175,7 +185,15 @@ async function submit() {
         prop="id"
         label="订单号"
         min-width="180"
-      /><el-table-column label="用户 / 收件人" min-width="150"
+      /><el-table-column
+        v-if="wait && status === 'paid'"
+        label="等待时长"
+        min-width="115"
+      >
+        <template #default="{ row }">{{
+          waitAge(row.paidAt)
+        }}</template> </el-table-column
+      ><el-table-column label="用户 / 收件人" min-width="150"
         ><template #default="{ row }"
           >{{ shop.db.users.find((u) => u.id === row.userId)?.name
           }}<small style="display: block; color: #7a828f">{{
@@ -293,6 +311,12 @@ async function submit() {
           selected.status === "paid" ? remainingQuantity(selected) : 0
         }}
         件
+      </p>
+      <p
+        v-if="selected.status === 'paid' && canShip(selected)"
+        class="admin-note"
+      >
+        仓储待发货。登记承运商和运单后，订单进入待收货。
       </p>
       <p
         v-if="selected.status === 'paid' && !canShip(selected)"

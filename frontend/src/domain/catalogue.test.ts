@@ -37,7 +37,7 @@ describe("public catalogue", () => {
     const descending = find({ sort: "price-desc" }).map(productPrice);
     expect(descending).toEqual([...descending].sort((a, b) => b - a));
   });
-  it("uses displayed minimum SKU price even when that SKU is sold out", () => {
+  it("uses the lowest available SKU meeting the requested price range", () => {
     const p = structuredClone(db.products[0]!);
     p.skus = [
       { id: "cheap", name: "a", price: 1990, stock: 0 },
@@ -49,7 +49,14 @@ describe("public catalogue", () => {
         db.categories,
         readCatalogueQuery({ max: "19.90", stock: "1" }),
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
+    const matches = searchProducts(
+      [p],
+      db.categories,
+      readCatalogueQuery({ max: "39.90", stock: "1" }),
+    );
+    expect(matches[0]?.matchedSkuId).toBe("available");
+    expect(matches.map(productPrice)).toEqual([3990]);
   });
   it("handles invalid, repeated and reversed URL parameters safely", () => {
     for (const page of ["NaN", "Infinity", "-1", "1.5", "9007199254740992"])

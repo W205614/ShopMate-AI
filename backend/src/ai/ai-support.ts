@@ -689,6 +689,7 @@ export async function executeSupportTool(
     sources: Source[];
     products: Set<string>;
     productCaps: Map<string, number | undefined>;
+    budgetMatches?: Map<number, boolean>;
     orders: Set<string>;
     degraded: string[];
   },
@@ -782,7 +783,7 @@ export async function executeSupportTool(
             .filter((term) => term.length > 1),
         ]),
       ];
-      return db.products
+      const matches = db.products
         .filter(
           (p) =>
             p.active &&
@@ -817,9 +818,21 @@ export async function executeSupportTool(
         .slice(0, 5)
         .map(({ p }) => {
           evidence.products.add(p.id);
-          evidence.productCaps.set(p.id, maxPrice);
+          const priorCap = evidence.productCaps.get(p.id);
+          evidence.productCaps.set(
+            p.id,
+            priorCap === undefined
+              ? maxPrice
+              : Math.min(priorCap, maxPrice ?? priorCap),
+          );
           return publicProduct(db, p.id);
         });
+      if (maxPrice !== undefined && evidence.budgetMatches)
+        evidence.budgetMatches.set(
+          maxPrice,
+          !!evidence.budgetMatches.get(maxPrice) || matches.length > 0,
+        );
+      return matches;
     }
     throw new HttpError(400, "工具不在允许列表");
   });
@@ -890,6 +903,7 @@ async function processBudgetedSupportRun(
     sources: [] as Source[],
     products: new Set<string>(),
     productCaps: new Map<string, number | undefined>(),
+    budgetMatches: new Map<number, boolean>(),
     orders: new Set<string>(),
     degraded: [] as string[],
   };
@@ -940,7 +954,7 @@ async function processBudgetedSupportRun(
       {
         role: "system",
         content:
-          "最终JSON还需声明replyKind：clarify（缺少参数）、grounded（事实答复）或handoff（无法确认或越权）。answer不直接展示，事实由服务端生成。可选presentation控制表达：productView为details、compare或recommend；focus为description、material、price、stock的非空数组，按用户所问选择，比较与推荐须保留price，推荐还须保留description或material说明差异；missingFields为product、sku、quantity、order、reason、items数组，仅追问当前真正缺失的信息，不重复询问已知订单；grounded答复的每个引用都必须在presentation.sourceQuotes中给出[{sourceId,text}]，只能逐字摘录本轮已选引用中的完整相关句子，保留实体、单位、条件和否定词，不能拼接改写。sourceQuotes仅用于citations中的知识来源ID，商品及订单事实由服务端渲染，不填sourceQuotes。比较时逐一查询相关商品，推荐先search_products按用户预算及需求检索，再选择有货商品。政策答复必须先search_knowledge；没有依据使用handoff。只保留直接回答本次问题所必需的最少引用；逐项检查所问的每个子问题。用户指定某份资料或政策时，限定在该资料范围内，不附加没有被询问的操作FAQ或售后流程。商品和订单必须返回本轮已查到的标识，禁止猜测。",
+          "最终JSON还需声明replyKind：clarify（缺少参数）、grounded（事实答复）或handoff（无法确认或越权）。answer不直接展示，事实由服务端生成。可选presentation控制表达：productView为details、compare或recommend；focus为description、material、price、stock的非空数组，按用户所问选择，比较与推荐须保留price，推荐还须保留description或material说明差异；missingFields为product、sku、quantity、order、reason、items、budget、use数组，仅追问真正缺失的信息，不重复询问已知条件；grounded答复的每个引用都必须在presentation.sourceQuotes中给出[{sourceId,text}]，只能逐字摘录本轮已选引用中的完整相关句子，保留实体、单位、条件和否定词，不能拼接改写。sourceQuotes仅用于citations中的知识来源ID，商品及订单事实由服务端渲染，不填sourceQuotes。比较时逐一查询相关商品，推荐先search_products按用户明确的预算及需求检索，再选择有货商品。预算内没有结果时使用handoff，禁止自行放宽预算。政策答复必须先search_knowledge；没有依据使用handoff。只保留直接回答本次问题所必需的最少引用；逐项检查所问的每个子问题。用户指定某份资料或政策时，限定在该资料范围内，不附加没有被询问的操作FAQ或售后流程。商品和订单必须返回本轮已查到的标识，禁止猜测。",
       },
       {
         role: "system",
@@ -1139,21 +1153,25 @@ async function processBudgetedSupportRun(
       requireThat(sourcesStillValid(sql, sources), "知识来源已更新，请重试");
       controller.signal.throwIfAborted();
       const factual = final.replyKind === "grounded";
+      const budget = evidence.budgetMatches.size
+        ? Math.min(...evidence.budgetMatches.keys())
+        : undefined;
       const products = factual
         ? withScopedDb(sql, (db) =>
             final.productIds
               .map((productId) => {
                 const product = publicProduct(db, productId);
                 if (final.presentation?.productView === "recommend") {
-                  const cap = evidence.productCaps.get(productId);
+                  const cap = Math.min(
+                    evidence.productCaps.get(productId) ?? Infinity,
+                    budget ?? Infinity,
+                  );
                   requireThat(
                     evidence.productCaps.has(productId),
                     "推荐商品必须先按需求检索",
                   );
                   product.skus = product.skus.filter(
-                    (sku) =>
-                      sku.availableStock > 0 &&
-                      (cap === undefined || sku.price <= cap),
+                    (sku) => sku.availableStock > 0 && sku.price <= cap,
                   );
                 }
                 return product;
@@ -1182,20 +1200,47 @@ async function processBudgetedSupportRun(
         !pending.length
           ? "handoff"
           : final.replyKind;
+      const noBudgetMatch =
+        replyKind === "handoff" &&
+        budget !== undefined &&
+        evidence.budgetMatches.get(budget) === false &&
+        !sources.length &&
+        !owned &&
+        !pending.length;
+      const recommendations =
+        final.presentation?.productView === "recommend"
+          ? products.map((product) => {
+              const sku = [...product.skus].sort(
+                (a, b) => a.price - b.price || a.id.localeCompare(b.id),
+              )[0]!;
+              return {
+                productId: product.id,
+                productName: product.name,
+                skuId: sku.id,
+                skuName: sku.name,
+                price: sku.price,
+                reason: product.description || `材质：${product.material}`,
+              };
+            })
+          : [];
       const answer: Message = {
         id: `ai-${run.id}`,
         role: "assistant",
         source: "ai",
         replyKind,
-        text: renderGroundedAnswer({
-          kind: replyKind,
-          presentation: final.presentation,
-          sources: factual ? sources : [],
-          products,
-          order: owned ? publicOrder(owned) : undefined,
-          afterSales: owned ? publicAfterSales(sql, run.user_id, owned.id) : [],
-          proposals: pending.map((proposal) => proposal.summary),
-        }),
+        text: noBudgetMatch
+          ? "按当前预算和条件暂时没有找到有货商品。要放宽预算，还是调整选购条件？"
+          : renderGroundedAnswer({
+              kind: replyKind,
+              presentation: final.presentation,
+              sources: factual ? sources : [],
+              products,
+              order: owned ? publicOrder(owned) : undefined,
+              afterSales: owned
+                ? publicAfterSales(sql, run.user_id, owned.id)
+                : [],
+              proposals: pending.map((proposal) => proposal.summary),
+            }),
         createdAt: now(),
         citations: (factual ? sources : []).map(
           ({ id, title, text, page, paragraph }) => ({
@@ -1209,6 +1254,7 @@ async function processBudgetedSupportRun(
         ...(factual && products.length
           ? { productIds: products.map((product) => product.id) }
           : {}),
+        ...(recommendations.length ? { recommendations } : {}),
         ...(owned ? { orderId: owned.id } : {}),
       };
       transaction(sql, () => {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import DeliveryProvinceField from "../../components/shop/DeliveryProvinceField.vue";
+import { addressProvince } from "../../../../shared/domain/delivery-province";
 import CollectionPager from "../../components/shop/CollectionPager.vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter, type LocationQuery } from "vue-router";
@@ -49,7 +51,7 @@ const section = computed(() =>
     : "overview",
 );
 const editing = ref(false);
-const form = reactive<AddressInput>({
+const form = reactive<AddressInput & { province: string }>({
   name: "",
   phone: "",
   region: "",
@@ -172,7 +174,7 @@ function edit(a?: Address) {
     name: a?.name ?? "",
     phone: a?.phone ?? "",
     region: a?.region ?? "",
-    province: a?.province ?? "",
+    province: a ? addressProvince(a) : "",
     detail: a?.detail ?? "",
     isDefault: a?.isDefault ?? shop.myAddresses.length === 0,
   });
@@ -343,13 +345,7 @@ async function deleteReview(id: string) {
               autocomplete="tel"
           /></label>
         </div>
-        <label
-          >配送省份<input
-            v-model.trim="form.province"
-            required
-            maxlength="30"
-            placeholder="如：浙江省"
-        /></label>
+        <DeliveryProvinceField v-model="form.province" />
         <label
           >省 / 市 / 区<input
             v-model.trim="form.region"

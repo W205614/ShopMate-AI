@@ -338,6 +338,12 @@ export async function transact<T>(
               }
             }
           }
+          const returnRequired =
+            command.method === "processAfterSale" &&
+            command.args[1] === "approve" &&
+            db.afterSales.some(
+              (sale) => sale.id === command.args[0] && sale.requiresReturn,
+            );
           if (recipient)
             enqueue(
               sql,
@@ -345,21 +351,28 @@ export async function transact<T>(
               {
                 userId: recipient,
                 orderId,
-                text: (
-                  {
-                    createOrder: "订单已创建，库存保留30分钟",
-                    payOrder: "订单付款成功",
-                    cancelOrder:
-                      order?.status === "pending" && order.cancelRequested
-                        ? "取消申请已提交，等待支付渠道确认"
-                        : "订单已取消",
-                    confirmOrder: "订单已确认收货",
-                    shipOrder: "订单已发货",
-                    requestAfterSale: "售后申请已受理",
-                    processAfterSale: "售后处理进度已更新",
-                    submitReturn: "退货信息已提交",
-                  } as Record<string, string>
-                )[command.method],
+                ...(command.method === "processAfterSale"
+                  ? { afterSaleId: command.args[0] }
+                  : {}),
+                text: returnRequired
+                  ? order?.transactionMode === "production"
+                    ? "退货已审核通过，请寄回商品并填写运单"
+                    : "退货已审核通过，请填写模拟退货运单"
+                  : (
+                      {
+                        createOrder: "订单已创建，库存保留30分钟",
+                        payOrder: "订单付款成功",
+                        cancelOrder:
+                          order?.status === "pending" && order.cancelRequested
+                            ? "取消申请已提交，等待支付渠道确认"
+                            : "订单已取消",
+                        confirmOrder: "订单已确认收货",
+                        shipOrder: "订单已发货",
+                        requestAfterSale: "售后申请已受理",
+                        processAfterSale: "售后处理进度已更新",
+                        submitReturn: "退货信息已提交",
+                      } as Record<string, string>
+                    )[command.method],
               },
               `notification:${actor.id}:${command.method}:${command.requestId}`,
             );
@@ -374,7 +387,14 @@ export async function transact<T>(
               "notification",
               {
                 userId: conversation.userId,
-                text: "客服已回复，请前往咨询会话查看",
+                conversationId: conversation.id,
+                ...(command.args[2] === true
+                  ? { actionMessageId: conversation.awaitingCustomerMessageId }
+                  : {}),
+                text:
+                  command.args[2] === true
+                    ? "客服需要你补充信息，请打开会话回复"
+                    : "客服已回复，请前往咨询会话查看",
               },
               `notification:${actor.id}:${command.method}:${command.requestId}`,
             );

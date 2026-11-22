@@ -104,13 +104,29 @@ export function useAdminPagination<T>(
     },
     { immediate: true },
   );
-  const rows = computed(() =>
-    metadata.value
+  const rows = computed(() => {
+    const ids = metadata.value?.ids;
+    if (query.value.wait && ids) {
+      const byId = new Map(
+        items.value.map((item) => [(item as { id: string }).id, item]),
+      );
+      return ids.flatMap((id) => {
+        const item = byId.get(id);
+        return item === undefined ? [] : [item];
+      });
+    }
+    return metadata.value
       ? items.value.filter(
-          (item) =>
-            metadata.value?.ids?.includes((item as { id: string }).id) ?? true,
+          (item) => ids?.includes((item as { id: string }).id) ?? true,
         )
-      : items.value.slice((page.value - 1) * 10, page.value * 10),
-  );
+      : items.value.slice((page.value - 1) * 10, page.value * 10);
+  });
   return { page, rows, pages, total };
+}
+export function waitAge(since?: string | null) {
+  const at = Date.parse(since ?? "");
+  if (!Number.isFinite(at)) return "时间未知";
+  const minutes = Math.max(0, Math.floor((Date.now() - at) / 60_000));
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours} 小时 ${minutes % 60} 分钟` : `${minutes} 分钟`;
 }

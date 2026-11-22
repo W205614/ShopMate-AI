@@ -23,7 +23,7 @@ git clone https://github.com/W205614/ShopMate-AI.git
 cd ShopMate-AI
 ```
 
-以下命令指定 `v0.1.5` 镜像，发布状态和摘要以 [v0.1.5 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.5) 为准。需要匹配版本的源码时执行 `git switch --detach v0.1.5`；默认 `main` 可能领先正式镜像。已有部署升级前先按[生产指南](docs/production.md)准备匹配的恢复资料，保留原配置和数据。
+以下命令指定 `v0.1.6` 镜像，发布状态和摘要以 [v0.1.6 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.6) 为准。需要匹配版本的源码时执行 `git switch --detach v0.1.6`；默认 `main` 可能领先正式镜像。已有部署升级前先按[生产指南](docs/production.md)准备匹配的恢复资料，保留原配置和数据。
 
 在项目根目录复制配置模板。Windows PowerShell：
 
@@ -44,8 +44,8 @@ Linux 或 macOS：
 在同一 `.env` 中添加以下两行，选择已发布的镜像（公开拉取无需 GitHub 登录）：
 
 ```dotenv
-API_IMAGE=ghcr.io/w205614/shopmate-ai-api:v0.1.5
-WEB_IMAGE=ghcr.io/w205614/shopmate-ai-web:v0.1.5
+API_IMAGE=ghcr.io/w205614/shopmate-ai-api:v0.1.6
+WEB_IMAGE=ghcr.io/w205614/shopmate-ai-web:v0.1.6
 ```
 
 ### 3. 启动服务

@@ -7,6 +7,7 @@ import { useShop } from "../../stores/shop";
 import { money, orderLabels, dateTime } from "../../domain/types";
 import type { Order } from "../../domain/types";
 import { request } from "../../services/repository";
+import { waitAge } from "./useAdminList";
 interface Dashboard {
   orders: number | null;
   activeProducts: number;
@@ -14,7 +15,15 @@ interface Dashboard {
   refund: string | null;
   purchase: string | null;
   net: string | null;
-  tasks: { paid: number; requested: number; waiting: number };
+  queues: Record<
+    "paid" | "requested" | "waiting",
+    {
+      total: number;
+      oldest: string | null;
+      overdue: number;
+      soon: number;
+    } | null
+  >;
   trend: { label: string; total: string }[];
   ranking: {
     id?: string;
@@ -90,20 +99,20 @@ const tasks = computed(() =>
   [
     {
       name: "待发货订单",
-      count: data.value?.tasks.paid ?? 0,
-      link: "/admin/orders?status=paid",
+      queue: data.value?.queues.paid,
+      link: "/admin/orders?status=paid&wait=all",
       permission: "warehouse",
     },
     {
       name: "待审核售后",
-      count: data.value?.tasks.requested ?? 0,
-      link: "/admin/after-sales?status=requested",
+      queue: data.value?.queues.requested,
+      link: "/admin/after-sales?status=requested&wait=all",
       permission: "support",
     },
     {
       name: "等待人工接入",
-      count: data.value?.tasks.waiting ?? 0,
-      link: "/admin/support?status=waiting",
+      queue: data.value?.queues.waiting,
+      link: "/admin/support?status=waiting&wait=all",
       permission: "support",
     },
   ].filter((task) => permitted(task.permission)),
@@ -233,14 +242,34 @@ const ranking = computed(() =>
         <h2>需要你处理</h2>
         <span class="admin-note">实时待办</span>
       </div>
-      <RouterLink
-        v-for="task in tasks"
-        :key="task.name"
-        class="admin-task-row"
-        :to="task.link"
-        ><span>{{ task.name }} ↗</span
-        ><strong>{{ task.count }}</strong></RouterLink
-      >
+      <div v-for="task in tasks" :key="task.name">
+        <RouterLink class="admin-task-row" :to="task.link">
+          <span
+            >{{ task.name }} ↗
+            <small v-if="task.queue?.total" class="admin-note">
+              · 最长等待 {{ waitAge(task.queue.oldest) }} · 超时
+              {{ task.queue.overdue }}
+            </small>
+          </span>
+          <strong>{{ task.queue?.total ?? 0 }}</strong>
+        </RouterLink>
+        <div v-if="task.queue?.total" class="button-row">
+          <RouterLink
+            v-if="task.queue.soon"
+            :to="task.link.replace('wait=all', 'wait=soon')"
+            class="text-link"
+          >
+            即将超时 {{ task.queue.soon }}
+          </RouterLink>
+          <RouterLink
+            v-if="task.queue.overdue"
+            :to="task.link.replace('wait=all', 'wait=overdue')"
+            class="text-link"
+          >
+            已超时 {{ task.queue.overdue }}
+          </RouterLink>
+        </div>
+      </div>
     </section>
   </div>
   <div class="admin-two-column">

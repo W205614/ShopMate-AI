@@ -1,9 +1,15 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { Order, Product, Session } from "../../shared/domain/types";
+import type {
+  Order,
+  Product,
+  Session,
+  Settings,
+} from "../../shared/domain/types";
 import { queryPage, queryRecord } from "./database";
 import { permits } from "./permissions";
 import { shopMode } from "./production/config";
 import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
+import { taskQueues, taskWaitWindow } from "./task-wait";
 
 export function dashboard(sql: DatabaseSync, session: Session) {
   const canFinance = permits(session, "finance"),
@@ -13,6 +19,30 @@ export function dashboard(sql: DatabaseSync, session: Session) {
       permits(session, "support");
   const scalar = (query: string) =>
     (sql.prepare(query).get() as { n: number }).n;
+  const time = Date.now();
+  const settings = queryRecord<Settings>(sql, "settings", "singleton");
+  function queueSummary(queue: (typeof taskQueues)[keyof typeof taskQueues]) {
+    if (!permits(session, queue.permission)) return null;
+    const window = taskWaitWindow(queue.minutesKey, settings, time);
+    return sql
+      .prepare(
+        `SELECT count(*) AS total, min(${queue.since}) AS oldest,
+          count(CASE WHEN ${queue.since} <= ? THEN 1 END) AS overdue,
+          count(CASE WHEN ${queue.since} > ? AND ${queue.since} <= ? THEN 1 END) AS soon
+        FROM ${queue.table} WHERE status=?`,
+      )
+      .get(window.overdue, window.overdue, window.soon, queue.status) as {
+      total: number;
+      oldest: string | null;
+      overdue: number;
+      soon: number;
+    };
+  }
+  const queues = {
+    paid: queueSummary(taskQueues.orders),
+    requested: queueSummary(taskQueues.afterSales),
+    waiting: queueSummary(taskQueues.conversations),
+  };
   const sums = { payment: 0n, refund: 0n, purchase: 0n },
     byDay = new Map<string, bigint>();
   if (canFinance)
@@ -100,20 +130,11 @@ export function dashboard(sql: DatabaseSync, session: Session) {
     purchase: canFinance ? String(sums.purchase) : null,
     net: canFinance ? String(sums.payment - sums.refund - sums.purchase) : null,
     tasks: {
-      paid: permits(session, "warehouse")
-        ? scalar("SELECT count(*) AS n FROM biz_orders WHERE status='paid'")
-        : null,
-      requested: permits(session, "support")
-        ? scalar(
-            "SELECT count(*) AS n FROM biz_after_sales WHERE status='requested'",
-          )
-        : null,
-      waiting: permits(session, "support")
-        ? scalar(
-            "SELECT count(*) AS n FROM biz_conversations WHERE status='waiting'",
-          )
-        : null,
+      paid: queues.paid?.total ?? null,
+      requested: queues.requested?.total ?? null,
+      waiting: queues.waiting?.total ?? null,
     },
+    queues,
     trend,
     ranking,
     lowStock,

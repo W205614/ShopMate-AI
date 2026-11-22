@@ -13,6 +13,7 @@ import type { Role } from "../domain/types";
 
 export const useShop = defineStore("shop", () => {
   const db = ref(getDatabase());
+  const deliveryProvince = ref("");
   const summary = ref(getMemberSummary());
   const storageIssue = ref(getStorageIssue());
   const syncStatus = ref(getSyncStatus());
@@ -55,6 +56,7 @@ export const useShop = defineStore("shop", () => {
   }
   return {
     db,
+    deliveryProvince,
     summary,
     storageIssue,
     syncStatus,

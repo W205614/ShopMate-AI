@@ -3,8 +3,14 @@ import { useCommerceMode } from "../../services/commerceMode";
 const { production } = useCommerceMode();
 import CollectionPager from "../../components/shop/CollectionPager.vue";
 import { computed, reactive } from "vue";
+import { useRoute } from "vue-router";
 import { useShop } from "../../stores/shop";
-import { afterSaleLabels, dateTime, money } from "../../domain/types";
+import {
+  afterSaleLabels,
+  dateTime,
+  money,
+  type AfterSale,
+} from "../../domain/types";
 import { api } from "../../services/api";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import { useAction } from "../../components/shop/useAction";
@@ -18,6 +24,7 @@ const shop = useShop(),
       .filter((a) => a.userId === shop.userId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   );
+const route = useRoute();
 const returns = reactive<Record<string, { carrier: string; tracking: string }>>(
   {},
 );
@@ -50,6 +57,29 @@ function submitReturn(id: string) {
     "退货单号已提交，等待管理员确认收货",
   );
 }
+const refundStatus = {
+  pending: "等待渠道处理",
+  unknown: "等待渠道核对",
+  processing: "渠道处理中",
+  succeeded: "渠道已确认退款",
+  failed: "渠道退款失败，请联系商家核对",
+  abnormal: "退款异常，请联系商家核对",
+};
+function guidance(sale: AfterSale) {
+  const order = shop.myOrders.find((o) => o.id === sale.orderId);
+  if (
+    sale.status === "approved" &&
+    sale.requiresReturn &&
+    order?.transactionMode === "production"
+  )
+    return sale.returnAddress
+      ? "请按下方地址寄回商品，寄出后提交退货单号。"
+      : "请先咨询客服确认寄回信息，寄出后再提交退货单号。";
+  return afterSaleState(sale, order).guidance;
+}
+function copyAddress(address: string) {
+  return run(() => navigator.clipboard.writeText(address), "退货地址已复制");
+}
 </script>
 <template>
   <div class="page-wrap">
@@ -58,6 +88,9 @@ function submitReturn(id: string) {
       <p>每一笔申请，都可以在这里查看进度。</p>
     </div>
     <ActionNotice :error="error" :notice="notice" />
+    <RouterLink v-if="route.query.id" to="/after-sales" class="text-link"
+      >查看全部售后</RouterLink
+    >
     <div class="after-sale-explainer">
       <h2>需要帮助？</h2>
       <p>
@@ -87,12 +120,25 @@ function submitReturn(id: string) {
           </li>
         </ul>
         <p v-if="a.note">处理说明：{{ a.note }}</p>
-        <p class="action-notice">
+        <p v-if="a.events.at(-1)" class="secondary">
+          最新进度：{{ eventLabel(a.events.at(-1)!.action) }} ·
+          {{ dateTime(a.events.at(-1)!.at) }}
+        </p>
+        <p class="action-notice">{{ guidance(a) }}</p>
+        <p v-if="a.channelRefund">
+          {{ money(a.channelRefund.amount) }} ·
           {{
-            afterSaleState(
-              a,
-              shop.myOrders.find((o) => o.id === a.orderId),
-            ).guidance
+            a.channelRefund.noTransfer
+              ? "无需资金退回"
+              : a.channelRefund.provider === "wechatpay"
+                ? "原微信支付渠道"
+                : "原支付宝渠道"
+          }}
+          ·
+          {{
+            a.channelRefund.noTransfer && a.channelRefund.status === "succeeded"
+              ? "已处理"
+              : refundStatus[a.channelRefund.status]
           }}
         </p>
         <form
@@ -105,6 +151,19 @@ function submitReturn(id: string) {
           class="form-stack"
           @submit.prevent="submitReturn(a.id)"
         >
+          <div v-if="a.returnAddress">
+            <strong>寄回地址</strong>
+            <p>{{ a.returnAddress }}</p>
+            <button
+              type="button"
+              class="text-link"
+              :disabled="busy"
+              @click="copyAddress(a.returnAddress)"
+            >
+              复制退货地址
+            </button>
+          </div>
+          <p>退货寄件运费由顾客承担。寄出后请提交承运商和单号。</p>
           <div class="form-two">
             <label
               >{{ production ? "退货承运商" : "模拟退货承运商"
@@ -163,15 +222,23 @@ function submitReturn(id: string) {
             class="button secondary-button"
             >查看订单</RouterLink
           ><RouterLink
-            :to="{ path: '/support', query: { orderId: a.orderId } }"
+            :to="{
+              path: '/support',
+              query: { orderId: a.orderId, afterSaleId: a.id },
+            }"
             class="text-link"
-            >咨询进度</RouterLink
+            >{{
+              a.channelRefund &&
+              ["failed", "abnormal", "unknown"].includes(a.channelRefund.status)
+                ? "联系客服核对退款"
+                : "咨询进度"
+            }}</RouterLink
           >
         </div>
       </article>
     </div>
     <div v-else class="empty-state">
-      <h2>暂无售后记录</h2>
+      <h2>{{ route.query.id ? "找不到这笔售后记录" : "暂无售后记录" }}</h2>
       <p>需要退货或退款时，从对应订单发起申请。</p>
       <RouterLink to="/orders" class="button">查看我的订单</RouterLink>
     </div>

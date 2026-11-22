@@ -9,7 +9,18 @@ export const answerPresentationSchema = z
       .max(4)
       .optional(),
     missingFields: z
-      .array(z.enum(["product", "sku", "quantity", "order", "reason", "items"]))
+      .array(
+        z.enum([
+          "product",
+          "sku",
+          "quantity",
+          "order",
+          "reason",
+          "items",
+          "budget",
+          "use",
+        ]),
+      )
       .min(1)
       .max(6)
       .optional(),
@@ -96,12 +107,14 @@ export function renderGroundedAnswer(input: {
       order: "本人订单号",
       reason: "售后原因",
       items: "申请售后的商品明细和数量",
+      budget: "预算",
+      use: "使用场景",
     };
     const missing = input.presentation?.missingFields;
     return [
       ...proposalText,
       missing?.length
-        ? `请补充${[...new Set(missing)].map((field) => labels[field]).join("、")}，核对后再为你生成待确认卡片。`
+        ? `请补充${[...new Set(missing)].map((field) => labels[field]).join("、")}。`
         : clarificationReply,
     ].join("\n");
   }

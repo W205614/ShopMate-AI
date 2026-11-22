@@ -7,10 +7,15 @@ import type {
 } from "../../../../shared/domain/production";
 import { productionApi } from "../../services/production";
 import { request, refreshState } from "../../services/repository";
+import {
+  paymentNeedsHelp,
+  paymentStatusText,
+} from "../../domain/paymentGuidance";
 const props = defineProps<{ orderId: string; expired: boolean }>();
 const channels = ref<PaymentChannel[]>([]),
   channel = ref<PaymentChannel>(),
   current = ref<Payment | null>(null),
+  loaded = ref(false),
   busy = ref(false),
   error = ref(""),
   qr = ref("");
@@ -20,20 +25,18 @@ const labels: Record<PaymentChannel, string> = {
   alipay_page: "支付宝支付",
   alipay_wap: "支付宝支付",
 };
-const statuses = {
-  creating: "正在创建支付单",
-  pending: "等待渠道确认付款",
-  unknown: "支付结果待核对，请勿重复付款",
-  succeeded: "付款成功",
-  closed: "支付单已关闭",
-  failed: "支付未受理，可重新选择渠道",
-};
 const active = computed(
   () =>
     !!current.value &&
     ["creating", "pending", "unknown"].includes(current.value.status),
 );
 const wechatBrowser = /MicroMessenger/i.test(navigator.userAgent);
+const canContinue = computed(
+  () =>
+    current.value?.status === "pending" &&
+    !current.value.closeRequested &&
+    !props.expired,
+);
 let alive = true,
   timer: number | undefined;
 watch(
@@ -49,18 +52,20 @@ async function load() {
   const result = await request<{ payments: Payment[] }>(
     `/api/orders/${encodeURIComponent(props.orderId)}/payments`,
   );
-  if (alive)
-    current.value =
-      result.payments.find(
-        (payment) => !["closed", "failed"].includes(payment.status),
-      ) ??
-      result.payments[0] ??
-      null;
+  if (!alive) return;
+  current.value =
+    result.payments.find(
+      (payment) => !["closed", "failed"].includes(payment.status),
+    ) ??
+    result.payments[0] ??
+    null;
+  loaded.value = true;
   if (current.value && ["closed", "failed"].includes(current.value.status))
     sessionStorage.removeItem(
       `shopmate:payment:${props.orderId}:${current.value.channel}`,
     );
-  if (current.value?.status === "succeeded") await refreshState("user");
+  if (props.expired || current.value?.status === "succeeded")
+    await refreshState("user");
 }
 async function act(operation: () => Promise<void>) {
   if (busy.value) return;
@@ -147,8 +152,13 @@ function openCheckout() {
     if (alive) window.location.assign(checkout.value);
   });
 }
+function reloadOnReturn() {
+  if (!document.hidden) void act(load);
+}
 onMounted(() => {
   void act(async () => {
+    await load();
+    if (!alive) return;
     const config = await productionApi.capabilities();
     const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
     channels.value = config.paymentChannels.filter((value) =>
@@ -157,14 +167,18 @@ onMounted(() => {
         : ["wechat_native", "alipay_page"].includes(value),
     );
     channel.value = channels.value[0];
-    await load();
+    if (!alive) return;
     timer = window.setInterval(() => {
-      if (!document.hidden && !busy.value && active.value) void act(load);
+      if (active.value) reloadOnReturn();
     }, 3000);
   });
+  document.addEventListener("visibilitychange", reloadOnReturn);
+  window.addEventListener("pageshow", reloadOnReturn);
 });
 onUnmounted(() => {
   alive = false;
+  document.removeEventListener("visibilitychange", reloadOnReturn);
+  window.removeEventListener("pageshow", reloadOnReturn);
   if (timer) window.clearInterval(timer);
 });
 </script>
@@ -174,25 +188,22 @@ onUnmounted(() => {
       微信 H5 支付需要在手机外部浏览器打开商城。
     </p>
     <p v-if="error" role="alert">{{ error }}</p>
+    <p v-if="!loaded && !error" role="status">正在读取原订单的付款状态…</p>
     <template v-if="current">
-      <p role="status">
-        {{ statuses[current.status]
-        }}<span v-if="current.closeRequested && active">，正在确认关单</span>
-      </p>
+      <p role="status">{{ paymentStatusText(current) }}</p>
       <p class="secondary">支付单号 {{ current.id }}</p>
+      <p v-if="active" class="secondary">
+        已完成付款时，请查询这笔付款的结果。渠道确认可能需要片刻。
+      </p>
       <img
-        v-if="qr && active && !current.closeRequested"
+        v-if="qr && canContinue"
         :src="qr"
         alt="微信支付二维码"
         width="240"
         height="240"
       />
       <button
-        v-if="
-          active &&
-          !current.closeRequested &&
-          current.checkout?.kind === 'redirect'
-        "
+        v-if="canContinue && current.checkout?.kind === 'redirect'"
         class="button"
         :disabled="busy"
         @click="openCheckout"
@@ -219,8 +230,22 @@ onUnmounted(() => {
         状态代码 {{ current.errorCode }}，可查询结果或联系商家核对。
       </p>
     </template>
+    <RouterLink
+      v-if="error || paymentNeedsHelp(current)"
+      :to="{ path: '/support', query: { orderId } }"
+      class="text-link"
+      >联系客服核对付款</RouterLink
+    >
+    <button
+      v-if="!loaded && error"
+      class="button button-secondary"
+      :disabled="busy"
+      @click="reloadOnReturn"
+    >
+      重新读取付款状态
+    </button>
     <div
-      v-if="!active && current?.status !== 'succeeded' && !expired"
+      v-if="loaded && !active && current?.status !== 'succeeded' && !expired"
       class="payment-actions"
     >
       <label

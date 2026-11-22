@@ -5,6 +5,10 @@ import type {
   CheckoutInput,
 } from "../../shared/domain/types";
 import { requireThat, productSku, integer, clone, now, id } from "./repository";
+import {
+  addressProvince,
+  canonicalProvince,
+} from "../../shared/domain/delivery-province";
 
 /** Pending reservations never alter ledger stock; status/deadline changes release them once. */
 export function reservedStock(
@@ -262,16 +266,12 @@ export function checkoutSnapshot(
     : undefined;
   const couponState = coupon ? bestCoupon : undefined;
   const discount = promotion?.discount ?? coupon?.discount ?? 0;
-  const province = address.province ?? address.region.split(/\s+/)[0];
-  const rules = db.shippingRules ?? [];
-  const rule =
-    rules.find((r) => r.province === province) ??
-    rules.find((r) => r.province === "*");
+  const { rule, fee: shippingFee } = calculateDelivery(
+    db.shippingRules ?? [],
+    addressProvince(address),
+    subtotal - discount,
+  );
   requireThat(!rule || rule.enabled, "该地区暂不配送");
-  const shippingFee =
-    rule && !(rule.freeAbove > 0 && subtotal - discount >= rule.freeAbove)
-      ? rule.fee
-      : 0;
   requireThat(
     integer(shippingFee) && integer(subtotal - discount + shippingFee, 1),
     "运费或订单金额无效",
@@ -303,6 +303,20 @@ export function checkoutSnapshot(
     coupon,
     fingerprint,
   };
+}
+export function calculateDelivery(
+  rules: NonNullable<Database["shippingRules"]>,
+  province: string,
+  amount: number,
+) {
+  const region = canonicalProvince(province);
+  const rule =
+    rules.find((r) => r.province === region) ??
+    rules.find((r) => canonicalProvince(r.province) === region) ??
+    rules.find((r) => r.province === "*");
+  const fee =
+    rule && !(rule.freeAbove > 0 && amount >= rule.freeAbove) ? rule.fee : 0;
+  return { rule, fee };
 }
 export const refundThrough = (item: OrderItem, quantity: number) =>
   Number((BigInt(item.total) * BigInt(quantity)) / BigInt(item.quantity));

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   Search,
@@ -8,11 +8,13 @@ import {
   ArrowUpRight,
   MessageCircle,
   Menu,
+  Bell,
   X,
 } from "lucide-vue-next";
 import { queryText } from "../../domain/catalogue";
 import { useShop } from "../../stores/shop";
 import { productionApi } from "../../services/production";
+import { request } from "../../services/repository";
 import "../../styles/shop.css";
 const shop = useShop(),
   route = useRoute(),
@@ -20,12 +22,47 @@ const shop = useShop(),
   search = ref(queryText(route.query.q)),
   menu = ref(false);
 const mode = ref<"demo" | "production" | null>(null);
+const unread = ref<number | null>(null);
+let unreadRequest = 0;
+let unreadTimer: number | undefined;
+async function loadUnread() {
+  const current = ++unreadRequest;
+  if (!shop.userId) {
+    unread.value = null;
+    return;
+  }
+  if (document.hidden) return;
+  try {
+    const result = await request<{ unread: number }>(
+      "/api/member/notifications/unread",
+    );
+    if (current === unreadRequest) unread.value = result.unread;
+  } catch {
+    if (current === unreadRequest) unread.value = null;
+  }
+}
+watch(
+  () => shop.userId,
+  () => {
+    unread.value = null;
+    void loadUnread();
+  },
+  { immediate: true },
+);
+watch([() => route.fullPath, () => shop.db.revision], () => void loadUnread());
 onMounted(async () => {
+  unreadTimer = window.setInterval(loadUnread, 15000);
+  document.addEventListener("visibilitychange", loadUnread);
   try {
     mode.value = (await productionApi.capabilities()).mode;
   } catch {
     mode.value = null;
   }
+});
+onUnmounted(() => {
+  unreadRequest++;
+  window.clearInterval(unreadTimer);
+  document.removeEventListener("visibilitychange", loadUnread);
 });
 watch(
   () => route.fullPath,
@@ -72,6 +109,13 @@ function submit() {
           ><ShoppingBag :size="21" /><span>{{
             shop.summary.cartQuantity
           }}</span></RouterLink
+        ><RouterLink
+          v-if="shop.userId"
+          to="/notifications"
+          :aria-label="unread ? `站内通知，${unread} 条未读` : '站内通知'"
+        >
+          <Bell :size="21" />
+          <span v-if="unread">{{ unread }}</span> </RouterLink
         ><button
           class="mobile-menu"
           aria-label="切换导航菜单"

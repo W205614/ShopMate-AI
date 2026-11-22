@@ -14,12 +14,25 @@ import type {
 import { readDatabase, queryPage, queryRecord } from "./database";
 import { findSession, HttpError } from "./auth";
 import { collectionPermission, demand, permits } from "./permissions";
-import { availableStock, reservedStock } from "./commerce-rules";
+import {
+  availableStock,
+  calculateDelivery,
+  reservedStock,
+} from "./commerce-rules";
 import { createReconciliationReader } from "./reconciliation/reconciliation-reader";
-import type { Promotion, PurchaseOrder } from "../../shared/domain/operations";
+import type {
+  DeliveryEstimate,
+  Promotion,
+  PurchaseOrder,
+} from "../../shared/domain/operations";
 import { queryMemberSummary, type PageOptions } from "./storage";
 import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
 import { releaseSnapshot } from "./storage";
+import type {
+  CustomerPaymentState,
+  Refund,
+} from "../../shared/domain/production";
+import { taskQueue } from "./task-wait";
 
 const meta = (sql: DatabaseSync) =>
   sql.prepare("SELECT version,revision FROM storage_meta WHERE id=1").get() as {
@@ -365,6 +378,57 @@ function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
   };
 }
 export function registerReadRoutes(app: Express, sql: DatabaseSync) {
+  app.get("/api/products/:id/delivery-estimate", (req, res) => {
+    const { sku, province, quantity } = z
+      .object({
+        sku: z.string().min(1).max(100),
+        province: z.string().trim().min(1).max(30),
+        quantity: z.coerce.number().int().positive(),
+      })
+      .strict()
+      .parse(req.query);
+    const item = sql
+      .prepare(
+        `SELECT s.price, ${availableStockSql} AS available ${stockAvailabilityFrom}
+       WHERE p.active=1 AND p.key=? AND s.id=?`,
+      )
+      .get(new Date().toISOString(), req.params.id, sku) as
+      { price: number; available: number } | undefined;
+    if (!item) throw new HttpError(404, "商品规格不可用");
+    if (quantity > item.available)
+      throw new HttpError(409, "该规格可售库存不足，请调整数量");
+    const subtotal = item.price * quantity;
+    if (!Number.isSafeInteger(subtotal))
+      throw new HttpError(400, "商品金额无效");
+    const db = readDatabase(sql);
+    try {
+      const { rule, fee } = calculateDelivery(
+        db.shippingRules ?? [],
+        province,
+        subtotal,
+      );
+      const estimate: DeliveryEstimate = {
+        deliverable: rule?.enabled ?? true,
+        ruleName: rule?.name ?? "默认免运费",
+        freeAbove: rule?.freeAbove ?? 0,
+        fee,
+        freeShippingGap:
+          rule?.enabled && fee > 0 ? Math.max(0, rule.freeAbove - subtotal) : 0,
+      };
+      res.json(estimate);
+    } finally {
+      releaseSnapshot(db);
+    }
+  });
+  app.get("/api/member/notifications/unread", (req, res) => {
+    const session = signed(sql, req, "user");
+    const unread = sql
+      .prepare(
+        "SELECT count(*) AS n FROM biz_notifications WHERE user_id=? AND json_extract(data,'$.read')=0",
+      )
+      .get(session.id)!.n;
+    res.json({ unread });
+  });
   app.get("/api/bootstrap", (req, res) => {
     const sessions = {
         user: findSession(sql, req, "user"),
@@ -536,6 +600,13 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
     }
     if (req.query.productId)
       options.productId = z.string().max(100).parse(req.query.productId);
+    if (role === "admin" && req.query.wait) {
+      const queue = taskQueue(collection, options.status);
+      if (queue) {
+        demand(session, queue.permission);
+        options.wait = z.enum(["all", "soon", "overdue"]).parse(req.query.wait);
+      }
+    }
     if (req.query.category)
       options.categoryId = z.string().max(100).parse(req.query.category);
     if (req.query.search || req.query.q)
@@ -629,6 +700,51 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
         result.items as Product[],
         role === "admin",
       );
+    if (collection === "orders" && role === "user") {
+      const paymentForOrder = sql.prepare(
+        `SELECT status, json_extract(data,'$.createdAt') AS createdAt,
+          json_extract(data,'$.closeRequested') AS closing
+        FROM production_payments WHERE order_id=? AND user_id=?
+        ORDER BY status IN ('closed','failed'), rowid DESC LIMIT 1`,
+      );
+      result.items = (result.items as Order[]).map((order) => {
+        if (
+          order.status !== "pending" ||
+          order.transactionMode !== "production"
+        )
+          return order;
+        const row = paymentForOrder.get(order.id, session!.id) as
+          | (Omit<CustomerPaymentState, "closeRequested"> & { closing: number })
+          | undefined;
+        if (!row) return order;
+        return {
+          ...order,
+          channelPayment: {
+            status: row.status,
+            createdAt: row.createdAt,
+            closeRequested: !!row.closing,
+          },
+        };
+      });
+    }
+    if (collection === "afterSales" && role === "user") {
+      const refundForSale = sql.prepare(
+        `SELECT r.data FROM production_refunds r
+         JOIN production_payments p ON p.id=r.payment_id
+         WHERE r.after_sale_id=? AND p.user_id=? ORDER BY r.rowid DESC LIMIT 1`,
+      );
+      result.items = (result.items as AfterSale[]).map((sale) => {
+        const row = refundForSale.get(sale.id, session!.id);
+        if (!row) return sale;
+        const { provider, amount, status, noTransfer } = JSON.parse(
+          String(row.data),
+        ) as Refund;
+        return {
+          ...sale,
+          channelRefund: { provider, amount, status, noTransfer },
+        };
+      });
+    }
     if (collection === "categories")
       result.items = result.items.map((value) => {
         const c = value as { id: string };

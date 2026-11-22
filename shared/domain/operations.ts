@@ -77,10 +77,27 @@ export interface Notification {
   id: string;
   userId: string;
   orderId?: string;
+  conversationId?: string;
+  actionMessageId?: string;
+  afterSaleId?: string;
+  actionRequired?: boolean;
   text: string;
   read: boolean;
   createdAt: string;
 }
+export interface DeliveryEstimate {
+  deliverable: boolean;
+  ruleName: string;
+  freeAbove: number;
+  fee: number;
+  freeShippingGap: number;
+}
+export const defaultTaskWaitMinutes = {
+  shipWaitMinutes: 1440,
+  reviewWaitMinutes: 1440,
+  supportWaitMinutes: 30,
+} as const;
+export type TaskWaitKey = keyof typeof defaultTaskWaitMinutes;
 export interface AuditEntry {
   id: string;
   actorId: string;

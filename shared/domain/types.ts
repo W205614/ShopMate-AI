@@ -37,6 +37,7 @@ export interface SKU {
   stock: number;
 }
 export interface Product {
+  matchedSkuId?: string;
   version?: number;
   id: string;
   name: string;
@@ -89,6 +90,7 @@ export interface OrderItem {
   quantity: number;
 }
 export interface Order {
+  channelPayment?: import("./production").CustomerPaymentState;
   transactionMode?: "demo" | "production";
   paymentHold?: boolean;
   cancelRequested?: boolean;
@@ -136,6 +138,11 @@ export interface AfterSaleLine {
   amount: number;
 }
 export interface AfterSale {
+  returnAddress?: string;
+  channelRefund?: Pick<
+    import("./production").Refund,
+    "provider" | "amount" | "status" | "noTransfer"
+  >;
   refundPending?: boolean;
   shippingRefund?: number;
   lines: AfterSaleLine[];
@@ -207,9 +214,20 @@ export interface Message {
   text: string;
   createdAt: string;
   productIds?: string[];
+  recommendations?: {
+    productId: string;
+    productName: string;
+    skuId: string;
+    skuName: string;
+    price: number;
+    reason: string;
+  }[];
   orderId?: string;
 }
 export interface Conversation {
+  awaitingCustomerMessageId?: string;
+  afterSaleId?: string;
+  waitingSince?: string;
   id: string;
   userId: string;
   title: string;
@@ -227,6 +245,9 @@ export interface Faq {
   active: boolean;
 }
 export interface Settings {
+  shipWaitMinutes?: number;
+  reviewWaitMinutes?: number;
+  supportWaitMinutes?: number;
   version?: number;
   name: string;
   slogan: string;

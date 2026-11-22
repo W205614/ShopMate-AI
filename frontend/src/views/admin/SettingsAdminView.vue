@@ -5,13 +5,30 @@ import { computed, reactive, ref, watch } from "vue";
 import { useShop } from "../../stores/shop";
 import { api, refreshState } from "../../services/api";
 import type { Settings } from "../../domain/types";
+import {
+  defaultTaskWaitMinutes,
+  type TaskWaitKey,
+} from "../../../../shared/domain/operations";
 import { useAdminAction } from "./useAdmin";
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
   baseline = ref({ ...shop.db.settings }),
   baselineRevision = ref(shop.db.revision),
   form = reactive({ ...shop.db.settings });
-const keys = ["name", "slogan", "notice"] as const;
+const queueSettings = [
+  ["shipWaitMinutes", "待发货"],
+  ["reviewWaitMinutes", "待审核售后"],
+  ["supportWaitMinutes", "等待人工接入"],
+] as const;
+const keys = [
+  "name",
+  "slogan",
+  "notice",
+  ...queueSettings.map(([key]) => key),
+] as const;
+function setTaskWait(key: TaskWaitKey, value?: number) {
+  form[key] = value ?? defaultTaskWaitMinutes[key];
+}
 const dirty = computed(() =>
   keys.some((key) => form[key] !== baseline.value[key]),
 );
@@ -27,6 +44,7 @@ function loadLatest(
   baseline.value = { ...settings };
   baselineRevision.value = revision;
   Object.assign(form, baseline.value);
+  for (const [key] of queueSettings) form[key] = settings[key];
 }
 async function reloadLatest() {
   await run(async () => {
@@ -95,8 +113,25 @@ async function save() {
           type="textarea"
           :rows="3"
           :disabled="busy"
-          maxlength="200" /></el-form-item
-      ><el-button
+          maxlength="200"
+      /></el-form-item>
+      <h3>待办提醒时限</h3>
+      <el-form-item
+        v-for="[key, label] in queueSettings"
+        :key="key"
+        :label="`${label}（分钟）`"
+      >
+        <el-input-number
+          :model-value="form[key] ?? defaultTaskWaitMinutes[key]"
+          :aria-label="`${label}（分钟）`"
+          :min="1"
+          :max="43200"
+          :precision="0"
+          :disabled="busy"
+          @update:model-value="setTaskWait(key, $event)"
+        />
+      </el-form-item>
+      <el-button
         type="primary"
         :loading="pending"
         :disabled="busy"

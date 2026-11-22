@@ -8,6 +8,7 @@ import { dateTime } from "../../domain/types";
 import { useAction } from "../../components/shop/useAction";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import "../../styles/account-commerce.css";
+import type { Notification } from "../../../../shared/domain/operations";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter();
@@ -59,6 +60,20 @@ function page(value: number) {
     query: value > 1 ? { page: String(value) } : {},
   });
 }
+function destination(item: Notification) {
+  if (item.conversationId)
+    return { path: "/support", query: { conversationId: item.conversationId } };
+  if (item.afterSaleId)
+    return { path: "/after-sales", query: { id: item.afterSaleId } };
+  if (item.orderId) return `/orders/${item.orderId}`;
+}
+function openNotice(item: Notification) {
+  return run(async () => {
+    if (!item.read) await commerceAction("markNotificationRead", item.id);
+    const target = destination(item);
+    if (target) await router.push(target);
+  });
+}
 </script>
 <template>
   <div class="page-wrap">
@@ -91,13 +106,24 @@ function page(value: number) {
         :key="item.id"
         class="commerce-list-card"
       >
-        <p>{{ item.text }}</p>
+        <p>
+          <strong v-if="item.actionRequired">需要操作 · </strong>{{ item.text }}
+        </p>
         <small>{{ dateTime(item.createdAt) }}</small>
-        <RouterLink v-if="item.orderId" :to="`/orders/${item.orderId}`"
+        <button
+          v-if="item.conversationId || item.afterSaleId"
+          type="button"
+          class="text-link"
+          :disabled="busy"
+          @click="openNotice(item)"
+        >
+          {{ item.conversationId ? "查看客服回复" : "查看售后进度" }}
+        </button>
+        <RouterLink v-else-if="item.orderId" :to="`/orders/${item.orderId}`"
           >查看订单</RouterLink
         >
         <button
-          v-if="!item.read"
+          v-if="!item.read && !item.conversationId && !item.afterSaleId"
           class="text-link"
           :disabled="busy"
           @click="
@@ -108,7 +134,7 @@ function page(value: number) {
           "
         >
           标为已读</button
-        ><span v-else> 已读</span>
+        ><span v-if="item.read"> 已读</span>
       </article>
     </div>
     <p v-if="!metadata?.total">暂无记录。</p>

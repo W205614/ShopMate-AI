@@ -14,7 +14,7 @@ async function post(client: APIRequestContext, path: string, data: unknown) {
   expect(response.ok(), `${path}: ${await response.text()}`).toBe(true);
   return response.json();
 }
-async function registerAndOrder(page: Page) {
+async function registerAndOrder(page: Page, quantity = 1) {
   const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 10),
     email = `pay_${suffix}@example.test`;
   const sent = await post(page.request, "/api/auth/verification/send", {
@@ -65,7 +65,7 @@ async function registerAndOrder(page: Page) {
           type: "buyNow",
           productId: "p01",
           skuId: "p01-s1",
-          quantity: 1,
+          quantity,
         },
       },
     ],
@@ -126,6 +126,17 @@ test("desktop channel checkout survives refresh, switches only after closure and
       `create:${first.id}`
     ],
   ).toBe(1);
+  await page.clock.setFixedTime(new Date(Date.now() + 3 * 60_000));
+  await page.goto(`/orders/${orderId}`);
+  await expect(
+    page.getByText("等待渠道确认付款", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "联系客服核对付款" }).click();
+  await expect(
+    page.getByRole("heading", { name: `订单 ${orderId}` }),
+  ).toBeVisible();
+  await page.clock.setFixedTime(new Date());
+  await page.goto(`/orders/${orderId}/pay`);
   await page
     .getByRole("button", { name: "关闭支付单以切换渠道", exact: true })
     .click();
@@ -182,6 +193,8 @@ test("desktop channel checkout survives refresh, switches only after closure and
     (value: { afterSaleId: string }) => value.afterSaleId === saleId,
   );
   expect(refund.status).toBe("processing");
+  await page.goto(`/after-sales?id=${saleId}`);
+  await expect(page.getByText(/原支付宝渠道.*渠道处理中/)).toBeVisible();
   await page.request.post(`/__acceptance/control/refunds/${refund.id}/state`, {
     headers: control,
     data: { status: "succeeded" },
@@ -189,6 +202,95 @@ test("desktop channel checkout survives refresh, switches only after closure and
   await page.goto(`/orders/${orderId}`);
   await expect(
     page.getByRole("heading", { name: "已退款", exact: true }),
+  ).toBeVisible();
+  await page.goto(`/after-sales?id=${saleId}`);
+  await expect(page.getByText(/原支付宝渠道.*渠道已确认退款/)).toBeVisible();
+});
+
+test("已发货部分退货可查看寄回地址并提交运单", async ({ page }) => {
+  const orderId = await registerAndOrder(page, 2);
+  const payment = await post(page.request, "/api/payments", {
+    orderId,
+    channel: "wechat_native",
+    requestId: crypto.randomUUID(),
+  });
+  const completed = await page.request.post(
+    `/__acceptance/control/payments/${payment.id}/state`,
+    { headers: control, data: { status: "succeeded" } },
+  );
+  expect(completed.ok()).toBe(true);
+  await page.request.get("/__acceptance/control/admin-session", {
+    headers: control,
+  });
+  await post(page.request, "/api/actions/shipOrder", {
+    args: [orderId, "顺丰速运", "SFTESTRETURN01"],
+    requestId: crypto.randomUUID(),
+  });
+  const orders = await (
+    await page.request.get(`/api/collections/orders?role=user&id=${orderId}`)
+  ).json();
+  await post(page.request, "/api/actions/requestAfterSale", {
+    args: [
+      orderId,
+      "不再需要",
+      "退回其中一件",
+      [{ orderItemId: orders.items[0].items[0].id, quantity: 1 }],
+    ],
+    requestId: crypto.randomUUID(),
+  });
+  const sales = await (
+    await page.request.get(
+      `/api/collections/afterSales?role=user&orderId=${orderId}`,
+    )
+  ).json();
+  const saleId = sales.items[0].id;
+  await post(page.request, "/api/actions/processAfterSale", {
+    args: [saleId, "approve", "审核通过"],
+    requestId: crypto.randomUUID(),
+  });
+  const merchant = await (await page.request.get("/api/merchant")).json();
+  const saved = await post(page.request, "/api/admin/merchant", {
+    merchant: { ...merchant, returnAddress: "之后改用的合成退货地址" },
+    requestId: crypto.randomUUID(),
+  });
+  try {
+    await page.goto(`/after-sales?id=${saleId}`);
+    await expect(
+      page.getByText("仅用于隔离验收的退货地址", { exact: true }),
+    ).toBeVisible();
+  } finally {
+    await post(page.request, "/api/admin/merchant", {
+      merchant: { ...merchant, version: saved.version },
+      requestId: crypto.randomUUID(),
+    });
+  }
+  await expect(
+    page.getByRole("button", { name: "复制退货地址" }),
+  ).toBeVisible();
+  await page.getByLabel("退货单号", { exact: true }).fill("SFTESTRETURN02");
+  await page.getByRole("button", { name: "提交退货单号" }).click();
+  await expect(page.getByText(/退货物流.*SFTESTRETURN02/)).toBeVisible();
+  await post(page.request, "/api/actions/processAfterSale", {
+    args: [saleId, "receive"],
+    requestId: crypto.randomUUID(),
+  });
+  const refund = await post(page.request, "/api/admin/refunds", {
+    afterSaleId: saleId,
+    requestId: crypto.randomUUID(),
+  });
+  const failed = await page.request.post(
+    `/__acceptance/control/refunds/${refund.id}/state`,
+    {
+      headers: control,
+      data: { status: "failed" },
+    },
+  );
+  expect(failed.ok()).toBe(true);
+  await page.reload();
+  await expect(page.getByText(/原微信支付渠道.*渠道退款失败/)).toBeVisible();
+  await page.getByRole("link", { name: "联系客服核对退款" }).click();
+  await expect(
+    page.getByRole("link", { name: `售后单 ${saleId}`, exact: true }),
   ).toBeVisible();
 });
 

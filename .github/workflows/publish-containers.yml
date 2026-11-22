@@ -62,7 +62,7 @@ jobs:
       - name: Stage source materials on a new draft Release
         run: |
           set -euo pipefail
-          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "ShopMate-AI $VERSION" --notes-file "docs/release-$VERSION.md"
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "ShopMate-AI $VERSION" --notes-file "docs/releases/release-$VERSION.md"
           gh release upload "$VERSION" --repo "$GITHUB_REPOSITORY" ".delivery/container-release/container-sources-$VERSION.tar.gz" .delivery/container-release/SHA256SUMS
       - name: Publish immutable versioned API and Web packages
         shell: bash

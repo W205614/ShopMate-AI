@@ -57,6 +57,9 @@ const settings = z
     name: text(40),
     slogan: text(80),
     notice: z.string().trim().max(200),
+    shipWaitMinutes: z.number().int().min(1).max(43200).optional(),
+    reviewWaitMinutes: z.number().int().min(1).max(43200).optional(),
+    supportWaitMinutes: z.number().int().min(1).max(43200).optional(),
     version: z.number().int().nonnegative().optional(),
   })
   .strict();
@@ -253,7 +256,11 @@ export const methods = {
     role: "user",
     args: z.tuple([
       z
-        .object({ productId: id.optional(), orderId: id.optional() })
+        .object({
+          productId: id.optional(),
+          orderId: id.optional(),
+          afterSaleId: id.optional(),
+        })
         .strict()
         .optional(),
     ]),
@@ -304,7 +311,10 @@ export const methods = {
       z.string().max(500).optional(),
     ]),
   },
-  replyConversation: { role: "admin", args: z.tuple([id, text(1000)]) },
+  replyConversation: {
+    role: "admin",
+    args: z.tuple([id, text(1000), z.boolean().optional()]),
+  },
   closeConversation: { role: "admin", args: z.tuple([id]) },
   saveFaq: {
     role: "admin",

@@ -104,9 +104,88 @@ test("零收款及恰好一分峰值不同，所有趋势坐标有限，大额�
     "峰值 ¥270,215,977,642,229.73",
   );
 });
+test("手机顾客按可买规格筛选并试算配送", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  fixture((db) => {
+    const [cheap, available] = db.products[0]!.skus;
+    Object.assign(cheap!, { price: 8_900, stock: 0 });
+    Object.assign(available!, { price: 11_900, stock: 8 });
+    db.addresses.push({
+      ...db.addresses.find((address) => address.userId === "u1")!,
+      id: "legacy-zhejiang-address",
+      name: "浙江收件人",
+      region: "浙江 杭州市 西湖区",
+      province: "浙江",
+      isDefault: false,
+    });
+    db.shippingRules!.push(
+      {
+        id: "region-delivery",
+        name: "浙江配送",
+        province: "浙江省",
+        enabled: true,
+        fee: 600,
+        freeAbove: 23_800,
+        version: 1,
+      },
+      {
+        id: "region-block",
+        name: "地区限制",
+        province: "测试禁送区",
+        enabled: false,
+        fee: 0,
+        freeAbove: 0,
+        version: 1,
+      },
+    );
+  });
+  const product = (await state(page)).products[0]!;
+  await page.goto(
+    `/products?q=${encodeURIComponent(product.name)}&max=100&stock=1&sort=price-asc`,
+  );
+  await expect(page.locator(".catalogue-results .product-card")).toHaveCount(0);
+  await page.getByLabel("最高价格").fill("119");
+  await page.getByRole("button", { name: "应用价格" }).click();
+  const card = page.locator(".catalogue-results .product-card");
+  await expect(card).toContainText("¥119.00");
+  await expect(card).toContainText(product.skus[1]!.name);
+  await card.click();
+  await expect(page).toHaveURL(new RegExp(`sku=${product.skus[1]!.id}`));
+  await expect(
+    page.getByRole("button", { name: product.skus[1]!.name, exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.getByText("配送与收货 · 试算运费", { exact: true }).click();
+  const province = page.getByLabel("配送省份", { exact: true });
+  const quote = page.getByRole("button", { name: "试算运费", exact: true });
+  await province.fill("浙江");
+  await quote.click();
+  await expect(
+    page.getByText(/预估运费 ¥6.00.*距包邮还差 ¥119.00/),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "增加数量" }).click();
+  await quote.click();
+  await expect(page.getByText(/预估运费 ¥0.00.*浙江配送/)).toBeVisible();
+  await province.fill("测试禁送区");
+  await quote.click();
+  await expect(
+    page.getByText("该地区暂不配送。", { exact: true }),
+  ).toBeVisible();
+  await province.fill("浙江");
+  await page.getByRole("button", { name: "减少数量" }).click();
+  await page.getByRole("button", { name: "立即购买", exact: true }).click();
+  await expect(page.getByText("选购时选择了 浙江省。")).toBeVisible();
+  await expect(page.getByRole("radio", { name: /浙江收件人/ })).toBeChecked();
+  await expect(page.locator(".summary-total")).toContainText("¥125.00");
+  await page.getByRole("radio", { name: /默认收货地址/ }).check();
+  await expect(
+    page.getByText(/收货地址、运费有变化，应付由 ¥125.00 更新为 ¥119.00/),
+  ).toBeVisible();
+});
 test("待办和低库存跳转携带对应条件，最近订单可精确定位且待付款不称实付", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const before = await state(page),
     order = before.orders.find((o) => o.id === "SM000005")!;
   await action(
@@ -121,21 +200,29 @@ test("待办和低库存跳转携带对应条件，最近订单可精确定位�
   await action(page, "transferConversation", chat);
   fixture((db) => {
     db.products[0]!.skus[0]!.stock = 0;
+    db.conversations.find((item) => item.id === chat)!.waitingSince = new Date(
+      Date.now() - 31 * 60_000,
+    ).toISOString();
   });
   await page.goto("/admin");
   for (const [name, url] of [
-    ["待发货订单", "/admin/orders?status=paid"],
-    ["待审核售后", "/admin/after-sales?status=requested"],
-    ["等待人工接入", "/admin/support?status=waiting"],
+    ["待发货订单", "/admin/orders?status=paid&wait=all"],
+    ["待审核售后", "/admin/after-sales?status=requested&wait=all"],
+    ["等待人工接入", "/admin/support?status=waiting&wait=all"],
   ]) {
     const link = page.getByRole("link", { name: new RegExp(name) });
     await expect(link).toHaveAttribute("href", url!);
+    if (name === "等待人工接入") await expect(link).toContainText("超时 1");
     await link.click();
+    await expect(page.getByLabel("等待顺序")).toHaveValue("all");
     if (name === "等待人工接入") {
       await expect(page.locator(".admin-conversation")).toHaveCount(1);
       await expect(page.locator(".admin-conversation")).toContainText(
         "等待人工",
       );
+      await page.getByLabel("等待顺序").selectOption("overdue");
+      await expect(page.locator(".admin-conversation")).toHaveCount(1);
+      await expect(page.locator(".admin-conversation")).toContainText("已等待");
     } else
       await expect(
         page.locator(".el-table__body-wrapper tbody tr"),
@@ -148,6 +235,19 @@ test("待办和低库存跳转携带对应条件，最近订单可精确定位�
       );
     await page.goto("/admin");
   }
+  await page.goto("/admin/settings");
+  const minutes = page.getByRole("spinbutton", {
+    name: "等待人工接入（分钟）",
+  });
+  await minutes.fill("60");
+  await minutes.press("Tab");
+  await page.getByRole("button", { name: "保存信息", exact: true }).click();
+  await expect(page.getByText("商城信息已保存", { exact: true })).toBeVisible();
+  await page.goto("/admin");
+  await page.getByRole("link", { name: "即将超时 1", exact: true }).click();
+  await expect(page).toHaveURL(/support\?.*wait=soon/);
+  await expect(page.locator(".admin-conversation")).toHaveCount(1);
+  await page.goto("/admin");
   await expect(
     page.getByRole("link", { name: "前往补货 ↗", exact: true }),
   ).toHaveAttribute("href", "/admin/inventory?low=1");

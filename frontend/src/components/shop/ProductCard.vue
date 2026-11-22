@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import type { Product } from "../../domain/types";
 import { money } from "../../domain/types";
-defineProps<{ product: Product; compact?: boolean }>();
+import { computed } from "vue";
+import { productPrice } from "../../domain/catalogue";
+const props = defineProps<{ product: Product; compact?: boolean }>();
+const matchedSku = computed(() =>
+  props.product.skus.find((sku) => sku.id === props.product.matchedSkuId),
+);
 </script>
 <template>
   <RouterLink
-    :to="`/products/${product.id}`"
+    :to="{
+      path: `/products/${product.id}`,
+      query: matchedSku ? { sku: matchedSku.id } : {},
+    }"
     class="product-card"
     :class="{ 'is-compact': compact }"
     ><div class="product-photo">
@@ -17,8 +25,11 @@ defineProps<{ product: Product; compact?: boolean }>();
     </div>
     <div class="product-caption">
       <h3>{{ product.name }}</h3>
-      <span>{{ money(Math.min(...product.skus.map((s) => s.price))) }}</span>
+      <span>{{ money(productPrice(product)) }}</span>
     </div>
+    <p v-if="matchedSku">
+      规格：{{ matchedSku.name }}<span v-if="!matchedSku.stock"> · 已售罄</span>
+    </p>
     <p v-if="!compact">{{ product.subtitle }}</p></RouterLink
   >
 </template>

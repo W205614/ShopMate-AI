@@ -61,6 +61,9 @@ export function runDueJobs(
           let payload: {
             userId?: unknown;
             orderId?: unknown;
+            afterSaleId?: unknown;
+            conversationId?: unknown;
+            actionMessageId?: unknown;
             text?: unknown;
           };
           try {
@@ -76,7 +79,14 @@ export function runDueJobs(
             !payload.text.trim() ||
             payload.text.length > 1000 ||
             (payload.orderId !== undefined &&
-              typeof payload.orderId !== "string")
+              typeof payload.orderId !== "string") ||
+            (payload.afterSaleId !== undefined &&
+              typeof payload.afterSaleId !== "string") ||
+            (payload.conversationId !== undefined &&
+              typeof payload.conversationId !== "string") ||
+            (payload.actionMessageId !== undefined &&
+              (typeof payload.actionMessageId !== "string" ||
+                typeof payload.conversationId !== "string"))
           )
             throw new Error("INVALID_NOTIFICATION_PAYLOAD");
           const id = `notification-${createHash("sha256").update(job.id).digest("hex")}`;
@@ -88,6 +98,15 @@ export function runDueJobs(
               userId: payload.userId,
               ...(payload.orderId
                 ? { orderId: payload.orderId as string }
+                : {}),
+              ...(payload.afterSaleId
+                ? { afterSaleId: payload.afterSaleId }
+                : {}),
+              ...(payload.conversationId
+                ? { conversationId: payload.conversationId }
+                : {}),
+              ...(payload.actionMessageId
+                ? { actionMessageId: payload.actionMessageId }
                 : {}),
               text: payload.text,
               read: false,

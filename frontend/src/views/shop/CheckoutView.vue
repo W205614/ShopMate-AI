@@ -23,6 +23,10 @@ import type {
 import OrderItems from "../../components/shop/OrderItems.vue";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import CheckoutAddressForm from "../../components/shop/CheckoutAddressForm.vue";
+import {
+  addressProvince,
+  canonicalProvince,
+} from "../../../../shared/domain/delivery-province";
 import "../../styles/commerce-flow.css";
 const shop = useShop(),
   router = useRouter(),
@@ -69,6 +73,15 @@ const addressId = ref(""),
   editAddress = ref<Address>(),
   requestId = ref(""),
   stale = ref(false);
+const preferredProvince = computed(() =>
+  canonicalProvince(
+    typeof route.query.province === "string" &&
+      route.query.province.length <= 30
+      ? route.query.province
+      : shop.deliveryProvince,
+  ),
+);
+let previousQuote: CheckoutQuote | undefined;
 let generation = 0;
 const now = ref(Date.now()),
   timer = window.setInterval(() => {
@@ -132,9 +145,12 @@ watch(
   () => {
     if (!shop.myAddresses.some((a) => a.id === addressId.value))
       addressId.value =
-        shop.myAddresses.find((a) => a.isDefault)?.id ??
-        shop.myAddresses[0]?.id ??
-        "";
+        (preferredProvince.value
+          ? shop.myAddresses.find(
+              (a) => addressProvince(a) === preferredProvince.value,
+            )?.id
+          : (shop.myAddresses.find((a) => a.isDefault)?.id ??
+            shop.myAddresses[0]?.id)) ?? "";
   },
   { immediate: true },
 );
@@ -199,6 +215,25 @@ async function refreshQuote() {
       quote.value = result;
       requestId.value = crypto.randomUUID();
       notice.value = "报价已更新，请确认商品明细、地址与应付金额后提交订单。";
+      if (previousQuote && previousQuote.total !== result.total) {
+        const reasons: string[] = [];
+        if (
+          JSON.stringify(previousQuote.address) !==
+          JSON.stringify(result.address)
+        )
+          reasons.push("收货地址");
+        const quantities = (value: CheckoutQuote) =>
+          JSON.stringify(
+            value.items.map(({ skuId, quantity }) => [skuId, quantity]),
+          );
+        if (quantities(previousQuote) !== quantities(result))
+          reasons.push("商品或数量");
+        if (previousQuote.discount !== result.discount) reasons.push("优惠");
+        if (previousQuote.shippingFee !== result.shippingFee)
+          reasons.push("运费");
+        notice.value = `${reasons.join("、") || "商品价格"}有变化，应付由 ${money(previousQuote.total)} 更新为 ${money(result.total)}。请重新确认。`;
+      }
+      previousQuote = result;
     }
   } catch (e) {
     if (current === generation)
@@ -451,10 +486,17 @@ watch(
               添加地址
             </button>
           </div>
+          <p v-if="preferredProvince" class="secondary">
+            选购时选择了 {{ preferredProvince }}。
+            <template v-if="!addressId"
+              >请选择或添加收货地址后核算运费。</template
+            >
+          </p>
           <CheckoutAddressForm
             v-if="editing"
             :key="editAddress?.id ?? 'new'"
             :address="editAddress"
+            :initial-province="preferredProvince"
             :first="!shop.myAddresses.length"
             :busy="saving"
             @save="saveAddress"

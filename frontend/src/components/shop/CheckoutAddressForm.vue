@@ -1,18 +1,26 @@
 <script setup lang="ts">
 import { reactive } from "vue";
 import type { Address, AddressInput } from "../../domain/types";
+import DeliveryProvinceField from "./DeliveryProvinceField.vue";
+import {
+  addressProvince,
+  canonicalProvince,
+} from "../../../../shared/domain/delivery-province";
 const props = defineProps<{
   address?: Address;
   first: boolean;
   busy: boolean;
+  initialProvince?: string;
 }>();
 const emit = defineEmits<{ save: [input: AddressInput]; cancel: [] }>();
-const form = reactive<AddressInput>({
+const form = reactive<AddressInput & { province: string }>({
   id: props.address?.id,
   name: props.address?.name ?? "",
   phone: props.address?.phone ?? "",
   region: props.address?.region ?? "",
-  province: props.address?.province ?? "",
+  province: props.address
+    ? addressProvince(props.address)
+    : (props.initialProvince ?? ""),
   detail: props.address?.detail ?? "",
   isDefault: props.address?.isDefault ?? props.first,
 });
@@ -20,7 +28,12 @@ const form = reactive<AddressInput>({
 <template>
   <form
     class="address-form form-stack"
-    @submit.prevent="emit('save', { ...form })"
+    @submit.prevent="
+      emit('save', {
+        ...form,
+        province: canonicalProvince(form.province ?? ''),
+      })
+    "
   >
     <h3>{{ form.id ? "编辑地址" : "添加收货地址" }}</h3>
     <div class="form-two">
@@ -40,14 +53,7 @@ const form = reactive<AddressInput>({
           autocomplete="tel"
       /></label>
     </div>
-    <label
-      >配送省份<input
-        v-model.trim="form.province"
-        required
-        maxlength="30"
-        autocomplete="address-level1"
-        placeholder="如：浙江省"
-    /></label>
+    <DeliveryProvinceField v-model="form.province" />
     <label
       >省 / 市 / 区<input
         v-model.trim="form.region"

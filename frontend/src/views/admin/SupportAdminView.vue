@@ -6,7 +6,8 @@ import { api } from "../../services/api";
 import { request } from "../../services/repository";
 import { dateTime } from "../../domain/types";
 import { useAdminAction } from "./useAdmin";
-import { useAdminQuery, useAdminPagination } from "./useAdminList";
+import { useAdminQuery, useAdminPagination, waitAge } from "./useAdminList";
+import TaskWaitFilter from "../../components/admin/TaskWaitFilter.vue";
 const shop = useShop(),
   { busy, pending, run } = useAdminAction(),
   filters = useAdminQuery(),
@@ -14,9 +15,11 @@ const shop = useShop(),
     values: ["bot", "waiting", "human", "closed"],
   }),
   queryField = filters.field("q", { replace: true }),
+  wait = filters.field("wait", { values: ["all", "soon", "overdue"] }),
   detailId = filters.field("detail", { resetPage: false }),
   autoSelectedId = ref(""),
   drafts = ref<Record<string, string>>({}),
+  followUps = ref<Record<string, boolean>>({}),
   confirming = ref(false),
   messageBox = ref<HTMLElement>();
 const filter = computed({
@@ -49,6 +52,7 @@ watch(
   () => {
     ownerEpoch++;
     drafts.value = {};
+    followUps.value = {};
     autoSelectedId.value = "";
     selectedId.value = "";
     cancelConfirmation?.();
@@ -167,15 +171,20 @@ async function reply() {
     return;
   if (
     (await run(
-      () => api.replyConversation(conversation.id, raw.trim()),
+      () =>
+        followUps.value[conversation.id]
+          ? api.replyConversation(conversation.id, raw.trim(), true)
+          : api.replyConversation(conversation.id, raw.trim()),
       "回复已发送",
     )) &&
     alive &&
     owner === shop.adminSession?.id &&
     epoch === ownerEpoch &&
     drafts.value[conversation.id] === raw
-  )
+  ) {
     delete drafts.value[conversation.id];
+    delete followUps.value[conversation.id];
+  }
 }
 async function close() {
   const conversation = selected.value,
@@ -247,8 +256,10 @@ async function close() {
           v-for="(label, key) in labels"
           :key="key"
           :label="label"
-          :value="key" /></el-select
-      ><button
+          :value="key"
+      /></el-select>
+      <TaskWaitFilter v-if="filter === 'waiting'" v-model="wait" />
+      <button
         v-for="c in visibleConversations"
         :key="c.id"
         class="admin-conversation"
@@ -259,6 +270,8 @@ async function close() {
         }}<span
           >{{ shop.db.users.find((u) => u.id === c.userId)?.name }} ·
           {{ labels[c.status] }}</span
+        ><span v-if="c.status === 'waiting' && wait"
+          >已等待 {{ waitAge(c.waitingSince) }}</span
         ><span>{{
           c.messages.at(-1)?.text.slice(0, 35) || "新会话"
         }}</span></button
@@ -306,6 +319,26 @@ async function close() {
           ><template v-if="selected.orderId"
             >关联订单：{{ selected.orderId }}</template
           >
+          <RouterLink
+            v-if="selected.afterSaleId"
+            :to="{
+              path: '/admin/after-sales',
+              query: { detail: selected.afterSaleId },
+            }"
+            >查看关联售后单</RouterLink
+          >
+        </div>
+        <div
+          v-if="selected.status === 'waiting' || selected.status === 'human'"
+          class="admin-callout"
+        >
+          {{
+            selected.status === "waiting"
+              ? "客服待接入。回复顾客后，会话进入人工处理中。"
+              : selected.awaitingCustomerMessageId
+                ? "等待顾客补充信息，收到后继续处理。"
+                : "客服处理中。核对关联订单或售后单后回复顾客。"
+          }}
         </div>
         <div class="admin-messages" ref="messageBox" aria-live="polite">
           <article
@@ -344,7 +377,14 @@ async function close() {
             placeholder="输入人工回复。发送后会话转为人工接待。"
             :readonly="!['waiting', 'human'].includes(selected.status)"
             @keydown.ctrl.enter.prevent="reply"
-          /><el-button
+          />
+          <el-checkbox
+            v-if="['waiting', 'human'].includes(selected.status)"
+            v-model="followUps[selected.id]"
+            :disabled="busy"
+            >需要顾客补充信息</el-checkbox
+          >
+          <el-button
             v-if="['waiting', 'human'].includes(selected.status)"
             type="primary"
             :loading="pending"

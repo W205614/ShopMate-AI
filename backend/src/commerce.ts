@@ -2,6 +2,7 @@ import type { ShopApi } from "../../shared/domain/api";
 import type { DatabaseSync } from "node:sqlite";
 import type { Database, Order, AfterSale } from "../../shared/domain/types";
 import { shopMode } from "./production/config";
+import { readMerchant } from "./production/accounts";
 import { HttpError } from "./errors";
 import { readDatabase, writeDatabase, transaction } from "./database";
 import { ensureRuntimeSchema, enqueue } from "./runtime";
@@ -556,6 +557,15 @@ export const commerceApi: Pick<
         if (action === "reject")
           requireThat(text(note, 500), "拒绝申请需要填写原因");
         sale.status = action === "approve" ? "approved" : "rejected";
+        if (
+          action === "approve" &&
+          sale.requiresReturn &&
+          order.transactionMode === "production"
+        ) {
+          const address = readMerchant(context.getStore()!.sql).returnAddress;
+          requireThat(address, "请先在生产接入中设置退货地址");
+          sale.returnAddress = address;
+        }
       } else if (action === "receive") {
         requireThat(
           sale.requiresReturn &&

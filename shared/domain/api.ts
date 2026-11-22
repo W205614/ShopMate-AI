@@ -93,10 +93,15 @@ export interface ShopApi {
   createConversation(context?: {
     productId?: string;
     orderId?: string;
+    afterSaleId?: string;
   }): Promise<string>;
   sendMessage(id: string, text: string): Promise<void>;
   transferConversation(id: string): Promise<void>;
-  replyConversation(id: string, text: string): Promise<void>;
+  replyConversation(
+    id: string,
+    text: string,
+    needsReply?: boolean,
+  ): Promise<void>;
   closeConversation(id: string): Promise<void>;
   saveFaq(input: FaqInput): Promise<void>;
   deleteFaq(id: string): Promise<void>;

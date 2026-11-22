@@ -16,6 +16,10 @@ import { reviewWriteReason } from "../../domain/reviewWriteState";
 import "../../styles/commerce-flow.css";
 import { eventLabel } from "../../components/shop/commerceLabels";
 import ShipmentTracking from "../../components/production/ShipmentTracking.vue";
+import {
+  paymentNeedsHelp,
+  paymentStatusText,
+} from "../../domain/paymentGuidance";
 import { useCommerceMode } from "../../services/commerceMode";
 const { production } = useCommerceMode();
 const shop = useShop(),
@@ -128,6 +132,15 @@ async function request() {
       <p>订单 {{ order.id }} · {{ dateTime(order.createdAt) }}</p>
     </div>
     <ActionNotice :error="error" :notice="notice" />
+    <div v-if="order.channelPayment" class="action-notice">
+      <p role="status">{{ paymentStatusText(order.channelPayment) }}</p>
+      <RouterLink
+        v-if="paymentNeedsHelp(order.channelPayment)"
+        :to="{ path: '/support', query: { orderId: order.id } }"
+        class="text-link"
+        >联系客服核对付款</RouterLink
+      >
+    </div>
     <p
       v-if="order.status === 'pending' && order.expiresAt"
       class="action-notice"
@@ -320,7 +333,12 @@ async function request() {
         <template v-if="order.status === 'pending'"
           ><RouterLink :to="`/orders/${order.id}/pay`" class="button">{{
             order.transactionMode === "production"
-              ? "前往付款"
+              ? order.channelPayment &&
+                ["creating", "pending", "unknown"].includes(
+                  order.channelPayment.status,
+                )
+                ? "核对付款"
+                : "前往付款"
               : production
                 ? "查看历史演示订单"
                 : "模拟支付"

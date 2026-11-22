@@ -20,7 +20,7 @@ import { HttpError, findSession, rateLimit } from "../auth";
 import { demand } from "../permissions";
 import { applyPaidOrder, applyRefund } from "../commerce";
 import { releaseCoupon, availableStock } from "../commerce-rules";
-import { audit } from "../runtime";
+import { audit, enqueue } from "../runtime";
 import { requireVerifiedContact } from "./accounts";
 import { enqueueNotification } from "./external";
 import { productionConfig } from "./config";
@@ -364,6 +364,16 @@ export class PaymentService {
           text: "订单付款成功",
           variables: { orderId: order.id },
         });
+        enqueue(
+          this.sql,
+          "notification",
+          {
+            userId: order.userId,
+            orderId: order.id,
+            text: "订单付款成功",
+          },
+          `payment-notice:${payment.id}`,
+        );
       });
       payment.settledAt = result.succeededAt;
       payment.providerTransactionId = result.providerTransactionId;
@@ -715,6 +725,17 @@ export class PaymentService {
             : "售后退款成功",
           variables: { orderId: order.id },
         });
+        enqueue(
+          this.sql,
+          "notification",
+          {
+            userId: order.userId,
+            orderId: order.id,
+            afterSaleId: sale.id,
+            text: refund.noTransfer ? "零金额售后已完成" : "渠道已确认退款",
+          },
+          `refund-notice:${refund.id}`,
+        );
       });
       refund.settledAt = result.succeededAt;
     } else if (result.status === "failed")

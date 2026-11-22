@@ -45,4 +45,22 @@ test("客服任务的商品比较与针对性追问可刷新恢复", async ({ pa
     "本人订单号",
   );
   await expect(page.locator(".support-proposal")).toHaveCount(0);
+  await page
+    .getByLabel("输入咨询内容", { exact: true })
+    .fill("预算100元，推荐有货的收纳用品。");
+  await page.getByRole("button", { name: "发送消息", exact: true }).click();
+  const skuLink = page
+    .getByRole("link", { name: "查看该规格", exact: true })
+    .first();
+  await expect(skuLink).toBeVisible({ timeout: 20_000 });
+  const link = await skuLink.getAttribute("href");
+  expect(link).toMatch(/\/products\/[^?]+\?sku=/);
+  const sku = new URL(link!, page.url()).searchParams.get("sku");
+  await page.getByRole("button", { name: "转人工", exact: true }).click();
+  await expect(page.locator(".chat-header")).toContainText("等待人工接入");
+  await skuLink.click();
+  await expect(
+    page.getByRole("button", { pressed: true }).filter({ hasText: /.+/ }),
+  ).toHaveCount(1);
+  expect(new URL(page.url()).searchParams.get("sku")).toBe(sku);
 });

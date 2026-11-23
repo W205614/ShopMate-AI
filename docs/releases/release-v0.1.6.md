@@ -14,4 +14,16 @@
 
 公开 Linux/amd64 镜像为 `ghcr.io/w205614/shopmate-ai-api:v0.1.6` 和 `ghcr.io/w205614/shopmate-ai-web:v0.1.6`。发布流程使用应用 CI 已验收的两个镜像及对应源码材料。摘要和附件以 [GitHub Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.6) 为准。部署和许可说明见[容器分发](https://github.com/W205614/ShopMate-AI/blob/v0.1.6/docs/container-distribution.md)。升级前按[生产指南](https://github.com/W205614/ShopMate-AI/blob/v0.1.6/docs/production.md)准备一致的恢复资料，保留现有配置和业务卷。
 
-交易和 AI 验证使用隔离数据、模拟支付和合成模型响应。真实商户、通知物流、模型质量及公网部署需要各自的运行环境和验收。生产 Caddy 入口可按[入口安全说明](https://github.com/W205614/ShopMate-AI/blob/v0.1.6/docs/security/production-edge-security.md)从本版本源码构建；本次分发的两个应用镜像用于现有 API/Web 编排。
+发布时使用隔离数据、模拟支付和合成模型响应。真实商户、通知物流及公网部署仍待实网验收。生产 Caddy 入口可按[入口安全说明](https://github.com/W205614/ShopMate-AI/blob/v0.1.6/docs/security/production-edge-security.md)从本版本源码构建；本次分发的两个应用镜像用于现有 API/Web 编排。
+
+## 2026-11-23 真实模型补验
+
+使用已发布的 v0.1.6 API/Web 镜像、独立 Compose 项目和合成账号及商品，调用真实模型 `gpt-6-luna`。本轮覆盖三条商品咨询。首轮 1/3 通过，两条失败场景各用原问题复测一次，复测 2/2 通过。
+
+| 场景                | 首轮                                               | 同题复测                                           |
+| ------------------- | -------------------------------------------------- | -------------------------------------------------- |
+| 用户缺预算          | 返回通用补参提示，没有询问预算                     | 仅询问预算                                         |
+| 75 元内推荐有货规格 | 同时展示 69 元和超预算的 79 元规格，未生成规格卡片 | 推荐 69 元有货小号，浏览器点击规格卡片打开对应 SKU |
+| 60 元内无匹配规格   | 询问是否放宽预算或调整选购条件，未推荐商品         | —                                                  |
+
+同题结果有波动，预算约束和澄清的稳定性仍待验证。共 15 次真实对话请求，供应商报告 22,940 tokens。结果限于上述商品咨询场景。

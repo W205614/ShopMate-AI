@@ -95,22 +95,29 @@ it("recommends remaining sellable goods but excludes goods fully reserved by pen
   expect(soldOut.text).toContain("转人工");
 });
 
-it("gives customers a usable human-handoff instruction and keeps accepting their follow-up", async () => {
-  const id = await chat();
-  await command("transferConversation", [id], () =>
-    supportApi.transferConversation(id),
-  );
-  const conversation = readDatabase(sql).conversations.find(
-    (c) => c.id === id,
-  )!;
-  expect(conversation.status).toBe("waiting");
-  expect(conversation.messages.at(-1)!.text).toContain("演示人工服务队列");
-  expect(conversation.messages.at(-1)!.text).toContain("继续补充问题");
-  expect(conversation.messages.at(-1)!.text).not.toContain("管理端");
-  const last = await send(id, "补充：我想确认包装是否破损");
-  expect(last.role).toBe("user");
-  expect(last.text).toContain("包装是否破损");
-  expect(readDatabase(sql).conversations.find((c) => c.id === id)!.status).toBe(
-    "waiting",
-  );
-});
+it.each(["demo", "production"] as const)(
+  "gives %s customers a usable human-handoff instruction and keeps accepting their follow-up",
+  async (mode) => {
+    vi.stubEnv("SHOP_MODE", mode);
+    const id = await chat();
+    await command("transferConversation", [id], () =>
+      supportApi.transferConversation(id),
+    );
+    const conversation = readDatabase(sql).conversations.find(
+      (c) => c.id === id,
+    )!;
+    expect(conversation.status).toBe("waiting");
+    const notice = conversation.messages.at(-1)!.text;
+    expect(notice).toContain(
+      mode === "demo" ? "已转入演示人工服务队列" : "已转入人工服务队列",
+    );
+    expect(conversation.messages.at(-1)!.text).toContain("继续补充问题");
+    expect(conversation.messages.at(-1)!.text).not.toContain("管理端");
+    const last = await send(id, "补充：我想确认包装是否破损");
+    expect(last.role).toBe("user");
+    expect(last.text).toContain("包装是否破损");
+    expect(
+      readDatabase(sql).conversations.find((c) => c.id === id)!.status,
+    ).toBe("waiting");
+  },
+);

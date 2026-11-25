@@ -132,7 +132,7 @@ export const supportApi: Pick<
           orders.find((o) => o.id === conversation.orderId) ?? orders[0];
         answer.text = order
           ? `你的订单 ${order.id} 可在订单详情中查看最新状态与物流。此处不会查询其他账号的订单。`
-          : "当前账号暂无演示订单。可以先去商城选择商品。";
+          : "当前账号暂无订单。可以先去商城选择商品。";
         if (order) answer.orderId = order.id;
       } else if (
         conversation.productId &&
@@ -174,7 +174,7 @@ export const supportApi: Pick<
           )
           .slice(0, 3);
         answer.text = products.length
-          ? "根据商品名称、分类与预算的本地规则，找到这些演示商品。请打开详情核对规格；推荐不代表专业或安全保证。"
+          ? "根据商品名称、分类与预算的本地规则，找到这些商品。请打开详情核对规格；推荐不代表专业或安全保证。"
           : "目前的本地规则无法可靠回答这个问题。你可以补充商品名称、品类或“预算 100 元”，也可以点击转人工。";
         if (products.length) answer.productIds = products.map((p) => p.id);
       }
@@ -198,7 +198,7 @@ export const supportApi: Pick<
       conversation.messages.push({
         id: id("msg-"),
         role: "assistant",
-        text: "已转入演示人工服务队列。你可以继续补充问题，客服接入后的回复会在此同步显示。",
+        text: "已转入人工服务队列。你可以继续补充问题，客服接入后的回复会在此同步显示。",
         createdAt: conversation.waitingSince,
       });
     });

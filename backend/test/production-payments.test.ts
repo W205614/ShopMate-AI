@@ -289,7 +289,9 @@ describe("production channel lifecycle", () => {
       "127.0.0.1",
     );
     await service.refresh(p.id);
-    await invoke(() => commerceApi.cancelOrder(id));
+    await expect(invoke(() => commerceApi.cancelOrder(id))).resolves.toBe(
+      "closing",
+    );
     expect(db().orders.find((order) => order.id === id)!.cancelRequested).toBe(
       true,
     );

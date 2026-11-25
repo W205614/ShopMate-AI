@@ -8,6 +8,7 @@ import {
   dateTime,
   orderLabels,
   afterSaleLabels,
+  cancellationNotice,
 } from "../../domain/types";
 import OrderItems from "../../components/shop/OrderItems.vue";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
@@ -94,13 +95,15 @@ function confirm() {
     return run(() => api.confirmOrder(order.value!.id), "已确认收货");
 }
 async function cancel() {
-  if (order.value && window.confirm("确认取消这笔待付款订单？"))
-    await run(
-      () => api.cancelOrder(order.value!.id),
-      order.value.paymentHold
-        ? "正在确认渠道关单，确认后释放库存；若已付款，请按售后流程处理。"
-        : "订单已取消",
-    );
+  const id = order.value?.id;
+  if (!id || !window.confirm("确认取消这笔待付款订单？")) return;
+  let status: Awaited<ReturnType<typeof api.cancelOrder>> | undefined;
+  if (
+    await run(async () => {
+      status = await api.cancelOrder(id);
+    })
+  )
+    notice.value = cancellationNotice(status);
 }
 async function request() {
   if (

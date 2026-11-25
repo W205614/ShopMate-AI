@@ -557,6 +557,7 @@ export interface PageOptions {
   categoryId?: string;
   active?: boolean;
   search?: string;
+  searchRecipient?: boolean;
   ids?: string[];
   orderId?: string;
   min?: number;
@@ -690,7 +691,7 @@ export function queryPage<T>(
         categories: ["name", "description"],
         ledger: ["reference", "note", "inventoryMovementId"],
         faqs: ["question", "answer"],
-        orders: ["address.name"],
+        orders: options.searchRecipient === false ? [] : ["address.name"],
         inventory: ["productId", "skuId", "reason"],
         reviews: ["content"],
         conversations: ["title", "orderId"],

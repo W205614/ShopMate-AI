@@ -23,7 +23,7 @@ import {
   requestAfterSaleChange,
 } from "../commerce";
 import { availableStock } from "../commerce-rules";
-import { aiConfig, chat } from "./ai-provider";
+import { aiConfig, chat, redactCustomerText } from "./ai-provider";
 import { retrieveKnowledge, sourcesStillValid } from "./ai-knowledge";
 import { cancelSupportWork, ensureSupportSchema } from "./ai-schema";
 import { audit, enqueue } from "../runtime";
@@ -130,7 +130,8 @@ function withScopedDb<T>(
 function executeChange(db: Database, input: ProposalInput) {
   if (input.kind === "addCart")
     addCartChange(db, input.productId, input.skuId, input.quantity);
-  else if (input.kind === "cancelOrder") cancelOrderChange(db, input.orderId);
+  else if (input.kind === "cancelOrder")
+    return cancelOrderChange(db, input.orderId);
   else
     requestAfterSaleChange(
       db,
@@ -185,7 +186,7 @@ export function createSupportProposal(
           carts: db.carts,
           couponClaims: db.couponClaims,
         }) as Database;
-        executeChange(simulated, input);
+        const cancellation = executeChange(simulated, input);
         let summary: string, details: Record<string, unknown>;
         if (input.kind === "addCart") {
           const product = db.products.find((p) => p.id === input.productId)!;
@@ -199,7 +200,10 @@ export function createSupportProposal(
             stock: availableStock(db, product.id, sku.id),
           };
         } else if (input.kind === "cancelOrder") {
-          summary = `取消待付款订单 ${input.orderId}，释放库存预占与优惠券`;
+          summary =
+            cancellation === "closing"
+              ? `为待付款订单 ${input.orderId} 提交取消申请，等待渠道关单`
+              : `取消待付款订单 ${input.orderId}，释放库存预占与优惠券`;
           details = {
             ...input,
             status: db.orders.find((o) => o.id === input.orderId)?.status,
@@ -295,8 +299,12 @@ export const supportCommands = {
           "商品或订单状态已变化，请重新生成并确认提案",
           "PROPOSAL_STALE",
         );
-      executeChange(db, input);
-      const result = { summary: p.summary, completed: true };
+      const cancellation = executeChange(db, input);
+      const cancellationNotice =
+        cancellation === "closing"
+          ? "取消申请已提交，正在确认渠道关单结果。若渠道已收款，请查看订单并按售后流程处理。"
+          : "订单已取消";
+      const result = { summary: p.summary, completed: true, cancellation };
       sql
         .prepare(
           "UPDATE support_proposals SET status='confirmed',result=? WHERE id=?",
@@ -318,7 +326,9 @@ export const supportCommands = {
             userId: uid,
             orderId: input.orderId,
             text:
-              input.kind === "cancelOrder" ? "订单已取消" : "售后申请已受理",
+              input.kind === "cancelOrder"
+                ? cancellationNotice
+                : "售后申请已受理",
           },
           `support-proposal:${p.id}`,
         );
@@ -329,7 +339,10 @@ export const supportCommands = {
         id: id("msg-"),
         role: "assistant",
         source: "rule",
-        text: `已根据你的确认完成：${p.summary}`,
+        text:
+          input.kind === "cancelOrder"
+            ? cancellationNotice
+            : `已根据你的确认完成：${p.summary}`,
         createdAt: now(),
       });
       return result;
@@ -649,7 +662,6 @@ function publicOrder(order: Order) {
     createdAtDisplay: orderTimeDisplay(order.createdAt),
     expiresAtDisplay: orderTimeDisplay(order.expiresAt),
     carrier: order.carrier,
-    tracking: order.tracking,
     shippingSimulated: order.transactionMode !== "production",
     items: order.items.map((i) => ({
       id: i.id,
@@ -686,6 +698,7 @@ export async function executeSupportTool(
   raw: unknown,
   signal: AbortSignal,
   evidence: {
+    statedBudget?: number;
     sources: Source[];
     products: Set<string>;
     productCaps: Map<string, number | undefined>;
@@ -704,7 +717,15 @@ export async function executeSupportTool(
     .strict();
   if (name === "search_knowledge") {
     const { query } = querySchema.parse(raw);
-    const found = await retrieveKnowledge(sql, query, signal);
+    const retrieved = await retrieveKnowledge(sql, query, signal);
+    const found = {
+      ...retrieved,
+      sources: retrieved.sources.map((source) => ({
+        ...source,
+        title: redactCustomerText(source.title),
+        text: redactCustomerText(source.text),
+      })),
+    };
     console.info(
       JSON.stringify({
         event: "support_knowledge_retrieved",
@@ -764,13 +785,14 @@ export async function executeSupportTool(
       return p;
     }
     if (name === "search_products") {
-      const { query, maxPrice } = z
+      const { query, maxPrice: modelPrice } = z
         .object({
           query: z.string().trim().min(1).max(500),
           maxPrice: z.number().int().nonnegative().optional(),
         })
         .strict()
         .parse(raw);
+      const maxPrice = evidence.statedBudget ?? modelPrice;
       const search = query
         .replace(/推荐|商品|一些|帮我|想买|有没有|家居好物/g, "")
         .toLowerCase();
@@ -825,7 +847,12 @@ export async function executeSupportTool(
               ? maxPrice
               : Math.min(priorCap, maxPrice ?? priorCap),
           );
-          return publicProduct(db, p.id);
+          const product = publicProduct(db, p.id);
+          if (maxPrice !== undefined)
+            product.skus = product.skus.filter(
+              (sku) => sku.availableStock > 0 && sku.price <= maxPrice,
+            );
+          return product;
         });
       if (maxPrice !== undefined && evidence.budgetMatches)
         evidence.budgetMatches.set(
@@ -900,6 +927,7 @@ async function processBudgetedSupportRun(
   }, 200);
   cancelled.unref();
   const evidence = {
+    statedBudget: undefined as number | undefined,
     sources: [] as Source[],
     products: new Set<string>(),
     productCaps: new Map<string, number | undefined>(),
@@ -920,6 +948,24 @@ async function processBudgetedSupportRun(
     }
     const msgIndex = c.messages.findIndex((m) => m.id === run.message_id);
     requireThat(msgIndex >= 0, "消息不存在");
+    const question = c.messages[msgIndex]!.text.normalize("NFKC");
+    const selecting = /推荐|挑选|选购|想买/.test(question);
+    const comparing = /对比|比较/.test(question);
+    const previous = c.messages[msgIndex - 1];
+    const budgetAmount =
+      question.match(
+        /(?:预算\s*(?:是|为|约|在)?|不超过|最多|最高)\s*[¥￥]?\s*(\d{1,7}(?:\.\d{1,2})?)(?![\d.])/u,
+      )?.[1] ??
+      question.match(
+        /(\d{1,7}(?:\.\d{1,2})?)\s*(?:元|块)\s*(?:以内|以下|封顶)/u,
+      )?.[1] ??
+      (previous?.replyKind === "clarify" && previous.text.includes("预算")
+        ? question.match(
+            /^\s*[¥￥]?\s*(\d{1,7}(?:\.\d{1,2})?)\s*(?:元|块)?[。！!\s]*$/u,
+          )?.[1]
+        : undefined);
+    if (budgetAmount !== undefined)
+      evidence.statedBudget = Math.round(Number(budgetAmount) * 100);
     const verifiedContext: Record<string, unknown> = {};
     if (c.productId) {
       try {
@@ -965,7 +1011,7 @@ async function processBudgetedSupportRun(
         .slice(Math.max(0, msgIndex - 12), msgIndex + 1)
         .map((m) => ({
           role: m.role === "user" ? "user" : "assistant",
-          content: m.text,
+          content: redactCustomerText(m.text),
         })),
     ];
     const completedSearches = new Map<string, unknown>();
@@ -1153,21 +1199,46 @@ async function processBudgetedSupportRun(
       requireThat(sourcesStillValid(sql, sources), "知识来源已更新，请重试");
       controller.signal.throwIfAborted();
       const factual = final.replyKind === "grounded";
-      const budget = evidence.budgetMatches.size
-        ? Math.min(...evidence.budgetMatches.keys())
-        : undefined;
+      const budget =
+        evidence.statedBudget ??
+        (evidence.budgetMatches.size
+          ? Math.min(...evidence.budgetMatches.keys())
+          : undefined);
+      const presentation =
+        final.replyKind === "clarify" &&
+        selecting &&
+        budget === undefined &&
+        !final.presentation?.missingFields?.length
+          ? { ...final.presentation, missingFields: ["budget" as const] }
+          : evidence.statedBudget !== undefined && final.productIds.length
+            ? {
+                ...final.presentation,
+                productView: comparing
+                  ? ("compare" as const)
+                  : ("recommend" as const),
+                focus: [
+                  "description" as const,
+                  "price" as const,
+                  "stock" as const,
+                ],
+              }
+            : final.presentation;
       const products = factual
         ? withScopedDb(sql, (db) =>
             final.productIds
               .map((productId) => {
                 const product = publicProduct(db, productId);
-                if (final.presentation?.productView === "recommend") {
+                if (
+                  evidence.statedBudget !== undefined ||
+                  presentation?.productView === "recommend"
+                ) {
                   const cap = Math.min(
                     evidence.productCaps.get(productId) ?? Infinity,
                     budget ?? Infinity,
                   );
                   requireThat(
-                    evidence.productCaps.has(productId),
+                    evidence.statedBudget !== undefined ||
+                      evidence.productCaps.has(productId),
                     "推荐商品必须先按需求检索",
                   );
                   product.skus = product.skus.filter(
@@ -1203,12 +1274,15 @@ async function processBudgetedSupportRun(
       const noBudgetMatch =
         replyKind === "handoff" &&
         budget !== undefined &&
-        evidence.budgetMatches.get(budget) === false &&
+        (evidence.budgetMatches.get(budget) === false ||
+          (evidence.statedBudget !== undefined &&
+            final.productIds.length > 0 &&
+            !products.length)) &&
         !sources.length &&
         !owned &&
         !pending.length;
       const recommendations =
-        final.presentation?.productView === "recommend"
+        presentation?.productView === "recommend"
           ? products.map((product) => {
               const sku = [...product.skus].sort(
                 (a, b) => a.price - b.price || a.id.localeCompare(b.id),
@@ -1232,10 +1306,12 @@ async function processBudgetedSupportRun(
           ? "按当前预算和条件暂时没有找到有货商品。要放宽预算，还是调整选购条件？"
           : renderGroundedAnswer({
               kind: replyKind,
-              presentation: final.presentation,
+              presentation,
               sources: factual ? sources : [],
               products,
-              order: owned ? publicOrder(owned) : undefined,
+              order: owned
+                ? { ...publicOrder(owned), tracking: owned.tracking }
+                : undefined,
               afterSales: owned
                 ? publicAfterSales(sql, run.user_id, owned.id)
                 : [],

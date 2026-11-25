@@ -64,7 +64,7 @@ export interface ShopApi {
     requestId: string;
   }): Promise<string | null>;
   payOrder(id: string): Promise<void>;
-  cancelOrder(id: string): Promise<void>;
+  cancelOrder(id: string): Promise<"cancelled" | "closing">;
   confirmOrder(id: string): Promise<void>;
   requestAfterSale(
     orderId: string,

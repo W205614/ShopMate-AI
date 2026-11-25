@@ -13,7 +13,13 @@ import type {
 } from "../../shared/domain/types";
 import { readDatabase, queryPage, queryRecord } from "./database";
 import { findSession, HttpError } from "./auth";
-import { collectionPermission, demand, permits } from "./permissions";
+import {
+  canReadOrderDelivery,
+  collectionPermission,
+  demand,
+  permits,
+  projectOrderForStaff,
+} from "./permissions";
 import {
   availableStock,
   calculateDelivery,
@@ -141,8 +147,12 @@ function relatedRecords(
   items: unknown[],
   session: Session | null,
   role: "user" | "admin",
-): Partial<Database> {
-  const related: Partial<Database> = {},
+): Omit<Partial<Database>, "orders"> & {
+  orders?: ReturnType<typeof projectOrderForStaff>[];
+} {
+  const related: Omit<Partial<Database>, "orders"> & {
+      orders?: ReturnType<typeof projectOrderForStaff>[];
+    } = {},
     productIds = new Set<string>(),
     orderIds = new Set<string>();
   if (collection === "couponClaims") {
@@ -286,14 +296,16 @@ function relatedRecords(
         (o): o is Order =>
           !!o && (role === "admin" || o.userId === session?.id),
       )
-      .map((order) =>
-        role === "admin" &&
-        !collectionPermission("orders").some((permission) =>
-          permits(session, permission),
+      .map((order) => {
+        if (role === "user") return order;
+        if (
+          !collectionPermission("orders").some((permission) =>
+            permits(session, permission),
+          )
         )
-          ? orderEligibility(order)
-          : order,
-      );
+          return orderEligibility(order);
+        return projectOrderForStaff(order, session);
+      });
   for (const order of related.orders ?? [])
     for (const item of order.items) productIds.add(item.productId);
   if (productIds.size)
@@ -609,6 +621,8 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
     }
     if (req.query.category)
       options.categoryId = z.string().max(100).parse(req.query.category);
+    if (collection === "orders" && role === "admin")
+      options.searchRecipient = canReadOrderDelivery(session);
     if (req.query.search || req.query.q)
       options.search = z
         .string()
@@ -699,6 +713,10 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
         sql,
         result.items as Product[],
         role === "admin",
+      );
+    if (collection === "orders" && role === "admin")
+      result.items = (result.items as Order[]).map((order) =>
+        projectOrderForStaff(order, session),
       );
     if (collection === "orders" && role === "user") {
       const paymentForOrder = sql.prepare(

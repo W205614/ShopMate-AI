@@ -312,7 +312,7 @@ describe("independent AI support confirmation review", () => {
     expect(
       after.conversations
         .find((c) => c.id === run.conversation_id)!
-        .messages.filter((m) => m.text.startsWith("已根据你的确认完成")),
+        .messages.filter((m) => m.text === "订单已取消"),
     ).toHaveLength(1);
   });
 

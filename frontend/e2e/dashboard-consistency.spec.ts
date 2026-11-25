@@ -182,6 +182,29 @@ test("手机顾客按可买规格筛选并试算配送", async ({ page }) => {
     page.getByText(/收货地址、运费有变化，应付由 ¥125.00 更新为 ¥119.00/),
   ).toBeVisible();
 });
+test("经营概览在没有业务写入时更新跨阈值的超时计数", async ({ page }) => {
+  const conversationId = await action(page, "createConversation", {});
+  await action(page, "transferConversation", conversationId);
+  const threshold = Date.now() + 12_000;
+  fixture((db) => {
+    const conversation = db.conversations.find(
+      (item) => item.id === conversationId,
+    )!;
+    conversation.waitingSince = new Date(threshold - 30 * 60_000).toISOString();
+  });
+  await page.clock.install();
+  await page.goto("/admin");
+  const queue = page.getByRole("link", { name: /等待人工接入/ });
+  const soon = page.getByRole("link", { name: "即将超时 1", exact: true });
+  await expect(soon).toBeVisible();
+  await expect
+    .poll(() => Date.now(), { timeout: 16_000 })
+    .toBeGreaterThan(threshold);
+  await page.clock.runFor(30_000);
+  await expect(queue).toContainText("超时 1");
+  await expect(soon).toHaveCount(0);
+});
+
 test("待办和低库存跳转携带对应条件，最近订单可精确定位且待付款不称实付", async ({
   page,
 }) => {

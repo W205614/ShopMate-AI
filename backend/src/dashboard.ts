@@ -6,7 +6,7 @@ import type {
   Settings,
 } from "../../shared/domain/types";
 import { queryPage, queryRecord } from "./database";
-import { permits } from "./permissions";
+import { permits, projectOrderForStaff } from "./permissions";
 import { shopMode } from "./production/config";
 import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
 import { taskQueues, taskWaitWindow } from "./task-wait";
@@ -139,7 +139,10 @@ export function dashboard(sql: DatabaseSync, session: Session) {
     ranking,
     lowStock,
     recentOrders: canOrders
-      ? queryPage<Order>(sql, "orders", { pageSize: 5, sort: "newest" }).items
+      ? queryPage<Order>(sql, "orders", {
+          pageSize: 5,
+          sort: "newest",
+        }).items.map((order) => projectOrderForStaff(order, session))
       : [],
     revision: scalar("SELECT revision AS n FROM storage_meta WHERE id=1"),
   };

@@ -1,4 +1,4 @@
-import type { Session } from "../../shared/domain/types";
+import type { Order, Session } from "../../shared/domain/types";
 import type { StaffRole } from "../../shared/domain/operations";
 import { HttpError } from "./errors";
 export const grants: Record<StaffRole, string[]> = {
@@ -29,6 +29,19 @@ export function permits(session: Session | null, permission: string) {
     (session.permissions === undefined ||
       session.permissions.includes(permission))
   );
+}
+export function canReadOrderDelivery(session: Session | null) {
+  return permits(session, "warehouse") || permits(session, "support");
+}
+export function projectOrderForStaff(order: Order, session: Session | null) {
+  if (canReadOrderDelivery(session)) return order;
+  const {
+    address: _address,
+    carrier: _carrier,
+    tracking: _tracking,
+    ...transaction
+  } = order;
+  return transaction;
 }
 export function demand(session: Session | null, permission: string) {
   if (!session) throw new HttpError(401, "请先登录管理账号");

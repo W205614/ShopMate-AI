@@ -3,7 +3,12 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useShop } from "../../stores/shop";
 import { api, getCollectionPage } from "../../services/api";
-import { money, dateTime, orderLabels } from "../../domain/types";
+import {
+  money,
+  dateTime,
+  orderLabels,
+  cancellationNotice,
+} from "../../domain/types";
 import type { OrderStatus } from "../../domain/types";
 import OrderItems from "../../components/shop/OrderItems.vue";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
@@ -85,8 +90,14 @@ async function reorder(id: string) {
     notice.value = message;
 }
 async function cancel(id: string) {
-  if (window.confirm("确认取消这笔待付款订单？"))
-    await run(() => api.cancelOrder(id), "订单已取消");
+  if (!window.confirm("确认取消这笔待付款订单？")) return;
+  let status: Awaited<ReturnType<typeof api.cancelOrder>> | undefined;
+  if (
+    await run(async () => {
+      status = await api.cancelOrder(id);
+    })
+  )
+    notice.value = cancellationNotice(status);
 }
 </script>
 <template>
@@ -129,7 +140,11 @@ async function cancel(id: string) {
             <RouterLink :to="`/orders/${o.id}`">{{ o.id }}</RouterLink
             ><span class="secondary">{{ dateTime(o.createdAt) }}</span>
           </div>
-          <strong class="order-status">{{ orderLabels[o.status] }}</strong>
+          <strong class="order-status">{{
+            o.status === "pending" && o.cancelRequested
+              ? "正在确认关单"
+              : orderLabels[o.status]
+          }}</strong>
         </div>
         <OrderItems :items="o.items" />
         <p v-if="o.refundedAmount" class="commerce-amount-note">
@@ -145,13 +160,13 @@ async function cancel(id: string) {
           >
           <div class="button-row">
             <button
-              v-if="o.status === 'pending'"
+              v-if="o.status === 'pending' && !o.cancelRequested"
               :disabled="busy"
               @click="cancel(o.id)"
             >
               取消订单</button
             ><RouterLink
-              v-if="o.status === 'pending'"
+              v-if="o.status === 'pending' && !o.cancelRequested"
               :to="`/orders/${o.id}/pay`"
               class="button"
               >{{

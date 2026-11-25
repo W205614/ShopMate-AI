@@ -416,7 +416,7 @@ export const commerceApi: Pick<
     });
   },
   async cancelOrder(orderId) {
-    await transact((db) => cancelOrderChange(db, orderId));
+    return transact((db) => cancelOrderChange(db, orderId));
   },
   async confirmOrder(orderId) {
     await transact((db) => {
@@ -448,6 +448,7 @@ export const commerceApi: Pick<
         };
         const product = db.products.find((p) => p.id === item.productId);
         const sku = product?.skus.find((s) => s.id === item.skuId);
+        const available = sku ? availableStock(db, item.productId, sku.id) : 0;
         const reason =
           !product || !product.active
             ? "商品已下架或移除"
@@ -455,8 +456,8 @@ export const commerceApi: Pick<
               ? "规格已失效"
               : !integer(item.quantity, 1) || !integer(requested.quantity, 1)
                 ? "购买数量无效"
-                : requested.quantity > availableStock(db, product!.id, sku.id)
-                  ? `库存不足（库存 ${sku.stock} 件，购物车已有 ${existing?.quantity ?? 0} 件，本次需 ${item.quantity} 件）`
+                : requested.quantity > available
+                  ? `库存不足（可售 ${available} 件，购物车已有 ${existing?.quantity ?? 0} 件，本次需 ${item.quantity} 件）`
                   : "";
         if (reason) {
           result.skipped.push(`${item.name} ${item.skuName}：${reason}`);
@@ -654,18 +655,19 @@ export function addCartChange(
 
 export function cancelOrderChange(db: Database, orderId: string) {
   const order = ownedOrder(db, orderId);
-  if (order.status === "cancelled") return;
+  if (order.status === "cancelled") return "cancelled";
   requireThat(order.status === "pending", "只有待付款订单可以取消");
   if (order.paymentHold) {
     order.cancelRequested = true;
     order.cancelReason = "用户取消";
-    return;
+    return "closing";
   }
   order.status = "cancelled";
   order.cancelledAt = now();
   order.cancelReason = "用户取消";
   addEvent(order, "cancelled", "user", "用户取消");
   releaseCoupon(db, order);
+  return "cancelled";
 }
 
 export function requestAfterSaleChange(

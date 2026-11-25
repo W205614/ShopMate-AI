@@ -43,6 +43,11 @@ const shop = useShop(),
   }),
   ship = ref(false),
   form = reactive({ id: "", carrier: "顺丰速运（模拟）", tracking: "" });
+const showDelivery = computed(() =>
+  shop.adminSession?.permissions?.some(
+    (permission) => permission === "warehouse" || permission === "support",
+  ),
+);
 const dateError = computed(() => {
   if (
     [from.value, to.value].some(
@@ -65,7 +70,7 @@ const filtered = computed(() =>
         (!query.value.trim() ||
           [
             o.id,
-            o.address.name,
+            o.address?.name ?? "",
             ...o.items.map((i) => `${i.name} ${i.skuName}`),
           ].some((value) =>
             value.toLowerCase().includes(query.value.trim().toLowerCase()),
@@ -135,7 +140,7 @@ async function submit() {
       <el-input
         v-model="query"
         maxlength="100"
-        placeholder="订单号 / 商品 / 收件人"
+        :placeholder="showDelivery ? '订单号 / 商品 / 收件人' : '订单号 / 商品'"
         clearable
       /><el-select v-model="status" placeholder="全部状态" clearable
         ><el-option
@@ -193,10 +198,12 @@ async function submit() {
         <template #default="{ row }">{{
           waitAge(row.paidAt)
         }}</template> </el-table-column
-      ><el-table-column label="用户 / 收件人" min-width="150"
+      ><el-table-column
+        :label="showDelivery ? '用户 / 收件人' : '用户'"
+        min-width="150"
         ><template #default="{ row }"
           >{{ shop.db.users.find((u) => u.id === row.userId)?.name
-          }}<small style="display: block; color: #7a828f">{{
+          }}<small v-if="row.address" style="display: block; color: #7a828f">{{
             row.address.name
           }}</small></template
         ></el-table-column
@@ -284,15 +291,17 @@ async function submit() {
             {{ dateTime(selected.cancelledAt) }} · {{ selected.cancelReason }}
           </dd></template
         >
-        <dt>收件信息</dt>
-        <dd>
-          {{ selected.address.name }} · {{ selected.address.phone }}<br />{{
-            selected.address.region
-          }}
-          {{ selected.address.detail }}
-        </dd>
-        <dt>物流信息</dt>
-        <dd>{{ selected.carrier || "尚未发货" }} {{ selected.tracking }}</dd>
+        <template v-if="selected.address">
+          <dt>收件信息</dt>
+          <dd>
+            {{ selected.address.name }} · {{ selected.address.phone }}<br />{{
+              selected.address.region
+            }}
+            {{ selected.address.detail }}
+          </dd>
+          <dt>物流信息</dt>
+          <dd>{{ selected.carrier || "尚未发货" }} {{ selected.tracking }}</dd>
+        </template>
       </dl>
       <div class="admin-order-product" v-for="i in selected.items" :key="i.id">
         <img :src="i.image" :alt="i.name" />

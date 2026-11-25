@@ -5,7 +5,13 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import mammoth from "mammoth";
 import sharp from "sharp";
-import { aiConfig, embed, vision, ProviderError } from "./ai-provider";
+import {
+  aiConfig,
+  embed,
+  vision,
+  ProviderError,
+  redactCustomerText,
+} from "./ai-provider";
 
 export interface DocumentSection {
   text: string;
@@ -257,7 +263,7 @@ export async function indexSections(
   for (let i = 0; i < chunks.length; i += 16) {
     const batch = chunks.slice(i, i + 16),
       vectors = await embed(
-        batch.map((s) => s.text),
+        batch.map((s) => redactCustomerText(s.text)),
         cancellation.signal,
       );
     result.push(

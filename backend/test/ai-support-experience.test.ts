@@ -6,7 +6,12 @@ import { context } from "../src/repository";
 import { supportApi } from "../src/support";
 import { ensureSupportSchema } from "../src/ai/ai-schema";
 import { ensureKnowledgeSchema } from "../src/ai/ai-knowledge";
-import { executeSupportTool, processSupportRun } from "../src/ai/ai-support";
+import {
+  createSupportProposal,
+  executeSupportTool,
+  processSupportRun,
+  supportCommands,
+} from "../src/ai/ai-support";
 import { renderGroundedAnswer } from "../src/ai/ai-answer";
 
 type Run = Parameters<typeof executeSupportTool>[1];
@@ -68,6 +73,48 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+it("acknowledges an AI cancellation with a payment hold without reporting completion", async () => {
+  const db = readDatabase(sql);
+  const order = db.orders.find((item) => item.id === "owned-order")!;
+  order.paymentHold = true;
+  order.transactionMode = "production";
+  writeDatabase(sql, db);
+  const run = await queued(order.id, "取消订单");
+  sql
+    .prepare("UPDATE support_runs SET status='running' WHERE id=?")
+    .run(run.id);
+  const proposal = asUser(() =>
+    createSupportProposal(sql, run, {
+      kind: "cancelOrder",
+      orderId: order.id,
+    }),
+  );
+  expect(proposal.summary).toContain("等待渠道关单");
+  sql
+    .prepare("UPDATE support_runs SET status='completed' WHERE id=?")
+    .run(run.id);
+  for (let attempt = 0; attempt < 2; attempt++)
+    await expect(
+      asUser(() => supportCommands.confirmSupportProposal(proposal.id)),
+    ).resolves.toMatchObject({ cancellation: "closing" });
+  const saved = readDatabase(sql);
+  expect(saved.orders.find((item) => item.id === order.id)).toMatchObject({
+    status: "pending",
+    cancelRequested: true,
+    paymentHold: true,
+  });
+  expect(
+    saved.conversations
+      .find((c) => c.id === run.conversation_id)!
+      .messages.at(-1)?.text,
+  ).toContain("正在确认渠道关单");
+  const notifications = sql
+    .prepare("SELECT payload FROM job_queue WHERE kind='notification'")
+    .all();
+  expect(notifications).toHaveLength(1);
+  expect(String(notifications[0]!.payload)).not.toContain("订单已取消");
+});
+
 it("renders a policy exception and rejects a quote that removes its negation", () => {
   const source = {
     id: "policy-test",
@@ -115,7 +162,8 @@ it.each([10000, 8000])(
               name: "search_products",
               arguments: JSON.stringify({
                 query: product.name,
-                maxPrice: budget,
+                // A mistaken model-provided limit must not replace the customer limit.
+                maxPrice: 100_000,
               }),
             },
           },
@@ -127,7 +175,7 @@ it.each([10000, 8000])(
           replyKind: budget >= sku.price ? "grounded" : "handoff",
           answer: "请看结果。",
           productIds: budget >= sku.price ? [product.id] : [],
-          presentation: { productView: "recommend" },
+          presentation: { productView: "details" },
         }),
       });
     await processSupportRun(sql, run.id, caller);
@@ -159,7 +207,6 @@ it("asks only for the missing shopping budget", async () => {
     content: JSON.stringify({
       replyKind: "clarify",
       answer: "请补充预算。",
-      presentation: { missingFields: ["budget"] },
     }),
   }));
   expect(
@@ -167,6 +214,76 @@ it("asks only for the missing shopping budget", async () => {
       .conversations.find((c) => c.id === run.conversation_id)!
       .messages.at(-1)?.text,
   ).toBe("请补充预算。");
+});
+
+it("filters an expensive specification after a model selects details without a search", async () => {
+  const db = readDatabase(sql);
+  const product = db.products.find((p) => p.id === "p01")!;
+  const [under, over] = product.skus;
+  Object.assign(under!, { price: 6_900, stock: 3 });
+  Object.assign(over!, { price: 7_900, stock: 3 });
+  writeDatabase(sql, db);
+  const run = await queued(undefined, `推荐预算75元的${product.name}`);
+  const caller = vi
+    .fn()
+    .mockResolvedValueOnce({
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        {
+          id: "details",
+          type: "function",
+          function: {
+            name: "product_details",
+            arguments: JSON.stringify({ productId: product.id }),
+          },
+        },
+      ],
+    })
+    .mockResolvedValueOnce({
+      role: "assistant",
+      content: JSON.stringify({
+        answer: "规格见结果",
+        productIds: [product.id],
+        presentation: { productView: "details" },
+      }),
+    });
+  await processSupportRun(sql, run.id, caller);
+  const answer = readDatabase(sql)
+    .conversations.find((c) => c.id === run.conversation_id)!
+    .messages.at(-1)!;
+  expect(answer.text).not.toContain(over!.name);
+  expect(answer.recommendations).toEqual([
+    expect.objectContaining({ skuId: under!.id, price: 6_900 }),
+  ]);
+});
+
+it("sends a minimized order and redacts contact details before calling the model", async () => {
+  const db = readDatabase(sql);
+  db.orders.find((order) => order.id === "owned-order")!.tracking =
+    "PRIVATE-SYNTHETIC-TRACK";
+  writeDatabase(sql, db);
+  const message =
+    "请查订单，邮箱 sample@example.test，手机号 138 1234 9876，收件地址：合成街1号。";
+  const run = await queued("owned-order", message);
+  const caller = vi.fn(async (_messages: unknown[]) => ({
+    role: "assistant" as const,
+    content: JSON.stringify({ answer: "订单状态", orderId: "owned-order" }),
+  }));
+  await processSupportRun(sql, run.id, caller);
+  const payload = JSON.stringify(caller.mock.calls[0]![0]);
+  expect(payload).toContain("owned-order");
+  for (const value of [
+    "sample@example.test",
+    "138 1234 9876",
+    "合成街1号",
+    "PRIVATE-SYNTHETIC-TRACK",
+  ])
+    expect(payload).not.toContain(value);
+  const saved = readDatabase(sql).conversations.find(
+    (c) => c.id === run.conversation_id,
+  )!;
+  expect(saved.messages.some((item) => item.text === message)).toBe(true);
 });
 
 it("supplies unambiguous Beijing dates for both owned-order tools, including a UTC day rollover", async () => {

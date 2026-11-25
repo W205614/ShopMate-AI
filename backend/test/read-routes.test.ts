@@ -260,6 +260,59 @@ describe("paged read contracts", () => {
       page.related.orders.map((order: { id: string }) => order.id).sort(),
     ).toEqual([paymentOrder.id, refundOrder.id].sort());
     expect(page.related.orders[0]).toHaveProperty("address");
+    sql
+      .prepare(
+        "UPDATE staff_access SET staff_role='finance' WHERE account_id='admin'",
+      )
+      .run();
+    const financeOrders = await get(
+      `/api/collections/orders?role=admin&id=${paymentOrder.id}`,
+      true,
+    );
+    expect(financeOrders.items[0]).toMatchObject({
+      id: paymentOrder.id,
+      total: paymentOrder.total,
+    });
+    expect(financeOrders.items[0]).not.toHaveProperty("address");
+    const financeSearch = await get(
+      `/api/collections/orders?role=admin&search=${encodeURIComponent(paymentOrder.address.name)}`,
+      true,
+    );
+    expect(
+      financeSearch.items.some(
+        (order: { id: string }) => order.id === paymentOrder.id,
+      ),
+    ).toBe(false);
+    const financeLedger = await get(
+      "/api/collections/ledger?role=admin&id=ledger-payment",
+      true,
+    );
+    expect(financeLedger.related.orders[0]).toMatchObject({
+      id: paymentOrder.id,
+    });
+    expect(financeLedger.related.orders[0]).not.toHaveProperty("address");
+    const financeDashboard = await get("/api/admin/dashboard", true);
+    expect(financeDashboard.recentOrders.length).toBeGreaterThan(0);
+    expect(
+      financeDashboard.recentOrders.every(
+        (order: object) => !("address" in order),
+      ),
+    ).toBe(true);
+    sql
+      .prepare(
+        "UPDATE staff_access SET staff_role='warehouse' WHERE account_id='admin'",
+      )
+      .run();
+    const warehouseOrders = await get(
+      `/api/collections/orders?role=admin&id=${paymentOrder.id}`,
+      true,
+    );
+    expect(warehouseOrders.items[0].address).toEqual(paymentOrder.address);
+    sql
+      .prepare(
+        "UPDATE staff_access SET staff_role='owner' WHERE account_id='admin'",
+      )
+      .run();
     expect(page.related.inventory.map((row: { id: string }) => row.id)).toEqual(
       [movement.id],
     );

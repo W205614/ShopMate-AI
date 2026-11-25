@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { findSession, HttpError } from "../auth";
 import { demand } from "../permissions";
 import { transaction } from "../database";
-import { aiConfig, embed, rerank } from "./ai-provider";
+import { aiConfig, embed, rerank, redactCustomerText } from "./ai-provider";
 import { reserveProviderRequest, withProviderBudget } from "./ai-budget";
 import { integerSetting } from "../config";
 import {
@@ -793,7 +793,7 @@ export async function retrieveKnowledge(
   if (documentCount) {
     try {
       const [queryVector] = await withProviderBudget(sql, () =>
-        embed([query.slice(0, 1000)], signal),
+        embed([redactCustomerText(query).slice(0, 1000)], signal),
       );
       const config = aiConfig(),
         seen = new Set<string>(),
@@ -890,8 +890,8 @@ export async function retrieveKnowledge(
       selected = (
         await withProviderBudget(sql, () =>
           rerank(
-            query.slice(0, 1000),
-            candidates.map((id) => sourceMap.get(id)!.text),
+            redactCustomerText(query).slice(0, 1000),
+            candidates.map((id) => redactCustomerText(sourceMap.get(id)!.text)),
             signal,
           ),
         )

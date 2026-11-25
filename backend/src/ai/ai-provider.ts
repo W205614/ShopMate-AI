@@ -9,6 +9,26 @@ export class ProviderError extends Error {
     super(code);
   }
 }
+export function redactCustomerText(text: string) {
+  return text
+    .replace(
+      /(?:收件地址|详细地址|住址)\s*[:：]\s*[^，。！？、;；\n]+/gu,
+      "地址：[已隐藏]",
+    )
+    .replace(
+      /(?:收件人|联系人)\s*[:：]\s*[^，。！？、;；\n]+/gu,
+      "联系人：[已隐藏]",
+    )
+    .replace(
+      /(?<![A-Z0-9._%+-])[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,253}\.[A-Z]{2,63}\b/giu,
+      "[邮箱已隐藏]",
+    )
+    .replace(/(?<!\d)\d{17}[\dXx](?!\d)/gu, "[证件号码已隐藏]")
+    .replace(
+      /(?<!\d)(?:\+?86[\s-]?)?1[3-9]\d[\s-]?\d{4}[\s-]?\d{4}(?!\d)/gu,
+      "[手机号码已隐藏]",
+    );
+}
 export function aiConfig() {
   return {
     enabled: process.env.AI_ENABLED === "true",

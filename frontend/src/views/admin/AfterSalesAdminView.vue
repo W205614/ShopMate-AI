@@ -73,6 +73,14 @@ const allowedActions = computed(() => ({
   receive: !!state.value?.canReceive && permitted("receive"),
   refund: !!state.value?.canRefund && permitted("refund"),
 }));
+const channelRefundOnly = computed(
+  () =>
+    selectedOrder.value?.transactionMode === "production" &&
+    allowedActions.value.refund &&
+    !allowedActions.value.approve &&
+    !allowedActions.value.reject &&
+    !allowedActions.value.receive,
+);
 const assignment = computed(() => {
   if (state.value?.canApprove)
     return "当前申请待客服审核，请由客服或店主批准或拒绝。";
@@ -391,7 +399,10 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
           >加载最新处理说明</el-button
         >
       </el-alert>
-      <el-form label-position="top"
+      <p v-if="channelRefundOnly" class="secondary">
+        渠道退款只提交退款请求。需要补充说明时，请通过人工客服告知顾客。
+      </p>
+      <el-form v-else label-position="top"
         ><el-form-item label="本次处理说明（用户可见）"
           ><el-input
             v-model="note"

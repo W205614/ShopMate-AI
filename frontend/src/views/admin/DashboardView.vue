@@ -80,7 +80,11 @@ watch(
   },
   { flush: "sync" },
 );
+const refreshTimer = window.setInterval(() => {
+  if (document.visibilityState === "visible" && shop.adminSession) void load();
+}, 30_000);
 onUnmounted(() => {
+  window.clearInterval(refreshTimer);
   sequence++;
 });
 const permitted = (permission: string) =>

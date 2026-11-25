@@ -166,6 +166,9 @@ onUnmounted(() => {
           支持 TXT、Markdown、DOCX、PDF、PNG、JPEG、WebP；每份不超过 10 MiB，PDF
           最多 30 页。识别内容需人工核对后发布。
         </p>
+        <p id="knowledge-provider-notice" class="admin-note">
+          上传后会向配置的服务发送需识别的图片或扫描页，以及用于建立索引的文本。请仅上传可公开给顾客的资料，先移除个人信息、凭据和内部数据。
+        </p>
       </div>
       <div>
         <el-button :disabled="busy" @click="refresh">刷新文档</el-button
@@ -179,6 +182,7 @@ onUnmounted(() => {
         type="file"
         accept=".txt,.md,.markdown,.docx,.pdf,.png,.jpg,.jpeg,.webp"
         aria-label="选择知识文档"
+        aria-describedby="knowledge-provider-notice"
         :disabled="busy"
         @change="upload"
       />

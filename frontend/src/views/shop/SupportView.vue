@@ -20,7 +20,12 @@ import {
   supportDegradation,
 } from "../../services/support";
 import type { SupportDetail, SupportProposal } from "../../services/support";
-import { dateTime, orderLabels, money } from "../../domain/types";
+import {
+  dateTime,
+  orderLabels,
+  money,
+  cancellationNotice,
+} from "../../domain/types";
 import ProductCard from "../../components/shop/ProductCard.vue";
 import ActionNotice from "../../components/shop/ActionNotice.vue";
 import { useAction } from "../../components/shop/useAction";
@@ -191,15 +196,21 @@ async function proposalAction(id: string, confirm: boolean) {
     return;
   }
   const target = capture();
-  await runScoped(
-    () =>
-      commerceAction(
-        confirm ? "confirmSupportProposal" : "cancelSupportProposal",
-        id,
-      ),
+  let cancellation: "closing" | "cancelled" | undefined;
+  const completed = await runScoped(
+    async () => {
+      const result = await commerceAction<
+        { cancellation?: "closing" | "cancelled" } | undefined
+      >(confirm ? "confirmSupportProposal" : "cancelSupportProposal", id);
+      cancellation = result?.cancellation;
+    },
     confirm ? "操作已完成，请核对最新记录。" : "已取消操作。",
   );
-  if (current(target)) await refreshDetail();
+  if (current(target)) {
+    if (completed && confirm && proposal.kind === "cancelOrder")
+      notice.value = cancellationNotice(cancellation);
+    await refreshDetail();
+  }
 }
 async function retry() {
   if (conversation.value?.status !== "bot" || aiEnabled.value !== true) return;
@@ -718,7 +729,8 @@ async function send(value?: string) {
                 {{
                   {
                     pending: "等待你的确认",
-                    confirmed: "已执行",
+                    confirmed:
+                      proposal.kind === "cancelOrder" ? "已确认" : "已执行",
                     cancelled: "已取消",
                     expired: "已失效，请重新咨询",
                   }[proposalStatus(proposal)]
@@ -760,6 +772,13 @@ async function send(value?: string) {
           </div>
         </div>
         <ActionNotice :error="error" :notice="notice" />
+        <p
+          v-if="aiEnabled && conversation?.status === 'bot'"
+          id="support-provider-notice"
+          class="chat-disclaimer"
+        >
+          对话与回答所需的商品、订单资料会发送给配置的模型服务。请勿输入真实姓名、地址、证件号、联系方式或支付信息。需处理这些资料时可转人工。
+        </p>
         <form
           v-if="conversation?.status !== 'closed'"
           class="chat-composer"
@@ -768,6 +787,11 @@ async function send(value?: string) {
           <label class="sr-only" for="chat-message">输入咨询内容</label
           ><textarea
             id="chat-message"
+            :aria-describedby="
+              aiEnabled && conversation?.status === 'bot'
+                ? 'support-provider-notice'
+                : undefined
+            "
             v-model="text"
             rows="2"
             maxlength="1000"

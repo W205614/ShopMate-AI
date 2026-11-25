@@ -4,7 +4,7 @@
 
 ## 当前使用与维护说明
 
-预构建 API/Web Packages、许可源码材料和升级入口见[容器分发说明](container-distribution.md)。当前商城和运营更新见 [v0.1.6 记录](releases/release-v0.1.6.md)，此前 AI 定向修复和安全维护见 [v0.1.5 记录](releases/release-v0.1.5.md)和 [v0.1.4 记录](releases/release-v0.1.4.md)，历史 AI 循环收敛和中文检索修复见 [v0.1.3 记录](releases/release-v0.1.3.md)和 [v0.1.2 记录](releases/release-v0.1.2.md)。
+预构建 API/Web Packages、许可源码材料和升级入口见[容器分发说明](container-distribution.md)。当前日常维护见 [v0.1.7 记录](releases/release-v0.1.7.md)，商城和运营更新见 [v0.1.6 记录](releases/release-v0.1.6.md)，此前 AI 定向修复和安全维护见 [v0.1.5 记录](releases/release-v0.1.5.md)和 [v0.1.4 记录](releases/release-v0.1.4.md)，历史 AI 循环收敛和中文检索修复见 [v0.1.3 记录](releases/release-v0.1.3.md)和 [v0.1.2 记录](releases/release-v0.1.2.md)。
 
 | 文档                                       | 适用问题                                                       |
 | ------------------------------------------ | -------------------------------------------------------------- |

@@ -23,7 +23,7 @@ git clone https://github.com/W205614/ShopMate-AI.git
 cd ShopMate-AI
 ```
 
-以下命令指定 `v0.1.6` 镜像，发布状态和摘要以 [v0.1.6 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.6) 为准。需要匹配版本的源码时执行 `git switch --detach v0.1.6`；默认 `main` 可能领先正式镜像。已有部署升级前先按[生产指南](docs/production.md)准备匹配的恢复资料，保留原配置和数据。
+以下命令使用 v0.1.7 的公开 API 和 Web 镜像。镜像摘要和对应源码见 [v0.1.7 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.1.7)。如需查看匹配的源码，执行 `git switch --detach v0.1.7`。已有环境升级前请保留原配置和业务卷，并按[生产指南](docs/production.md)准备可验证的恢复资料。
 
 在项目根目录复制配置模板。Windows PowerShell：
 
@@ -44,8 +44,8 @@ Linux 或 macOS：
 在同一 `.env` 中添加以下两行，选择已发布的镜像（公开拉取无需 GitHub 登录）：
 
 ```dotenv
-API_IMAGE=ghcr.io/w205614/shopmate-ai-api:v0.1.6
-WEB_IMAGE=ghcr.io/w205614/shopmate-ai-web:v0.1.6
+API_IMAGE=ghcr.io/w205614/shopmate-ai-api:v0.1.7
+WEB_IMAGE=ghcr.io/w205614/shopmate-ai-web:v0.1.7
 ```
 
 ### 3. 启动服务
@@ -100,7 +100,7 @@ Caddy 入口的依赖修复、构建与全部严重级别扫描见[HTTPS 入口�
 
 微信 H5 支付链接遵循官方五分钟有效期；到期后先查单，再按原支付单号恢复链接，跳转前重新确认状态，详见[H5 链接刷新与限制](docs/integrations.md#h5-支付链接刷新)。
 
-单店产品的初次验收见[单店生产版验收报告](docs/acceptance/production-acceptance-20261106.md)。当前版本的商城、支付及售后改动见 [v0.1.6 发布说明](docs/releases/release-v0.1.6.md)，历次发布可从[文档导航](docs/README.md)查阅。
+单店产品的初次验收见[单店生产版验收报告](docs/acceptance/production-acceptance-20261106.md)。公开 v0.1.7 镜像已在隔离环境通过目录筛选和双账号模拟交易验收，覆盖下单恢复、履约和分批退款。关单提示、配送资料权限、库存提示和运营超时改动见 [v0.1.7 发布说明](docs/releases/release-v0.1.7.md)。历次发布可从[文档导航](docs/README.md)查阅。
 
 ## 第一次体验
 
@@ -112,7 +112,7 @@ Caddy 入口的依赖修复、构建与全部严重级别扫描见[HTTPS 入口�
 
 ![v0.1.6 商城按价格和库存筛选后展示匹配的商品规格](docs/screenshots/v016-catalogue.jpg)
 
-想体验 AI 客服，可按[模型配置说明](docs/ai-support.md#模型配置)在服务端配置密钥并重新启动。顾客登录后可从商品或本人订单发起咨询。选购时可提供预算和用途，推荐卡片会链接到具体规格。加购、取消待付款订单和申请售后都要经顾客确认。v0.1.6 的 CI 使用合成模型验证工具调用、规格展示和确认流程。真实模型补验中，缺预算追问和预算内推荐首轮未通过，同题复测通过。预算内无货场景首轮通过。详见 [v0.1.6 真实模型补验](docs/releases/release-v0.1.6.md#2026-11-23-真实模型补验)。
+开启 AI 客服前，按[模型配置说明](docs/ai-support.md#模型配置)了解会话与知识资料的外部处理范围。顾客可按商品或本人订单发起咨询。选购时可给出用途和明确预算，由服务端按预算核对当前可售规格，点击卡片可打开对应规格。加购、取消待付款订单和申请售后均须顾客确认。v0.1.7 使用合成模型复测了预算、规格和确认流程。真实模型历史结果见 [v0.1.6 补验记录](docs/releases/release-v0.1.6.md#2026-11-23-真实模型补验)。
 
 ## 运行架构
 

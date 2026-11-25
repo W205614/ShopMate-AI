@@ -954,10 +954,13 @@ async function processBudgetedSupportRun(
     const previous = c.messages[msgIndex - 1];
     const budgetAmount =
       question.match(
-        /(?:预算\s*(?:是|为|约|在)?|不超过|最多|最高)\s*[¥￥]?\s*(\d{1,7}(?:\.\d{1,2})?)(?![\d.])/u,
+        /预算\s*(?:是|为|约|在)?\s*(?:[¥￥]?\s*\d{1,7}(?:\.\d{1,2})?\s*(?:元|块)?\s*[-~–—至到]\s*)?[¥￥]?\s*(\d{1,7}(?:\.\d{1,2})?)(?![\d.])/u,
       )?.[1] ??
       question.match(
-        /(\d{1,7}(?:\.\d{1,2})?)\s*(?:元|块)\s*(?:以内|以下|封顶)/u,
+        /(?:不超过|最多|最高)\s*[¥￥]?\s*(\d{1,7}(?:\.\d{1,2})?)\s*(?:元|块)/u,
+      )?.[1] ??
+      question.match(
+        /(?<![\d.])(\d{1,7}(?:\.\d{1,2})?)\s*(?:元|块)\s*(?:以内|以下|封顶)/u,
       )?.[1] ??
       (previous?.replyKind === "clarify" && previous.text.includes("预算")
         ? question.match(

@@ -216,47 +216,60 @@ it("asks only for the missing shopping budget", async () => {
   ).toBe("请补充预算。");
 });
 
-it("filters an expensive specification after a model selects details without a search", async () => {
-  const db = readDatabase(sql);
-  const product = db.products.find((p) => p.id === "p01")!;
-  const [under, over] = product.skus;
-  Object.assign(under!, { price: 6_900, stock: 3 });
-  Object.assign(over!, { price: 7_900, stock: 3 });
-  writeDatabase(sql, db);
-  const run = await queued(undefined, `推荐预算75元的${product.name}`);
-  const caller = vi
-    .fn()
-    .mockResolvedValueOnce({
-      role: "assistant",
-      content: null,
-      tool_calls: [
-        {
-          id: "details",
-          type: "function",
-          function: {
-            name: "product_details",
-            arguments: JSON.stringify({ productId: product.id }),
+it.each([
+  ["预算75元", true],
+  ["预算50到75元", true],
+  ["最多2件", false],
+] as const)(
+  "applies a price limit only when the customer states a budget: %s",
+  async (constraint, limited) => {
+    const db = readDatabase(sql);
+    const product = db.products.find((p) => p.id === "p01")!;
+    const [under, over] = product.skus;
+    Object.assign(under!, { price: 6_900, stock: 3 });
+    Object.assign(over!, { price: 7_900, stock: 3 });
+    writeDatabase(sql, db);
+    const run = await queued(undefined, `推荐${constraint}的${product.name}`);
+    const caller = vi
+      .fn()
+      .mockResolvedValueOnce({
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "details",
+            type: "function",
+            function: {
+              name: "product_details",
+              arguments: JSON.stringify({ productId: product.id }),
+            },
           },
-        },
-      ],
-    })
-    .mockResolvedValueOnce({
-      role: "assistant",
-      content: JSON.stringify({
-        answer: "规格见结果",
-        productIds: [product.id],
-        presentation: { productView: "details" },
-      }),
-    });
-  await processSupportRun(sql, run.id, caller);
-  const answer = readDatabase(sql)
-    .conversations.find((c) => c.id === run.conversation_id)!
-    .messages.at(-1)!;
-  expect(answer.text).not.toContain(over!.name);
-  expect(answer.recommendations).toEqual([
-    expect.objectContaining({ skuId: under!.id, price: 6_900 }),
-  ]);
-});
+        ],
+      })
+      .mockResolvedValueOnce({
+        role: "assistant",
+        content: JSON.stringify({
+          answer: "规格见结果",
+          productIds: [product.id],
+          presentation: { productView: "details" },
+        }),
+      });
+    await processSupportRun(sql, run.id, caller);
+    const answer = readDatabase(sql)
+      .conversations.find((c) => c.id === run.conversation_id)!
+      .messages.at(-1)!;
+    expect(answer.text).toContain(under!.name);
+    if (limited) {
+      expect(answer.text).not.toContain(over!.name);
+      expect(answer.recommendations).toEqual([
+        expect.objectContaining({ skuId: under!.id, price: 6_900 }),
+      ]);
+    } else {
+      expect(answer.text).toContain(over!.name);
+      expect(answer.recommendations).toBeUndefined();
+    }
+  },
+);
 
 it("sends a minimized order and redacts contact details before calling the model", async () => {
   const db = readDatabase(sql);

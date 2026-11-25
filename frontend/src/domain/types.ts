@@ -1,4 +1,13 @@
+import { orderLabels, type Order } from "../../../shared/domain/types";
 export * from "../../../shared/domain/types";
+
+export function orderStatusLabel(
+  order: Pick<Order, "status" | "cancelRequested">,
+) {
+  return order.status === "pending" && order.cancelRequested
+    ? "正在确认关单"
+    : orderLabels[order.status];
+}
 
 export function cancellationNotice(status?: "closing" | "cancelled") {
   if (status === "closing") return "取消申请已提交，正在确认渠道关单结果。";

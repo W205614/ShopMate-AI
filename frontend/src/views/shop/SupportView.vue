@@ -22,7 +22,7 @@ import {
 import type { SupportDetail, SupportProposal } from "../../services/support";
 import {
   dateTime,
-  orderLabels,
+  orderStatusLabel,
   money,
   cancellationNotice,
 } from "../../domain/types";
@@ -489,7 +489,7 @@ async function send(value?: string) {
           v-if="order"
           :to="`/orders/${order.id}`"
           class="chat-order-context"
-          >订单 {{ order.id }} · {{ orderLabels[order.status] }} ·
+          >订单 {{ order.id }} · {{ orderStatusLabel(order) }} ·
           {{ money(order.total) }} <ArrowUpRight :size="17"
         /></RouterLink>
         <RouterLink
@@ -698,10 +698,9 @@ async function send(value?: string) {
                 }}
                 ·
                 {{
-                  orderLabels[
-                    orders.find((o) => o.id === proposal.details.orderId)!
-                      .status
-                  ]
+                  orderStatusLabel(
+                    orders.find((o) => o.id === proposal.details.orderId)!,
+                  )
                 }}
               </p>
               <template v-if="proposal.kind === 'requestAfterSale'">

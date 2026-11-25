@@ -33,6 +33,8 @@ const title = computed(() => {
     return "历史演示订单";
   if (order.value?.status === "refunded") return "订单已退款";
   if (order.value?.status === "cancelled") return "订单已取消";
+  if (order.value?.status === "pending" && order.value.cancelRequested)
+    return "正在确认关单";
   if (order.value?.status === "pending")
     return order.value.transactionMode === "production"
       ? "订单付款"
@@ -63,12 +65,21 @@ async function pay() {
         {{
           production && order.transactionMode !== "production"
             ? "该订单为历史演示数据，生产环境不提供模拟付款或真实退款。"
-            : order.transactionMode === "production"
-              ? "请通过支付平台完成付款，并以商城确认的渠道结果为准。"
-              : "这是服务端模拟交易，不会扣款，也不会收集银行卡或支付密码。"
+            : order.status === "pending" && order.cancelRequested
+              ? "已提交取消申请。请返回订单查看渠道结果。"
+              : order.transactionMode === "production"
+                ? "请通过支付平台完成付款，并以商城确认的渠道结果为准。"
+                : "这是服务端模拟交易，不会扣款，也不会收集银行卡或支付密码。"
         }}
       </p>
-      <p v-if="order.status === 'pending' && order.expiresAt" class="secondary">
+      <p
+        v-if="
+          order.status === 'pending' &&
+          !order.cancelRequested &&
+          order.expiresAt
+        "
+        class="secondary"
+      >
         付款截止 {{ dateTime(order.expiresAt) }} ·
         {{
           expired
@@ -79,14 +90,21 @@ async function pay() {
       <ActionNotice :error="error || modeError" :notice="notice" />
       <ChannelPayment
         v-if="
-          order.status === 'pending' && order.transactionMode === 'production'
+          order.status === 'pending' &&
+          !order.cancelRequested &&
+          order.transactionMode === 'production'
         "
         :key="order.id"
         :order-id="order.id"
         :expired="expired"
       />
       <div
-        v-else-if="order.status === 'pending' && loaded && !production"
+        v-else-if="
+          order.status === 'pending' &&
+          !order.cancelRequested &&
+          loaded &&
+          !production
+        "
         class="payment-actions"
       >
         <button class="button" :disabled="busy || expired" @click="pay">

@@ -197,10 +197,18 @@ export function renderGroundedAnswer(input: {
   }
   if (input.order) {
     const order = input.order;
+    const status =
+      order.status === "pending" && order.cancelRequested
+        ? "正在确认关单"
+        : (orderStatuses[order.status] ?? "状态请在订单详情核对");
     facts.push(
-      `订单${order.id}：${orderStatuses[order.status] ?? "状态请在订单详情核对"}；应付${yuan(order.total)}。${order.createdAtDisplay ? `创建时间${order.createdAtDisplay}。` : ""}`,
+      `订单${order.id}：${status}；应付${yuan(order.total)}。${order.createdAtDisplay ? `创建时间${order.createdAtDisplay}。` : ""}`,
     );
-    if (order.status === "pending" && order.expiresAtDisplay)
+    if (
+      order.status === "pending" &&
+      !order.cancelRequested &&
+      order.expiresAtDisplay
+    )
       facts.push(`付款期限${order.expiresAtDisplay}。`);
     if (order.status === "pending" && order.cancelRequested)
       facts.push("取消申请正在确认渠道关单结果，订单尚未关闭。");

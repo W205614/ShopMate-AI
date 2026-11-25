@@ -6,7 +6,7 @@ import { api } from "../../services/api";
 import {
   money,
   dateTime,
-  orderLabels,
+  orderStatusLabel,
   afterSaleLabels,
   cancellationNotice,
 } from "../../domain/types";
@@ -131,11 +131,14 @@ async function request() {
       ><span>订单详情</span>
     </nav>
     <div class="page-heading">
-      <h1>{{ orderLabels[order.status] }}</h1>
+      <h1>{{ orderStatusLabel(order) }}</h1>
       <p>订单 {{ order.id }} · {{ dateTime(order.createdAt) }}</p>
     </div>
     <ActionNotice :error="error" :notice="notice" />
-    <div v-if="order.channelPayment" class="action-notice">
+    <div
+      v-if="order.channelPayment && !order.cancelRequested"
+      class="action-notice"
+    >
       <p role="status">{{ paymentStatusText(order.channelPayment) }}</p>
       <RouterLink
         v-if="paymentNeedsHelp(order.channelPayment)"
@@ -145,7 +148,9 @@ async function request() {
       >
     </div>
     <p
-      v-if="order.status === 'pending' && order.expiresAt"
+      v-if="
+        order.status === 'pending' && !order.cancelRequested && order.expiresAt
+      "
       class="action-notice"
     >
       请在 {{ dateTime(order.expiresAt) }} 前完成{{
@@ -154,7 +159,10 @@ async function request() {
           : "模拟付款，超时自动取消。"
       }}
     </p>
-    <p v-if="order.cancelReason" class="secondary">
+    <p
+      v-if="order.status === 'cancelled' && order.cancelReason"
+      class="secondary"
+    >
       关闭原因：{{ order.cancelReason }}
     </p>
     <div class="order-detail-layout">
@@ -333,7 +341,7 @@ async function request() {
       </div>
       <aside class="order-summary">
         <h2>订单操作</h2>
-        <template v-if="order.status === 'pending'"
+        <template v-if="order.status === 'pending' && !order.cancelRequested"
           ><RouterLink :to="`/orders/${order.id}/pay`" class="button">{{
             order.transactionMode === "production"
               ? order.channelPayment &&

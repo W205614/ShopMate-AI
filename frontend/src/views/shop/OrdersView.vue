@@ -7,6 +7,7 @@ import {
   money,
   dateTime,
   orderLabels,
+  orderStatusLabel,
   cancellationNotice,
 } from "../../domain/types";
 import type { OrderStatus } from "../../domain/types";
@@ -140,17 +141,16 @@ async function cancel(id: string) {
             <RouterLink :to="`/orders/${o.id}`">{{ o.id }}</RouterLink
             ><span class="secondary">{{ dateTime(o.createdAt) }}</span>
           </div>
-          <strong class="order-status">{{
-            o.status === "pending" && o.cancelRequested
-              ? "正在确认关单"
-              : orderLabels[o.status]
-          }}</strong>
+          <strong class="order-status">{{ orderStatusLabel(o) }}</strong>
         </div>
         <OrderItems :items="o.items" />
         <p v-if="o.refundedAmount" class="commerce-amount-note">
           已退款 {{ money(o.refundedAmount) }}
         </p>
-        <p v-if="o.status === 'pending' && o.expiresAt" class="secondary">
+        <p
+          v-if="o.status === 'pending' && !o.cancelRequested && o.expiresAt"
+          class="secondary"
+        >
           付款截止 {{ dateTime(o.expiresAt) }}
         </p>
         <div class="order-bottom">

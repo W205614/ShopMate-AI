@@ -207,6 +207,58 @@ test("desktop channel checkout survives refresh, switches only after closure and
   await expect(page.getByText(/原支付宝渠道.*渠道已确认退款/)).toBeVisible();
 });
 
+test("取消渠道待付款订单后各入口显示关单中，晚到付款以渠道结果为准", async ({
+  page,
+}) => {
+  const orderId = await registerAndOrder(page);
+  await page.goto(`/orders/${orderId}/pay`);
+  await page.getByRole("button", { name: "创建支付单", exact: true }).click();
+  await expect(page.getByAltText("微信支付二维码")).toBeVisible();
+  const payment = (await channelPayments(page.request, orderId)).items[0];
+
+  await page.goto("/orders");
+  const order = page.locator(".order-block").filter({ hasText: orderId });
+  page.once("dialog", (dialog) => dialog.accept());
+  await order.getByRole("button", { name: "取消订单", exact: true }).click();
+  await expect(
+    page.getByText("取消申请已提交，正在确认渠道关单结果。", { exact: true }),
+  ).toBeVisible();
+  await expect(order.locator(".order-status")).toHaveText("正在确认关单");
+  await expect(order.getByRole("link", { name: "前往付款" })).toHaveCount(0);
+
+  await order.getByRole("link", { name: "订单详情", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "正在确认关单", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /前往付款|核对付款/ }),
+  ).toHaveCount(0);
+  await page.goto(`/orders/${orderId}/pay`);
+  await expect(
+    page.getByRole("heading", { name: "正在确认关单", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "创建支付单", exact: true }),
+  ).toHaveCount(0);
+
+  const settled = await page.request.post(
+    `/__acceptance/control/payments/${payment.id}/state`,
+    {
+      headers: control,
+      data: { status: "succeeded" },
+    },
+  );
+  expect(settled.ok()).toBe(true);
+  await page.goto(`/orders/${orderId}`);
+  await expect(
+    page.getByRole("heading", { name: "待发货", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/关闭原因/)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "申请售后", exact: true }),
+  ).toBeVisible();
+});
+
 test("已发货部分退货可查看寄回地址并提交运单", async ({ page }) => {
   const orderId = await registerAndOrder(page, 2);
   const payment = await post(page.request, "/api/payments", {

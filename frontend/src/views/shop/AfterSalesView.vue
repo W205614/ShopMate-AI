@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useCommerceMode } from "../../services/commerceMode";
-const { production } = useCommerceMode();
+const { production, loaded, error: modeError } = useCommerceMode();
 import CollectionPager from "../../components/shop/CollectionPager.vue";
 import { computed, reactive } from "vue";
 import { useRoute } from "vue-router";
@@ -90,7 +90,7 @@ function copyAddress(address: string) {
       <h1>售后服务</h1>
       <p>每一笔申请，都可以在这里查看进度。</p>
     </div>
-    <ActionNotice :error="error" :notice="notice" />
+    <ActionNotice :error="error || modeError" :notice="notice" />
     <RouterLink v-if="route.query.id" to="/after-sales" class="text-link"
       >查看全部售后</RouterLink
     >
@@ -161,7 +161,7 @@ function copyAddress(address: string) {
               {{ parcel.receivedAt ? "已收货" : "待商家收货" }}
             </p>
             <form
-              v-else
+              v-else-if="loaded"
               class="form-stack"
               @submit.prevent="submitReturn(a.id, parcel.id)"
             >
@@ -201,6 +201,7 @@ function copyAddress(address: string) {
         </section>
         <form
           v-if="
+            loaded &&
             !a.returnParcels?.length &&
             afterSaleState(
               a,

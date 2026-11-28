@@ -322,7 +322,10 @@ test("已发货部分退货可查看寄回地址并提交运单", async ({ page 
   ).toBeVisible();
   await page.getByLabel("退货单号", { exact: true }).fill("SFTESTRETURN02");
   await page.getByRole("button", { name: "提交退货单号" }).click();
-  await expect(page.getByText(/退货物流.*SFTESTRETURN02/)).toBeVisible();
+  const parcel = page.locator(".checkout-section").filter({
+    has: page.getByRole("heading", { name: "退货包裹 1", exact: true }),
+  });
+  await expect(parcel).toContainText("顺丰速运 · SFTESTRETURN02 · 待商家收货");
   await post(page.request, "/api/actions/processAfterSale", {
     args: [saleId, "receive"],
     requestId: crypto.randomUUID(),

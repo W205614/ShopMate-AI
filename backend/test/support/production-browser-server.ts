@@ -24,6 +24,8 @@ import {
   type RefundResult,
 } from "../../src/production/payment-providers";
 import { createSeed } from "../../../shared/domain/seed";
+import { defaultWarehouseId } from "../../../shared/domain/warehouses";
+import { stockRow } from "../../src/warehouse-stock";
 import type {
   Payment,
   PaymentProvider,
@@ -79,6 +81,9 @@ const seed = createSeed(),
   db = readDatabase(sql);
 db.products = seed.products;
 db.categories = seed.categories;
+for (const product of db.products)
+  for (const sku of product.skus)
+    stockRow(db, defaultWarehouseId, product.id, sku.id).onHand = sku.stock;
 db.inventory = db.products.flatMap((product) =>
   product.skus.map((sku) => ({
     id: `browser-opening-${sku.id}`,
@@ -294,6 +299,8 @@ controls.post("/orders/:id/legacy-copy", (req, res) => {
   ];
   delete historical.quoteId;
   delete historical.inventoryPolicy;
+  delete historical.allocations;
+  delete historical.parcels;
   database.orders.push(historical);
   database.revision++;
   writeDatabase(sql, database);

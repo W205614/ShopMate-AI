@@ -2,8 +2,9 @@ import { orderLabels, type Order } from "../../../shared/domain/types";
 export * from "../../../shared/domain/types";
 
 export function orderStatusLabel(
-  order: Pick<Order, "status" | "cancelRequested">,
+  order: Pick<Order, "status" | "cancelRequested" | "parcels">,
 ) {
+  if (order.status === "paid" && order.parcels?.length) return "部分已发货";
   return order.status === "pending" && order.cancelRequested
     ? "正在确认关单"
     : orderLabels[order.status];

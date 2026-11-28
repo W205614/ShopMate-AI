@@ -204,8 +204,21 @@ try {
     currentIdentity = identity(live);
   let businessPreserved = false;
   try {
+    const comparable = structuredClone(current.db);
+    if (original.version < 6 && current.meta.version === 6) {
+      const opening = new Map(
+        comparable.inventory
+          .filter((entry) => entry.id.startsWith("warehouse-v6-opening-"))
+          .map((entry) => [entry.skuId, entry.delta]),
+      );
+      for (const sku of comparable.products.flatMap((product) => product.skus))
+        sku.stock -= opening.get(sku.id) ?? 0;
+      comparable.inventory = comparable.inventory.filter(
+        (entry) => !entry.id.startsWith("warehouse-v6-opening-"),
+      );
+    }
     businessPreserved = equal(
-      oldShape(current.db, original, true),
+      oldShape(comparable, original, true),
       oldShape(original, original, true),
     );
   } catch {
@@ -258,7 +271,7 @@ try {
     foreignKeys:
       baseline.prepare("PRAGMA foreign_key_check").all().length === 0 &&
       live.prepare("PRAGMA foreign_key_check").all().length === 0,
-    currentVersion: current.meta.version === 5,
+    currentVersion: [5, 6].includes(current.meta.version),
   };
   console.log(
     JSON.stringify(

@@ -13,6 +13,9 @@ import {
   supportCommands,
 } from "../src/ai/ai-support";
 import { renderGroundedAnswer } from "../src/ai/ai-answer";
+import { migrateDatabase } from "../src/migration";
+import { setStock } from "./support/warehouse-fixture";
+import { stockRow } from "../src/warehouse-stock";
 
 type Run = Parameters<typeof executeSupportTool>[1];
 let sql: DatabaseSync;
@@ -63,6 +66,7 @@ beforeEach(() => {
       })),
     },
   ];
+  migrateDatabase(seed);
   writeDatabase(sql, seed);
   ensureSupportSchema(sql);
   ensureKnowledgeSchema(sql);
@@ -142,8 +146,10 @@ it.each([10000, 8000])(
     const db = readDatabase(sql);
     const product = db.products.find((p) => p.id === "p01")!;
     const sku = product.skus[1]!;
-    Object.assign(product.skus[0]!, { price: 7_000, stock: 0 });
-    Object.assign(sku, { price: 8_900, stock: 3 });
+    product.skus[0]!.price = 7_000;
+    sku.price = 8_900;
+    setStock(db, product.id, product.skus[0]!.id, 0);
+    setStock(db, product.id, sku.id, 3);
     writeDatabase(sql, db);
     const run = await queued(
       undefined,
@@ -214,6 +220,62 @@ it("asks only for the missing shopping budget", async () => {
       .conversations.find((c) => c.id === run.conversation_id)!
       .messages.at(-1)?.text,
   ).toBe("请补充预算。");
+});
+
+it("uses verified budget and delivery facts when the model wrongly hands off an available recommendation", async () => {
+  const db = readDatabase(sql);
+  const product = db.products.find((entry) => entry.id === "p01")!;
+  product.skus[0]!.price = 5900;
+  product.skus[1]!.price = 6900;
+  db.warehouses![0]!.provinces = ["上海市"];
+  db.warehouses!.push({
+    id: "fixture-south",
+    name: "验收华南仓",
+    priority: 1,
+    provinces: ["广东省"],
+    acceptsOrders: true,
+    version: 1,
+  });
+  stockRow(db, "fixture-south", product.id, product.skus[1]!.id).onHand = 2;
+  product.skus[1]!.stock += 2;
+  writeDatabase(sql, db);
+  const run = await queued(
+    undefined,
+    `推荐可寄到广东省的${product.name}，预算75元。`,
+  );
+  const caller = vi
+    .fn()
+    .mockResolvedValueOnce({
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        {
+          id: "regional-search",
+          type: "function",
+          function: {
+            name: "search_products",
+            arguments: JSON.stringify({ query: product.name }),
+          },
+        },
+      ],
+    })
+    .mockResolvedValueOnce({
+      role: "assistant",
+      content: JSON.stringify({
+        replyKind: "handoff",
+        answer: "无货，建议联系人工。",
+        productIds: [product.id],
+      }),
+    });
+  await processSupportRun(sql, run.id, caller);
+  const answer = readDatabase(sql)
+    .conversations.find((entry) => entry.id === run.conversation_id)!
+    .messages.at(-1)!;
+  expect(answer.replyKind).toBe("grounded");
+  expect(answer.recommendations).toEqual([
+    expect.objectContaining({ skuId: product.skus[1]!.id, price: 6900 }),
+  ]);
+  expect(answer.text).not.toContain("没有找到有货商品");
 });
 
 it.each([

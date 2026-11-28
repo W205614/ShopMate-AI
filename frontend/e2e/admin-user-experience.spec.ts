@@ -9,7 +9,11 @@ import {
 import { test, expect, TEST_ADMIN_PASSWORD } from "./fixtures";
 
 function fixture<T>(change: (db: Database) => T): T {
-  const sql = openDatabase(resolve("../backend/.e2e/shopmate.sqlite"));
+  const sql = openDatabase(
+    resolve(
+      process.env.PLAYWRIGHT_DATABASE_PATH || "../backend/.e2e/shopmate.sqlite",
+    ),
+  );
   try {
     sql.exec("BEGIN IMMEDIATE");
     const db = readDatabase(sql),

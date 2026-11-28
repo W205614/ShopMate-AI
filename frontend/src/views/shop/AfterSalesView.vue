@@ -50,10 +50,13 @@ async function cancel(id: string) {
       "售后申请已撤销，可重新选择商品数量申请",
     );
 }
-function submitReturn(id: string) {
-  const input = returnForm(id);
+function submitReturn(id: string, parcelId?: string) {
+  const input = returnForm(parcelId ?? id);
   return run(
-    () => api.submitReturn(id, input.carrier, input.tracking),
+    () =>
+      parcelId
+        ? api.submitReturn(id, input.carrier, input.tracking, parcelId)
+        : api.submitReturn(id, input.carrier, input.tracking),
     "退货单号已提交，等待管理员确认收货",
   );
 }
@@ -141,8 +144,64 @@ function copyAddress(address: string) {
               : refundStatus[a.channelRefund.status]
           }}
         </p>
+        <section
+          v-if="
+            a.returnParcels?.length &&
+            ['approved', 'returning', 'received', 'refunded'].includes(a.status)
+          "
+        >
+          <div
+            v-for="(parcel, index) in a.returnParcels"
+            :key="parcel.id"
+            class="checkout-section"
+          >
+            <h3>退货包裹 {{ index + 1 }}</h3>
+            <p v-if="parcel.tracking">
+              {{ parcel.carrier }} · {{ parcel.tracking }} ·
+              {{ parcel.receivedAt ? "已收货" : "待商家收货" }}
+            </p>
+            <form
+              v-else
+              class="form-stack"
+              @submit.prevent="submitReturn(a.id, parcel.id)"
+            >
+              <div v-if="parcel.address">
+                <strong>寄回地址</strong>
+                <p>{{ parcel.address }}</p>
+                <button
+                  type="button"
+                  class="text-link"
+                  :disabled="busy"
+                  @click="copyAddress(parcel.address)"
+                >
+                  复制退货地址
+                </button>
+              </div>
+              <div class="form-two">
+                <label
+                  >{{ production ? "退货承运商" : "模拟退货承运商" }}
+                  <input
+                    v-model.trim="returnForm(parcel.id).carrier"
+                    required
+                    maxlength="60"
+                  />
+                </label>
+                <label
+                  >{{ production ? "退货单号" : "模拟退货单号" }}
+                  <input
+                    v-model.trim="returnForm(parcel.id).tracking"
+                    required
+                    maxlength="80"
+                  />
+                </label>
+              </div>
+              <button class="button" :disabled="busy">提交退货单号</button>
+            </form>
+          </div>
+        </section>
         <form
           v-if="
+            !a.returnParcels?.length &&
             afterSaleState(
               a,
               shop.myOrders.find((o) => o.id === a.orderId),
@@ -182,7 +241,7 @@ function copyAddress(address: string) {
           </div>
           <button class="button" :disabled="busy">提交退货单号</button>
         </form>
-        <p v-if="a.returnTracking">
+        <p v-if="a.returnTracking && !a.returnParcels?.length">
           退货物流：{{ a.returnCarrier }} · {{ a.returnTracking }}
         </p>
         <details v-if="a.events.length">

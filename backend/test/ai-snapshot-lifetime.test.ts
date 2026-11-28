@@ -1,7 +1,7 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import { openDatabase, writeDatabase, transaction } from "../src/database";
-import { createSeed } from "../../shared/domain/seed";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
 import { createSupportProposal, processSupportRun } from "../src/ai/ai-support";
@@ -14,7 +14,7 @@ const asUser = <T>(work: () => T, id = "u1") =>
 beforeEach(() => {
   vi.stubEnv("AI_ENABLED", "true");
   sql = openDatabase(":memory:");
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   ensureSupportSchema(sql);
 });
 afterEach(() => {

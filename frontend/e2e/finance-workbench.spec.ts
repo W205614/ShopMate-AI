@@ -27,7 +27,11 @@ async function state(page: Page): Promise<Database> {
   return (await readSnapshot(page.request, "admin")).db;
 }
 function fixture(change: (db: Database) => void) {
-  const sql = openDatabase(resolve("../backend/.e2e/shopmate.sqlite"));
+  const sql = openDatabase(
+    resolve(
+      process.env.PLAYWRIGHT_DATABASE_PATH || "../backend/.e2e/shopmate.sqlite",
+    ),
+  );
   try {
     sql.exec("BEGIN IMMEDIATE");
     const db = readDatabase(sql);

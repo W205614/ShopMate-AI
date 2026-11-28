@@ -5,6 +5,7 @@ import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
 import { ensureRuntimeSchema } from "../src/runtime";
+import { migrateDatabase } from "../src/migration";
 
 let sql: DatabaseSync;
 function command<T>(method: string, args: unknown[], work: () => T) {
@@ -67,6 +68,7 @@ beforeEach(() => {
       ],
     },
   ];
+  migrateDatabase(seed);
   writeDatabase(sql, seed);
 });
 afterEach(() => {
@@ -89,6 +91,7 @@ it("recommends remaining sellable goods but excludes goods fully reserved by pen
   expect(available.productIds).toEqual(["p01"]);
   const db = readDatabase(sql);
   db.orders[0]!.items[0]!.quantity = 3;
+  db.orders[0]!.allocations![0]!.quantity = 3;
   writeDatabase(sql, db);
   const soldOut = await send(id, "推荐无线头戴耳机");
   expect(soldOut.productIds ?? []).toEqual([]);

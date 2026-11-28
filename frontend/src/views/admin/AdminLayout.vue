@@ -55,6 +55,7 @@ const allLinks = [
   ["/admin/products", "商品管理", "Products"],
   ["/admin/categories", "分类管理", "Categories"],
   ["/admin/inventory", "库存管理", "Inventory"],
+  ["/admin/warehouses", "多仓履约", "Warehouses"],
   ["/admin/orders", "订单管理", "Orders"],
   ["/admin/after-sales", "售后管理", "After sales"],
   ["/admin/finance", "收支流水", "Finance"],

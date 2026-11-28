@@ -18,6 +18,8 @@ import { enqueueNotification, enqueueShipment } from "./production/external";
 import { shopMode } from "./production/config";
 import type { DatabaseReadScope } from "./storage";
 import { releaseSnapshot } from "./storage";
+import { defaultWarehouseId } from "../../shared/domain/warehouses";
+import { pendingStock, stockRow } from "./warehouse-stock";
 
 export const context = new AsyncLocalStorage<{
   sql: DatabaseSync;
@@ -100,6 +102,8 @@ export function commandReadScope(
         "reorder",
         "requestAfterSale",
         "shipOrder",
+        "shipParcel",
+        "reassignWarehouse",
       ].includes(command.method)
     )
       add(first);
@@ -294,6 +298,7 @@ export async function transact<T>(
           "cancelOrder",
           "confirmOrder",
           "shipOrder",
+          "shipParcel",
           "requestAfterSale",
           "processAfterSale",
           "submitReturn",
@@ -315,15 +320,18 @@ export async function transact<T>(
                 text: "订单或售后进度已更新，请前往商城查看",
               });
               if (
-                command.method === "shipOrder" &&
-                order.carrier &&
-                order.tracking
-              )
-                enqueueShipment(sql, {
-                  orderId: order.id,
-                  carrier: order.carrier,
-                  tracking: order.tracking,
-                });
+                command.method === "shipOrder" ||
+                command.method === "shipParcel"
+              ) {
+                const shipment = order.parcels?.at(-1) ?? order;
+                if (shipment.carrier && shipment.tracking)
+                  enqueueShipment(sql, {
+                    orderId: order.id,
+                    parcelId: order.parcels?.at(-1)?.id,
+                    carrier: shipment.carrier,
+                    tracking: shipment.tracking,
+                  });
+              }
               if (command.method === "submitReturn") {
                 const sale = db.afterSales.find(
                   (value) => value.id === command.args[0],
@@ -332,6 +340,9 @@ export async function transact<T>(
                   enqueueShipment(sql, {
                     orderId: order.id,
                     afterSaleId: sale.id,
+                    parcelId: sale.returnParcels?.find(
+                      (entry) => entry.tracking === sale.returnTracking,
+                    )?.id,
                     carrier: sale.returnCarrier,
                     tracking: sale.returnTracking,
                   });
@@ -368,6 +379,7 @@ export async function transact<T>(
                             : "订单已取消",
                         confirmOrder: "订单已确认收货",
                         shipOrder: "订单已发货",
+                        shipParcel: "订单有新包裹发货",
                         requestAfterSale: "售后申请已受理",
                         processAfterSale: "售后处理进度已更新",
                         submitReturn: "退货信息已提交",
@@ -425,14 +437,29 @@ export function move(
   skuId: string,
   delta: number,
   reason: string,
+  warehouseId = defaultWarehouseId,
 ) {
   const { sku } = productSku(db, productId, skuId);
   requireThat(integer(sku.stock + delta), "库存不足或库存数量无效");
+  if (db.warehouseStocks) {
+    const row = stockRow(db, warehouseId, productId, skuId);
+    requireThat(
+      integer(row.onHand + delta) &&
+        (delta >= 0 ||
+          row.onHand + delta >=
+            row.committed +
+              row.transferLocked +
+              (pendingStock(db).get(row.id) ?? 0)),
+      "仓库库存不能低于已预占数量",
+    );
+    row.onHand += delta;
+  }
   sku.stock += delta;
   const movement = {
     id: id("stock-"),
     productId,
     skuId,
+    ...(db.warehouseStocks ? { warehouseId } : {}),
     delta,
     reason,
     createdAt: now(),

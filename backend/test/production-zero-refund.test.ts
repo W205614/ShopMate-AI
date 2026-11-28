@@ -77,7 +77,10 @@ it("settles a zero allocated partial refund once without a provider transfer or 
     after.products
       .find((product) => product.id === "p01")!
       .skus.find((sku) => sku.id === "p01-s1")!.stock,
-  ).toBe(stock + 1);
+  ).toBe(stock);
+  expect(
+    after.warehouseStocks!.find((row) => row.skuId === "p01-s1")!.committed,
+  ).toBe(1);
   expect(
     after.ledger.filter(
       (item) => item.type === "refund" && item.reference === orderId,

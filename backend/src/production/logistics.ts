@@ -5,7 +5,9 @@ import { z } from "zod";
 import { findSession, rateLimit } from "../auth";
 import { permits, demand } from "../permissions";
 import { queryRecord, transaction } from "../database";
-import type { Order } from "../../../shared/domain/types";
+import type { AfterSale, Order } from "../../../shared/domain/types";
+import { defaultWarehouseId } from "../../../shared/domain/warehouses";
+import { includesWarehouseOrder, warehouseScope } from "../warehouse-stock";
 import { HttpError } from "../errors";
 import { audit } from "../runtime";
 
@@ -13,6 +15,7 @@ type Shipment = {
   id: string;
   order_id: string;
   after_sale_id: string | null;
+  parcel_id: string | null;
   kind: "outbound" | "return";
   carrier: string;
   tracking: string;
@@ -93,6 +96,13 @@ export function ensureLogisticsSchema(sql: DatabaseSync) {
     sql.exec(
       "ALTER TABLE external_logistics_requests ADD COLUMN operation TEXT NOT NULL DEFAULT 'refresh'",
     );
+  if (
+    !sql
+      .prepare("PRAGMA table_info(external_shipments)")
+      .all()
+      .some((column) => column.name === "parcel_id")
+  )
+    sql.exec("ALTER TABLE external_shipments ADD COLUMN parcel_id TEXT");
 }
 
 function config() {
@@ -151,6 +161,7 @@ export function enqueueShipment(
   input: {
     orderId: string;
     afterSaleId?: string;
+    parcelId?: string;
     carrier: string;
     tracking: string;
   },
@@ -178,7 +189,7 @@ export function enqueueShipment(
     .digest("hex");
   sql
     .prepare(
-      "INSERT OR IGNORE INTO external_shipments(id,order_id,after_sale_id,kind,carrier,tracking,subscription_status,run_after,updated_at) VALUES(?,?,?,?,?,?,'pending',?,?)",
+      "INSERT OR IGNORE INTO external_shipments(id,order_id,after_sale_id,kind,carrier,tracking,subscription_status,run_after,updated_at,parcel_id) VALUES(?,?,?,?,?,?,'pending',?,?,?)",
     )
     .run(
       id,
@@ -189,6 +200,7 @@ export function enqueueShipment(
       tracking,
       Date.now(),
       Date.now(),
+      input.parcelId ?? null,
     );
 }
 
@@ -460,21 +472,46 @@ function orderAccess(sql: DatabaseSync, req: Request, orderId: string) {
   const user = findSession(sql, req, "user"),
     admin = findSession(sql, req, "admin");
   if (!user && !admin) throw new HttpError(401, "请先登录", "AUTH_REQUIRED");
+  const scope =
+    order?.userId === user?.id ? undefined : warehouseScope(sql, admin);
   if (
     !order ||
     (order.userId !== user?.id &&
       !permits(admin, "warehouse") &&
       !permits(admin, "support") &&
-      !permits(admin, "finance"))
+      !permits(admin, "finance")) ||
+    (scope && !includesWarehouseOrder(order, scope))
   )
     throw new HttpError(404, "订单不存在", "ORDER_NOT_FOUND");
-  return { order, actorId: admin?.id ?? user!.id };
+  return {
+    order,
+    scope,
+    actorId: order.userId === user?.id ? user.id : admin!.id,
+  };
+}
+
+function canReadShipment(
+  sql: DatabaseSync,
+  order: Order,
+  shipment: Shipment,
+  scope?: string[],
+) {
+  if (!scope) return true;
+  if (!shipment.parcel_id) return scope.includes(defaultWarehouseId);
+  const parcel = shipment.after_sale_id
+    ? queryRecord<AfterSale>(
+        sql,
+        "afterSales",
+        shipment.after_sale_id,
+      )?.returnParcels?.find((entry) => entry.id === shipment.parcel_id)
+    : order.parcels?.find((entry) => entry.id === shipment.parcel_id);
+  return !!parcel && scope.includes(parcel.warehouseId);
 }
 
 export function registerLogisticsRoutes(app: Express, sql: DatabaseSync) {
   app.get("/api/orders/:id/shipment", (req, res) => {
     const id = z.string().min(1).max(100).parse(req.params.id);
-    orderAccess(sql, req, id);
+    const { order, scope } = orderAccess(sql, req, id);
     const rows = sql
       .prepare(
         "SELECT * FROM external_shipments WHERE order_id=? ORDER BY updated_at DESC,id",
@@ -482,22 +519,25 @@ export function registerLogisticsRoutes(app: Express, sql: DatabaseSync) {
       .all(id) as Shipment[];
     res.json({
       enabled: process.env.KUAIDI100_ENABLED === "true",
-      items: rows.map((row) => ({
-        id: row.id,
-        kind: row.kind,
-        afterSaleId: row.after_sale_id,
-        carrier: row.carrier,
-        tracking: row.tracking,
-        status: row.subscription_status,
-        lastError: row.last_error,
-        updatedAt: row.updated_at,
-        trace: JSON.parse(row.trace),
-      })),
+      items: rows
+        .filter((row) => canReadShipment(sql, order, row, scope))
+        .map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          afterSaleId: row.after_sale_id,
+          parcelId: row.parcel_id,
+          carrier: row.carrier,
+          tracking: row.tracking,
+          status: row.subscription_status,
+          lastError: row.last_error,
+          updatedAt: row.updated_at,
+          trace: JSON.parse(row.trace),
+        })),
     });
   });
   app.post("/api/orders/:id/shipment/:shipmentId/refresh", async (req, res) => {
     const id = z.string().min(1).max(100).parse(req.params.id);
-    const { actorId } = orderAccess(sql, req, id);
+    const { actorId, order, scope } = orderAccess(sql, req, id);
     const shipmentId = z
       .string()
       .regex(/^[a-f0-9]{64}$/)
@@ -512,25 +552,23 @@ export function registerLogisticsRoutes(app: Express, sql: DatabaseSync) {
           "SELECT r.shipment_id,r.result,r.operation,s.order_id FROM external_logistics_requests r JOIN external_shipments s ON s.id=r.shipment_id WHERE r.actor_id=? AND r.request_id=?",
         )
         .get(actorId, input.requestId);
-      if (receipt) {
-        if (
-          receipt.shipment_id !== shipmentId ||
-          receipt.order_id !== id ||
-          receipt.operation !== "refresh"
-        )
-          throw new HttpError(
-            409,
-            "请求标识已用于其他运单",
-            "IDEMPOTENCY_CONFLICT",
-          );
-        return String(receipt.result);
-      }
       if (
-        !sql
-          .prepare("SELECT 1 FROM external_shipments WHERE id=? AND order_id=?")
-          .get(shipmentId, id)
+        receipt &&
+        (receipt.shipment_id !== shipmentId ||
+          receipt.order_id !== id ||
+          receipt.operation !== "refresh")
       )
+        throw new HttpError(
+          409,
+          "请求标识已用于其他运单",
+          "IDEMPOTENCY_CONFLICT",
+        );
+      const shipment = sql
+        .prepare("SELECT * FROM external_shipments WHERE id=? AND order_id=?")
+        .get(shipmentId, id) as Shipment | undefined;
+      if (!shipment || !canReadShipment(sql, order, shipment, scope))
         throw new HttpError(404, "运单不存在", "SHIPMENT_NOT_FOUND");
+      if (receipt) return String(receipt.result);
       sql
         .prepare(
           "INSERT INTO external_logistics_requests(actor_id,request_id,shipment_id,result,created_at,operation) VALUES(?,?,?,'',?,'refresh')",
@@ -545,6 +583,9 @@ export function registerLogisticsRoutes(app: Express, sql: DatabaseSync) {
       const shipment = sql
         .prepare("SELECT * FROM external_shipments WHERE id=?")
         .get(shipmentId) as Shipment;
+      const access = orderAccess(sql, req, id);
+      if (!canReadShipment(sql, access.order, shipment, access.scope))
+        throw new HttpError(404, "运单不存在", "SHIPMENT_NOT_FOUND");
       if (!activeShipment(sql, shipment))
         throw new HttpError(
           410,
@@ -578,6 +619,17 @@ export function registerLogisticsRoutes(app: Express, sql: DatabaseSync) {
       .strict()
       .parse(req.body);
     transaction(sql, () => {
+      const shipment = sql
+        .prepare("SELECT * FROM external_shipments WHERE id=?")
+        .get(id) as Shipment | undefined;
+      const order =
+        shipment && queryRecord<Order>(sql, "orders", shipment.order_id);
+      if (
+        !shipment ||
+        !order ||
+        !canReadShipment(sql, order, shipment, warehouseScope(sql, actor))
+      )
+        throw new HttpError(404, "运单不存在", "SHIPMENT_NOT_FOUND");
       const previous = sql
         .prepare(
           "SELECT shipment_id,operation FROM external_logistics_requests WHERE actor_id=? AND request_id=?",

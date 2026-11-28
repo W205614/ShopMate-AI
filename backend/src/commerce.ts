@@ -33,6 +33,17 @@ import {
   releaseCoupon,
 } from "./commerce-rules";
 
+import { defaultWarehouseId } from "../../shared/domain/warehouses";
+import { commitWarehouseStock, requireWarehouse } from "./warehouse-stock";
+import {
+  claimFulfillments,
+  dispatchParcel,
+  moveAllocation,
+  openAllocation,
+  releaseRefundedAllocation,
+  updateFulfillmentStatus,
+} from "./fulfillment";
+
 export function expirePendingOrders(sql: DatabaseSync) {
   ensureRuntimeSchema(sql);
   return transaction(sql, () => {
@@ -116,6 +127,8 @@ export const commerceApi: Pick<
   | "cancelAfterSale"
   | "submitReturn"
   | "shipOrder"
+  | "shipParcel"
+  | "reassignWarehouse"
   | "processAfterSale"
 > = {
   async addCart(productId, skuId, quantity) {
@@ -338,6 +351,14 @@ export const commerceApi: Pick<
           ...item,
           id: `${orderId}-${item.id}`,
         })),
+        allocations: snapshot.allocations?.map((allocation, index) => ({
+          ...allocation,
+          id: `${orderId}-allocation-${index + 1}`,
+          orderItemId: `${orderId}-${allocation.orderItemId}`,
+          shipped: 0,
+          cancelled: 0,
+        })),
+        ...(snapshot.allocations ? { parcels: [] } : {}),
         inventoryPolicy: "reserved-v1",
         pointsPolicy: "earned-v1",
         pointsAwarded: 0,
@@ -403,12 +424,13 @@ export const commerceApi: Pick<
         const { product, sku } = productSku(db, item.productId, item.skuId);
         requireThat(
           product.active &&
-            availableStock(
-              db,
-              product.id,
-              sku.id,
-              order.inventoryPolicy === "reserved-v1" ? order.id : undefined,
-            ) >= item.quantity,
+            (order.allocations ||
+              availableStock(
+                db,
+                product.id,
+                sku.id,
+                order.inventoryPolicy === "reserved-v1" ? order.id : undefined,
+              ) >= item.quantity),
           `${item.name}已下架或库存不足，无法支付`,
         );
       }
@@ -418,10 +440,39 @@ export const commerceApi: Pick<
   async cancelOrder(orderId) {
     return transact((db) => cancelOrderChange(db, orderId));
   },
-  async confirmOrder(orderId) {
+  async confirmOrder(orderId, parcelId) {
     await transact((db) => {
       const order = ownedOrder(db, orderId);
       if (order.status === "completed") return;
+      if (order.parcels?.length) {
+        const parcels = parcelId
+          ? order.parcels.filter((entry) => entry.id === parcelId)
+          : order.parcels;
+        requireThat(parcels.length > 0, "订单中没有该包裹");
+        const blocked = new Set(
+          db.afterSales
+            .filter(
+              (sale) =>
+                sale.orderId === order.id && activeAfterSale(sale.status),
+            )
+            .flatMap((sale) =>
+              sale.lines.flatMap((line) => line.fulfillments ?? []),
+            )
+            .map((line) => line.parcelId),
+        );
+        requireThat(
+          parcels.every(
+            (parcel) => parcel.receivedAt || !blocked.has(parcel.id),
+          ),
+          "包裹售后处理中，不能确认收货",
+        );
+        if (parcels.every((parcel) => parcel.receivedAt)) return;
+        const at = now();
+        for (const parcel of parcels) parcel.receivedAt ??= at;
+        updateFulfillmentStatus(db, order);
+        addEvent(order, "received", "user");
+        return;
+      }
       requireThat(order.status === "shipped", "只有待收货订单可以确认收货");
       requireThat(!hasSale(db, orderId), "售后处理中，暂不能确认收货");
       order.status = "completed";
@@ -502,20 +553,38 @@ export const commerceApi: Pick<
       sale.events.push({ at: now(), actor: "user", action: "cancelled" });
     });
   },
-  async submitReturn(afterSaleId, carrier, tracking) {
+  async submitReturn(afterSaleId, carrier, tracking, returnParcelId) {
     await transact((db) => {
       const sale = db.afterSales.find(
         (a) => a.id === afterSaleId && a.userId === userId(),
       );
       requireThat(sale, "售后不存在或不属于当前用户");
       requireThat(
-        sale.requiresReturn && sale.status === "approved",
+        sale.requiresReturn &&
+          (sale.status === "approved" ||
+            (!!sale.returnParcels && sale.status === "returning")),
         "当前售后不可提交退货单号",
       );
       requireThat(
         text(carrier, 60) && text(tracking, 80),
         "请填写退货承运商与单号",
       );
+      if (sale.returnParcels?.length) {
+        const parcel = sale.returnParcels.find((entry) =>
+          returnParcelId
+            ? entry.id === returnParcelId
+            : sale.returnParcels!.length === 1,
+        );
+        requireThat(parcel && !parcel.tracking, "退货包裹不存在或已提交运单");
+        requireThat(
+          !sale.returnParcels.some(
+            (entry) => entry.tracking === tracking.trim(),
+          ),
+          "运单已用于该售后的其他包裹",
+        );
+        parcel.carrier = carrier.trim();
+        parcel.tracking = tracking.trim();
+      }
       sale.returnCarrier = carrier.trim();
       sale.returnTracking = tracking.trim();
       sale.status = "returning";
@@ -529,9 +598,30 @@ export const commerceApi: Pick<
   },
   async shipOrder(orderId, carrier, tracking) {
     await transact((db) => {
-      admin();
+      const actor = admin();
       const order = db.orders.find((o) => o.id === orderId);
       requireThat(order, "订单不存在");
+      if (order.allocations) {
+        const allocations = order.allocations.filter(
+          (entry) => openAllocation(order, entry) > 0,
+        );
+        const warehouseId = allocations[0]?.warehouseId;
+        requireThat(
+          warehouseId &&
+            allocations.every((entry) => entry.warehouseId === warehouseId),
+          "跨仓订单须按仓发货",
+        );
+        dispatchParcel(db, order, actor, {
+          warehouseId,
+          carrier: carrier.trim(),
+          tracking: tracking.trim(),
+          lines: allocations.map((entry) => ({
+            allocationId: entry.id,
+            quantity: openAllocation(order, entry),
+          })),
+        });
+        return;
+      }
       requireThat(order.status === "paid", "只有待发货订单可以发货");
       requireThat(!hasSale(db, orderId), "售后处理中，不能发货");
       requireThat(
@@ -545,9 +635,23 @@ export const commerceApi: Pick<
       addEvent(order, "shipped", "admin", `${order.carrier} ${order.tracking}`);
     });
   },
-  async processAfterSale(afterSaleId, action, note = "") {
+  async shipParcel(orderId, input) {
+    return transact((db) => {
+      const order = db.orders.find((entry) => entry.id === orderId);
+      requireThat(order, "订单不存在");
+      return dispatchParcel(db, order, admin(), input);
+    });
+  },
+  async reassignWarehouse(orderId, allocationId, warehouseId, quantity) {
     await transact((db) => {
-      admin();
+      const order = db.orders.find((entry) => entry.id === orderId);
+      requireThat(order, "订单不存在");
+      moveAllocation(db, order, admin(), allocationId, warehouseId, quantity);
+    });
+  },
+  async processAfterSale(afterSaleId, action, note = "", returnParcelId) {
+    await transact((db) => {
+      const actor = admin();
       const sale = db.afterSales.find((a) => a.id === afterSaleId);
       requireThat(sale, "售后不存在");
       const order = db.orders.find((o) => o.id === sale.orderId);
@@ -564,8 +668,15 @@ export const commerceApi: Pick<
           order.transactionMode === "production"
         ) {
           const address = readMerchant(context.getStore()!.sql).returnAddress;
-          requireThat(address, "请先在生产接入中设置退货地址");
-          sale.returnAddress = address;
+          for (const parcel of sale.returnParcels ?? []) {
+            parcel.address =
+              db.warehouses!.find(
+                (warehouse) => warehouse.id === parcel.warehouseId,
+              )?.returnAddress ?? address;
+            requireThat(parcel.address, "请先配置退货仓地址");
+          }
+          sale.returnAddress = sale.returnParcels?.[0]?.address ?? address;
+          requireThat(sale.returnAddress, "请先在生产接入中设置退货地址");
         }
       } else if (action === "receive") {
         requireThat(
@@ -575,19 +686,48 @@ export const commerceApi: Pick<
             sale.returnCarrier,
           "只有已提交退货单号的申请可以记录收货",
         );
-        sale.status = "received";
-        if (order.inventoryPolicy === "reserved-v1") {
+        const parcel = sale.returnParcels?.find((entry) =>
+          returnParcelId
+            ? entry.id === returnParcelId
+            : sale.returnParcels!.length === 1,
+        );
+        requireThat(
+          !sale.returnParcels?.length ||
+            (parcel?.tracking && !parcel.receivedAt),
+          "请选择已提交运单且尚未收货的退货包裹",
+        );
+        const warehouseId = parcel?.warehouseId ?? defaultWarehouseId;
+        if (db.warehouses) requireWarehouse(db, actor, warehouseId);
+        if (parcel) parcel.receivedAt = now();
+        if (!sale.returnParcels?.some((entry) => !entry.receivedAt))
+          sale.status = "received";
+        if (order.allocations || order.inventoryPolicy === "reserved-v1") {
           const inspections = (db.returnInspections ??= []);
           for (const line of sale.lines) {
             const item = order.items.find((i) => i.id === line.orderItemId)!;
             requireThat(item, "退货订单条目不存在");
+            const quantity = parcel
+              ? (line.fulfillments ?? []).reduce((total, fulfillment) => {
+                  const source = order.parcels!.find(
+                    (entry) => entry.id === fulfillment.parcelId,
+                  );
+                  return (
+                    total +
+                    (source?.warehouseId === warehouseId
+                      ? fulfillment.quantity
+                      : 0)
+                  );
+                }, 0)
+              : line.quantity;
+            if (!quantity) continue;
             inspections.push({
               id: id("inspection-"),
               afterSaleId: sale.id,
               orderItemId: item.id,
               productId: item.productId,
               skuId: item.skuId,
-              quantity: line.quantity,
+              warehouseId,
+              quantity,
               good: 0,
               defective: 0,
               disposed: 0,
@@ -712,9 +852,22 @@ export function requestAfterSaleChange(
       amount:
         refundThrough(item, item.refundedQuantity + line.quantity) -
         refundThrough(item, item.refundedQuantity),
+      fulfillments: order.allocations
+        ? claimFulfillments(db, order, item.id, line.quantity)
+        : undefined,
     };
   });
   const at = now();
+  const returnWarehouses = new Set(
+    details
+      .flatMap((line) => line.fulfillments ?? [])
+      .flatMap((entry) => {
+        const parcel = order.parcels?.find(
+          (source) => source.id === entry.parcelId,
+        );
+        return parcel ? [parcel.warehouseId] : [];
+      }),
+  );
   const fullRemaining = order.items.every(
     (item) =>
       item.refundedQuantity +
@@ -723,7 +876,7 @@ export function requestAfterSaleChange(
       item.quantity,
   );
   const shippingRefund =
-    order.status === "paid" && fullRemaining
+    order.status === "paid" && !order.parcels?.length && fullRemaining
       ? (order.shippingFee ?? 0) - (order.shippingRefunded ?? 0)
       : 0;
   db.afterSales.unshift({
@@ -733,7 +886,17 @@ export function requestAfterSaleChange(
     reason: reason.trim(),
     description: description.trim(),
     status: "requested",
-    requiresReturn: order.status !== "paid",
+    requiresReturn: order.allocations
+      ? returnWarehouses.size > 0
+      : order.status !== "paid",
+    ...(returnWarehouses.size
+      ? {
+          returnParcels: [...returnWarehouses].map((warehouseId) => ({
+            id: id("return-parcel-"),
+            warehouseId,
+          })),
+        }
+      : {}),
     createdAt: at,
     note: "",
     lines: details,
@@ -751,14 +914,16 @@ export function applyPaidOrder(
   succeededAt = now(),
 ) {
   requireThat(order.status === "pending", "订单状态不能登记收款");
-  for (const item of order.items)
-    move(
-      db,
-      item.productId,
-      item.skuId,
-      -item.quantity,
-      `订单付款 ${order.id}`,
-    );
+  if (order.allocations) commitWarehouseStock(db, order);
+  else
+    for (const item of order.items)
+      move(
+        db,
+        item.productId,
+        item.skuId,
+        -item.quantity,
+        `订单付款 ${order.id}`,
+      );
   if (order.coupon) {
     const claim = db.couponClaims.find((c) => c.id === order.coupon!.claimId);
     requireThat(
@@ -838,9 +1003,13 @@ export function applyRefund(
     "退款金额超出实付金额",
   );
   if (!apply) return amount;
+  if (order.allocations) releaseRefundedAllocation(db, order, sale);
   for (const line of sale.lines) {
     const item = order.items.find((i) => i.id === line.orderItemId)!;
-    if (!sale.requiresReturn || order.inventoryPolicy !== "reserved-v1")
+    if (
+      !order.allocations &&
+      (!sale.requiresReturn || order.inventoryPolicy !== "reserved-v1")
+    )
       move(
         db,
         item.productId,
@@ -865,6 +1034,7 @@ export function applyRefund(
   syncOrderPoints(db, order);
   if (order.items.every((i) => i.refundedQuantity === i.quantity))
     order.status = "refunded";
+  else updateFulfillmentStatus(db, order);
   addEvent(order, "refund", "admin", `退款 ${amount} 分`);
   sale.refundPending = false;
   return amount;

@@ -1,3 +1,4 @@
+import { currentSeed } from "./warehouse-fixture";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import {
@@ -24,7 +25,6 @@ import {
 } from "../../src/production/payment-providers";
 import type { Payment, Refund } from "../../../shared/domain/production";
 import type { Database, Session } from "../../../shared/domain/types";
-import { createSeed } from "../../../shared/domain/seed";
 
 /** A provider boundary fixture; inventory, refunds, permissions and ledger behavior remain real. */
 export class RegressionGateway implements PaymentGateway {
@@ -105,7 +105,7 @@ export function storedRefund(sql: DatabaseSync, id: string): Refund {
 }
 export function createPaymentFixture() {
   const sql = openDatabase(":memory:");
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   ensureRuntimeSchema(sql);
   ensureAccountSchema(sql);
   ensureExternalSchema(sql);

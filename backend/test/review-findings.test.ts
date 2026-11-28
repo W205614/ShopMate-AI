@@ -1,3 +1,4 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { createAccount } from "../src/auth";
@@ -7,7 +8,7 @@ import { reconcile } from "../src/reconciliation/reconciliation";
 
 it("keyed review moderation loads its completed purchase rather than only pending orders", async () => {
   const sql = openDatabase(":memory:");
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   await createAccount(
     sql,
     { username: "moderator", name: "审核员", password: "ModeratorTest123!" },

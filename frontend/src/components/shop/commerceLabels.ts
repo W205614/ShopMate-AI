@@ -3,6 +3,8 @@ export const eventLabel = (action: string) =>
     created: "订单已创建",
     paid: "模拟付款成功",
     shipped: "已模拟发货",
+    received: "包裹已确认收货",
+    warehouseReassigned: "已改派待发商品",
     completed: "已确认收货",
     cancelled: "已取消",
     afterSaleRequested: "已提交售后",

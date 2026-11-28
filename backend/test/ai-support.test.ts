@@ -1,7 +1,7 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
-import { createSeed } from "../../shared/domain/seed";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
 import { commerceApi } from "../src/commerce";
@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.stubEnv("AI_ENABLED", "true");
   vi.stubEnv("LLM_API_KEY", "test-no-network");
   sql = openDatabase(":memory:");
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   ensureSupportSchema(sql);
   ensureKnowledgeSchema(sql);
 });

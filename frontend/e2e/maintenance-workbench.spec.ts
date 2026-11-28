@@ -15,7 +15,12 @@ test("店主按需查看运行状态、分页失败任务，丢响应后核对�
   page,
 }) => {
   if (!process.env.PLAYWRIGHT_BASE_URL) {
-    const sql = openDatabase(resolve("../backend/.e2e/shopmate.sqlite"));
+    const sql = openDatabase(
+      resolve(
+        process.env.PLAYWRIGHT_DATABASE_PATH ||
+          "../backend/.e2e/shopmate.sqlite",
+      ),
+    );
     try {
       const insert = sql.prepare(
         "INSERT INTO job_queue(id,kind,payload,status,attempts,run_after,last_error,created_at) VALUES (?,'notification',?,'failed',5,?,'JOB_EXECUTION_FAILED',?)",

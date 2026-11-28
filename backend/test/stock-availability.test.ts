@@ -5,6 +5,7 @@ import { openDatabase, writeDatabase } from "../src/database";
 import { createApp } from "../src/app";
 import { tokenHash } from "../src/auth";
 import { createSeed } from "../../shared/domain/seed";
+import { migrateDatabase } from "../src/migration";
 
 let sql: DatabaseSync, server: Server, base: string;
 beforeEach(async () => {
@@ -110,6 +111,7 @@ beforeEach(async () => {
         },
       ],
     }));
+  migrateDatabase(seed);
   writeDatabase(sql, seed);
   sql
     .prepare(

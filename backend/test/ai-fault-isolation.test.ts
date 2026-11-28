@@ -1,9 +1,9 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createServer, type Server } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { createApp } from "../src/app";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
-import { createSeed } from "../../shared/domain/seed";
 import { tokenHash } from "../src/auth";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
@@ -25,7 +25,7 @@ const listen = async (server: Server) => {
 
 beforeEach(async () => {
   sql = openDatabase(":memory:");
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   for (const [id, role] of [
     ["u1", "user"],
     ["admin", "admin"],

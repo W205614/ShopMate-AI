@@ -21,6 +21,8 @@ import {
 import { hashPassword, HttpError } from "./auth";
 import { context } from "./repository";
 import { demand } from "./permissions";
+import { defaultWarehouseId } from "../../shared/domain/warehouses";
+import { requireWarehouse, stockRow } from "./warehouse-stock";
 
 function version(current: { version?: number }, expected: number | undefined) {
   if (expected !== (current.version ?? 0))
@@ -83,6 +85,7 @@ export const operationsApi = {
   },
   async createPurchaseOrder(input: {
     supplierId: string;
+    warehouseId?: string;
     lines: {
       productId: string;
       skuId: string;
@@ -92,6 +95,8 @@ export const operationsApi = {
   }) {
     authorize("warehouse");
     return transact((db) => {
+      const warehouseId = input.warehouseId ?? defaultWarehouseId;
+      requireWarehouse(db, admin(), warehouseId);
       requireThat(
         db.suppliers?.some((s) => s.id === input.supplierId && s.active),
         "供应商不存在或已停用",
@@ -107,6 +112,7 @@ export const operationsApi = {
       const po: PurchaseOrder = {
         id: id("po-"),
         supplierId: input.supplierId,
+        warehouseId,
         lines: input.lines.map((l) => ({ ...l, received: 0 })),
         receipts: [],
         status: "draft",
@@ -122,6 +128,7 @@ export const operationsApi = {
     return transact((db) => {
       const po = db.purchaseOrders?.find((p) => p.id === poId);
       requireThat(po, "采购单不存在");
+      requireWarehouse(db, admin(), po.warehouseId ?? defaultWarehouseId);
       version(po, expectedVersion);
       requireThat(
         po.status === "draft" &&
@@ -138,6 +145,7 @@ export const operationsApi = {
     return transact((db) => {
       const po = db.purchaseOrders?.find((p) => p.id === poId);
       requireThat(po, "采购单不存在");
+      requireWarehouse(db, admin(), po.warehouseId ?? defaultWarehouseId);
       version(po, expectedVersion);
       requireThat(
         ["draft", "ordered"].includes(po.status) && !po.receipts.length,
@@ -157,6 +165,8 @@ export const operationsApi = {
     return transact((db) => {
       const po = db.purchaseOrders?.find((p) => p.id === input.id);
       requireThat(po, "采购单不存在");
+      const warehouseId = po.warehouseId ?? defaultWarehouseId;
+      requireWarehouse(db, admin(), warehouseId);
       version(po, input.version);
       requireThat(
         ["ordered", "partial"].includes(po.status),
@@ -183,6 +193,7 @@ export const operationsApi = {
             line.skuId,
             receipt.quantity,
             `采购入库 ${po.id}`,
+            warehouseId,
           ).id,
         );
         amount = safeAmount(
@@ -224,6 +235,8 @@ export const operationsApi = {
     return transact((db) => {
       const inspection = db.returnInspections?.find((i) => i.id === input.id);
       requireThat(inspection, "质检记录不存在");
+      const warehouseId = inspection.warehouseId ?? defaultWarehouseId;
+      requireWarehouse(db, admin(), warehouseId);
       version(inspection, input.version);
       requireThat(
         inspection.status === "pending" &&
@@ -237,7 +250,14 @@ export const operationsApi = {
           inspection.skuId,
           input.good,
           `退货良品质检入库 ${inspection.id}`,
+          warehouseId,
         );
+      stockRow(
+        db,
+        warehouseId,
+        inspection.productId,
+        inspection.skuId,
+      ).defective += input.defective;
       Object.assign(inspection, {
         good: input.good,
         defective: input.defective,
@@ -259,6 +279,8 @@ export const operationsApi = {
     return transact((db) => {
       const inspection = db.returnInspections?.find((i) => i.id === input.id);
       requireThat(inspection, "质检记录不存在");
+      const warehouseId = inspection.warehouseId ?? defaultWarehouseId;
+      requireWarehouse(db, admin(), warehouseId);
       version(inspection, input.version);
       requireThat(
         inspection.status === "inspected" &&
@@ -266,6 +288,12 @@ export const operationsApi = {
         "处置数量超出隔离次品数量",
       );
       inspection.disposed += input.quantity;
+      stockRow(
+        db,
+        warehouseId,
+        inspection.productId,
+        inspection.skuId,
+      ).defective -= input.quantity;
       inspection.note += `\n处置 ${input.quantity} 件：${input.note}`;
       inspection.version++;
       return inspection;

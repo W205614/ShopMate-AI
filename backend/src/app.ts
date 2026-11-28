@@ -59,6 +59,7 @@ import {
   migrateLegacyAdminAccess,
 } from "./auth";
 import { context, admin, transact } from "./repository";
+import { warehouseApi } from "./warehouses";
 import { commerceApi } from "./commerce";
 import { catalogApi } from "./catalog";
 import { supportApi } from "./support";
@@ -385,6 +386,7 @@ export async function createApp(
     ...supportCommands,
     ...marketingApi,
     ...operationsApi,
+    ...warehouseApi,
     ...maintenanceCommands,
     async resetDemo() {
       admin();

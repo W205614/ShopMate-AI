@@ -1,3 +1,5 @@
+import { currentSeed } from "./support/warehouse-fixture";
+import { migrateDatabase } from "../src/migration";
 import { beforeEach, afterEach, describe, it, expect } from "vitest";
 import type { Server } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
@@ -9,7 +11,7 @@ import { tokenHash } from "../src/auth";
 let sql: DatabaseSync, server: Server, base: string;
 beforeEach(async () => {
   sql = openDatabase(":memory:");
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   for (const [id, role, token] of [
     ["u1", "user", "user-token"],
     ["admin", "admin", "admin-token"],
@@ -822,8 +824,12 @@ describe("paged read contracts", () => {
   });
 
   it("pages inventory by SKU and filters low stock before calculating totals", async () => {
-    const seed = createSeed(),
-      skus = seed.products.flatMap((product) => product.skus);
+    const seed = createSeed();
+    seed.orders = [];
+    seed.afterSales = [];
+    migrateDatabase(seed);
+    writeDatabase(sql, seed);
+    const skus = seed.products.flatMap((product) => product.skus);
     const page = await get(
       "/api/collections/products?role=admin&view=inventory&pageSize=7&page=2&sort=asc",
       true,

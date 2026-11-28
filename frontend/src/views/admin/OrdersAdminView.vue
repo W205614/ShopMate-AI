@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { useCommerceMode } from "../../services/commerceMode";
 const { production } = useCommerceMode();
-import { computed, ref, reactive } from "vue";
+import { computed, onMounted, ref, reactive, watch } from "vue";
 import { useShop } from "../../stores/shop";
 import { api } from "../../services/api";
+import { request } from "../../services/repository";
+import type { Warehouse } from "../../../../shared/domain/warehouses";
 import {
   orderLabels,
   afterSaleLabels,
@@ -42,7 +44,60 @@ const shop = useShop(),
     },
   }),
   ship = ref(false),
-  form = reactive({ id: "", carrier: "顺丰速运（模拟）", tracking: "" });
+  form = reactive({
+    id: "",
+    carrier: "顺丰速运（模拟）",
+    tracking: "",
+    warehouseId: "",
+  });
+const warehouses = ref<Warehouse[]>([]);
+const eligibleLines = computed(
+  () =>
+    shippingOrder.value?.allocations?.filter(
+      (allocation) =>
+        allocation.warehouseId === form.warehouseId &&
+        remainingAllocation(allocation) > 0,
+    ) ?? [],
+);
+const shippingOrder = computed(() =>
+  shop.db.orders.find((order) => order.id === form.id),
+);
+const shippingWarehouses = computed(() => [
+  ...new Set(
+    shippingOrder.value?.allocations
+      ?.filter((allocation) => remainingAllocation(allocation) > 0)
+      .map((allocation) => allocation.warehouseId) ?? [],
+  ),
+]);
+const quantities = reactive<Record<string, number>>({});
+const changing = ref(false);
+const reassignment = reactive({
+  orderId: "",
+  allocationId: "",
+  warehouseId: "",
+  quantity: 1,
+  maximum: 1,
+  source: "",
+});
+const warehouseName = (id: string) =>
+  warehouses.value.find((warehouse) => warehouse.id === id)?.name ??
+  (id === "warehouse-default" ? "默认仓" : id);
+function remainingAllocation(
+  allocation: NonNullable<Order["allocations"]>[number],
+) {
+  return allocation.quantity - allocation.shipped - allocation.cancelled;
+}
+watch(eligibleLines, (lines) => {
+  for (const line of lines) quantities[line.id] = remainingAllocation(line);
+});
+onMounted(() => {
+  if (shop.adminSession?.permissions?.includes("warehouse"))
+    void run(async () => {
+      warehouses.value = (
+        await request<{ warehouses: Warehouse[] }>("/api/admin/warehouses")
+      ).warehouses;
+    });
+});
 const showDelivery = computed(() =>
   shop.adminSession?.permissions?.some(
     (permission) => permission === "warehouse" || permission === "support",
@@ -92,12 +147,16 @@ function canShip(order: Order) {
   return (
     shop.adminSession?.permissions?.includes("warehouse") &&
     order.status === "paid" &&
-    order.items.some((item) => item.quantity > item.refundedQuantity) &&
-    !shop.db.afterSales.some(
-      (a) =>
-        a.orderId === order.id &&
-        !["refunded", "rejected", "cancelled"].includes(a.status),
-    )
+    (order.allocations
+      ? order.allocations.some(
+          (allocation) => remainingAllocation(allocation) > 0,
+        )
+      : order.items.some((item) => item.quantity > item.refundedQuantity) &&
+        !shop.db.afterSales.some(
+          (a) =>
+            a.orderId === order.id &&
+            !["refunded", "rejected", "cancelled"].includes(a.status),
+        ))
   );
 }
 function view(o: Order) {
@@ -109,6 +168,7 @@ function shipping(o: Order) {
   form.carrier =
     o.transactionMode === "production" ? "顺丰速运" : "顺丰速运（模拟）";
   form.tracking = "";
+  form.warehouseId = shippingWarehouses.value[0] ?? "";
   ship.value = true;
 }
 async function submit() {
@@ -118,11 +178,55 @@ async function submit() {
     });
   if (
     await run(
-      () => api.shipOrder(form.id, form.carrier, form.tracking),
+      async () => {
+        if (!shippingOrder.value?.allocations)
+          return api.shipOrder(form.id, form.carrier, form.tracking);
+        await api.shipParcel(form.id, {
+          warehouseId: form.warehouseId,
+          carrier: form.carrier.trim(),
+          tracking: form.tracking.trim(),
+          lines: eligibleLines.value
+            .filter((line) => quantities[line.id]! > 0)
+            .map((line) => ({
+              allocationId: line.id,
+              quantity: quantities[line.id]!,
+            })),
+        });
+      },
       production.value ? "发货信息已登记" : "模拟发货已完成",
     )
   )
     ship.value = false;
+}
+function reassign(
+  order: Order,
+  allocation: NonNullable<Order["allocations"]>[number],
+) {
+  const maximum = remainingAllocation(allocation);
+  Object.assign(reassignment, {
+    orderId: order.id,
+    allocationId: allocation.id,
+    source: allocation.warehouseId,
+    warehouseId: "",
+    quantity: maximum,
+    maximum,
+  });
+  changing.value = true;
+}
+async function submitReassignment() {
+  if (
+    await run(
+      () =>
+        api.reassignWarehouse(
+          reassignment.orderId,
+          reassignment.allocationId,
+          reassignment.warehouseId,
+          reassignment.quantity,
+        ),
+      "待发商品已改派",
+    )
+  )
+    changing.value = false;
 }
 </script>
 <template>
@@ -407,6 +511,37 @@ async function submit() {
         >
       </p> </template
     ><el-alert v-else title="没有找到该订单" type="warning" :closable="false" />
+    <section
+      v-if="selected?.allocations?.length && showDelivery"
+      class="admin-panel"
+    >
+      <h3>分仓与包裹</h3>
+      <div v-for="allocation in selected.allocations" :key="allocation.id">
+        {{ warehouseName(allocation.warehouseId) }} ·
+        {{
+          selected.items.find((item) => item.id === allocation.orderItemId)
+            ?.skuName
+        }}
+        · 待发 {{ remainingAllocation(allocation) }} / 已发
+        {{ allocation.shipped }} / 已取消 {{ allocation.cancelled }}
+        <el-button
+          v-if="
+            canShip(selected) &&
+            remainingAllocation(allocation) &&
+            warehouses.length > 1
+          "
+          link
+          type="primary"
+          :disabled="busy"
+          @click="reassign(selected, allocation)"
+          >改派</el-button
+        >
+      </div>
+      <p v-for="parcel in selected.parcels ?? []" :key="parcel.id">
+        {{ warehouseName(parcel.warehouseId) }} · {{ parcel.carrier }}
+        {{ parcel.tracking }} · {{ parcel.receivedAt ? "已收货" : "已发货" }}
+      </p>
+    </section>
     <template #footer
       ><el-button :disabled="pending" @click="detail = false">关闭</el-button
       ><el-button
@@ -433,6 +568,28 @@ async function submit() {
       type="info"
       :closable="false"
     /><el-form label-position="top" :disabled="busy" @submit.prevent="submit"
+      ><template v-if="shippingOrder?.allocations">
+        <el-form-item label="发货仓"
+          ><el-select v-model="form.warehouseId">
+            <el-option
+              v-for="warehouseId in shippingWarehouses"
+              :key="warehouseId"
+              :value="warehouseId"
+              :label="warehouseName(warehouseId)"
+            /> </el-select
+        ></el-form-item>
+        <el-form-item
+          v-for="line in eligibleLines"
+          :key="line.id"
+          :label="`发货件数 · ${shippingOrder.items.find((item) => item.id === line.orderItemId)?.skuName}`"
+        >
+          <el-input-number
+            v-model="quantities[line.id]"
+            :min="0"
+            :max="remainingAllocation(line)"
+            :precision="0"
+          />
+        </el-form-item> </template
       ><el-form-item label="物流公司" required
         ><el-input v-model="form.carrier" /></el-form-item
       ><el-form-item label="物流单号" required
@@ -452,4 +609,42 @@ async function submit() {
       ></template
     ></el-dialog
   >
+  <el-dialog
+    v-model="changing"
+    title="改派未发商品"
+    width="440px"
+    :close-on-click-modal="false"
+  >
+    <el-form
+      label-position="top"
+      :disabled="busy"
+      @submit.prevent="submitReassignment"
+    >
+      <el-form-item label="目标仓"
+        ><el-select v-model="reassignment.warehouseId">
+          <el-option
+            v-for="warehouse in warehouses.filter(
+              (entry) =>
+                entry.id !== reassignment.source && entry.acceptsOrders,
+            )"
+            :key="warehouse.id"
+            :value="warehouse.id"
+            :label="warehouse.name"
+          /> </el-select
+      ></el-form-item>
+      <el-form-item label="改派件数"
+        ><el-input-number
+          v-model="reassignment.quantity"
+          :min="1"
+          :max="reassignment.maximum"
+          :precision="0"
+      /></el-form-item>
+      <el-button
+        native-type="submit"
+        type="primary"
+        :disabled="busy || !reassignment.warehouseId"
+        >确认改派</el-button
+      >
+    </el-form>
+  </el-dialog>
 </template>

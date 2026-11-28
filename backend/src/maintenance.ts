@@ -21,6 +21,7 @@ import { resolve, dirname, basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { tableFor } from "./storage";
+import { businessVersion } from "./migration";
 
 export interface BackupManifest {
   format: 1;
@@ -504,7 +505,7 @@ export async function restoreBackup(
   if (existsSync(`${to}.running`))
     throw new Error("检测到运行标记，停止服务并核实离线状态后再恢复");
   const manifest = inspectBackup(from);
-  if (manifest.schemaVersion > 1 || manifest.businessVersion > 5)
+  if (manifest.schemaVersion > 1 || manifest.businessVersion > businessVersion)
     throw new Error("备份版本高于当前程序支持范围");
   mkdirSync(dirname(to), { recursive: true });
   let previousBackup: string | undefined;

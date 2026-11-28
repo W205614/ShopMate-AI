@@ -1,8 +1,8 @@
+import { currentSeed, setStock } from "./support/warehouse-fixture";
 import { beforeEach, describe, expect, it } from "vitest";
 import { commerceApi, expirePendingOrders } from "../src/commerce";
 import { context } from "../src/repository";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
-import { createSeed } from "../../shared/domain/seed";
 import { allocateDiscount } from "../src/commerce-rules";
 import type {
   CheckoutInput,
@@ -21,7 +21,12 @@ const api = Object.fromEntries(
         {
           sql,
           user: { id: uid, name: uid, role: "user" },
-          admin: { id: "admin", name: "admin", role: "admin" } as Session,
+          admin: {
+            id: "admin",
+            name: "admin",
+            role: "admin",
+            staffRole: "owner",
+          } as Session,
         },
         () => (fn as (...args: unknown[]) => Promise<unknown>)(...args),
       ),
@@ -67,7 +72,7 @@ function coupon(discount = 101) {
   });
 }
 beforeEach(() => {
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   uid = "u1";
 });
 
@@ -252,7 +257,7 @@ describe("批量操作、地址与部分售后", () => {
     await api.addCart("p02", "p02-s1", 1);
     const ids = db().carts.map((c) => c.id);
     change((v) => {
-      v.products[0]!.skus[0]!.stock = 0;
+      setStock(v, "p01", "p01-s1", 0);
     });
     await api.batchCart({ ids, action: "select", selected: true });
     expect(db().carts.map((c) => c.selected)).toEqual([false, true]);
@@ -339,7 +344,10 @@ describe("批量操作、地址与部分售后", () => {
     }
     expect(amounts).toEqual([39866, 39867, 39867]);
     expect(amounts.reduce((n, a) => n + a, 0)).toBe(original.total);
-    expect(db().products[0]!.skus[0]!.stock).toBe(stock + 3);
+    expect(db().products[0]!.skus[0]!.stock).toBe(stock);
+    expect(
+      db().warehouseStocks!.find((row) => row.skuId === "p01-s1")!.committed,
+    ).toBe(0);
     expect(db().orders.find((o) => o.id === value)!.refundedAmount).toBe(
       original.total,
     );
@@ -435,7 +443,7 @@ describe("批量操作、地址与部分售后", () => {
     expect(db().inventory).toEqual(before.inventory);
     expect(db().ledger).toEqual(before.ledger);
     change((v) => {
-      v.products[0]!.skus[0]!.stock = 5;
+      setStock(v, "p01", "p01-s1", 5);
       v.products[1]!.active = true;
       v.products[1]!.skus = [];
     });

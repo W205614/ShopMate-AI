@@ -1,10 +1,10 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { beforeEach, describe, expect, it } from "vitest";
 import { commerceApi } from "../src/commerce";
 import { catalogApi } from "../src/catalog";
 import { supportApi } from "../src/support";
 import { context } from "../src/repository";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
-import { createSeed } from "../../shared/domain/seed";
 import type { Role, Session } from "../../shared/domain/types";
 const sql = openDatabase(":memory:");
 let sessions: { user: Session | null; admin: Session | null };
@@ -24,6 +24,7 @@ const api = {
       id: username === "lin" ? "u1" : username === "chen" ? "u2" : "admin",
       name: username,
       role,
+      ...(role === "admin" ? { staffRole: "owner" as const } : {}),
     };
   },
   async logout(role: Role) {
@@ -33,7 +34,7 @@ const api = {
 const getDatabase = () => readDatabase(sql);
 
 beforeEach(async () => {
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   sessions = { user: null, admin: null };
   await api.login("user", "lin", "demo123");
   await api.login("admin", "admin", "demo123");
@@ -91,7 +92,10 @@ describe("交易与库存", () => {
     expect(getDatabase().products[0]!.skus[0]!.stock).toBe(stock);
     await Promise.all([api.payOrder(orderId), api.payOrder(orderId)]);
     const db = getDatabase();
-    expect(db.products[0]!.skus[0]!.stock).toBe(stock - 2);
+    expect(db.products[0]!.skus[0]!.stock).toBe(stock);
+    expect(
+      db.warehouseStocks!.find((row) => row.skuId === "p01-s1")!.committed,
+    ).toBe(2);
     expect(db.ledger.filter((l) => l.reference === orderId)).toHaveLength(1);
     expect(db.orders[0]!.status).toBe("paid");
     await expect(api.cancelOrder(orderId)).rejects.toThrow("只有待付款");
@@ -119,8 +123,9 @@ describe("交易与库存", () => {
     await expect(newOrder("p03", stock)).rejects.toThrow("库存不足");
     await Promise.all([api.payOrder(one), api.payOrder(one)]);
     expect(
-      getDatabase().products.find((p) => p.id === "p03")!.skus[0]!.stock,
-    ).toBe(0);
+      getDatabase().warehouseStocks!.find((row) => row.skuId === "p03-s1")!
+        .committed,
+    ).toBe(stock);
     expect(getDatabase().orders.find((o) => o.id === one)!.status).toBe("paid");
     expect(
       getDatabase().ledger.filter(

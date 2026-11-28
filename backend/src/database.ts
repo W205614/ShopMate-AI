@@ -45,6 +45,7 @@ export function initialDatabase(): Database {
       createdAt: new Date().toISOString(),
     })),
   );
+  migrateDatabase(db);
   return db;
 }
 

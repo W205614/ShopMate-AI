@@ -33,12 +33,37 @@ export function permits(session: Session | null, permission: string) {
 export function canReadOrderDelivery(session: Session | null) {
   return permits(session, "warehouse") || permits(session, "support");
 }
-export function projectOrderForStaff(order: Order, session: Session | null) {
+export function projectOrderForStaff(
+  order: Order,
+  session: Session | null,
+  warehouseIds?: string[],
+) {
+  if (warehouseIds && order.allocations) {
+    const allocations = order.allocations.filter((allocation) =>
+      warehouseIds.includes(allocation.warehouseId),
+    );
+    const parcels =
+      order.parcels?.filter((parcel) =>
+        warehouseIds.includes(parcel.warehouseId),
+      ) ?? [];
+    return {
+      ...order,
+      allocations,
+      parcels,
+      carrier: parcels[0]?.carrier,
+      tracking: parcels[0]?.tracking,
+      items: order.items.filter((item) =>
+        allocations.some((allocation) => allocation.orderItemId === item.id),
+      ),
+      events: order.events.filter((event) => event.action !== "shipped"),
+    };
+  }
   if (canReadOrderDelivery(session)) return order;
   const {
     address: _address,
     carrier: _carrier,
     tracking: _tracking,
+    parcels: _parcels,
     ...transaction
   } = order;
   return transaction;
@@ -60,13 +85,17 @@ export function methodPermission(method: string, args: unknown[]): string {
   if (/^(saveCoupon|toggleCoupon|savePromotion)$/.test(method))
     return "marketing";
   if (
-    /^(adjustStock|shipOrder|saveSupplier|createPurchaseOrder|orderPurchase|receivePurchase|cancelPurchase|inspectReturn|disposeReturn)$/.test(
+    /^(adjustStock|shipOrder|shipParcel|reassignWarehouse|saveSupplier|createPurchaseOrder|orderPurchase|receivePurchase|cancelPurchase|inspectReturn|disposeReturn|createStockTransfer|dispatchStockTransfer|receiveStockTransfer|returnStockTransfer|cancelStockTransfer)$/.test(
       method,
     )
   )
     return "warehouse";
-  if (method === "saveStaff") return "staff";
-  if (/^(saveSettings|saveShippingRule|resetDemo|retryJob)$/.test(method))
+  if (method === "saveStaff" || method === "assignWarehouses") return "staff";
+  if (
+    /^(saveSettings|saveShippingRule|saveWarehouse|resetDemo|retryJob)$/.test(
+      method,
+    )
+  )
     return "settings";
   if (
     /^(moderateReview|replyConversation|closeConversation|saveFaq|deleteFaq)$/.test(

@@ -1,5 +1,7 @@
 import { checkVersion } from "./versions";
 import { reservedStock } from "./commerce-rules";
+import { defaultWarehouseId } from "../../shared/domain/warehouses";
+import { requireWarehouse, stockRow } from "./warehouse-stock";
 import { context } from "./repository";
 import { validateAssetReferences } from "./production/assets";
 import type { ShopApi } from "../../shared/domain/api";
@@ -74,11 +76,15 @@ export const catalogApi: Pick<
       else db.products.unshift(value);
       for (const sku of skus)
         if (!existingSkuIds.has(sku.id)) {
+          if (db.warehouseStocks)
+            stockRow(db, defaultWarehouseId, productId, sku.id).onHand =
+              sku.stock;
           if (sku.stock)
             db.inventory.unshift({
               id: id("stock-"),
               productId,
               skuId: sku.id,
+              warehouseId: defaultWarehouseId,
               delta: sku.stock,
               reason: "商品规格初始库存",
               createdAt: now(),
@@ -144,6 +150,8 @@ export const catalogApi: Pick<
           (integer(options?.expectedStock as number) && cost === 0),
         "盘点必须提交读取时库存，且不能登记采购支出",
       );
+      const warehouseId = options?.warehouseId ?? defaultWarehouseId;
+      if (db.warehouses) requireWarehouse(db, admin(), warehouseId);
       const fingerprint = JSON.stringify({
         productId,
         skuId,
@@ -152,6 +160,7 @@ export const catalogApi: Pick<
         reason: reason.trim(),
         mode,
         expectedStock: options?.expectedStock ?? null,
+        ...(options?.warehouseId ? { warehouseId } : {}),
       });
       const at = now();
       db.inventoryRequests = db.inventoryRequests.filter(
@@ -170,8 +179,11 @@ export const catalogApi: Pick<
           );
         return clone(previous.result);
       }
-      const { sku } = productSku(db, productId, skuId),
-        beforeStock = sku.stock;
+      const { sku } = productSku(db, productId, skuId);
+      const row = db.warehouseStocks
+        ? stockRow(db, warehouseId, productId, skuId)
+        : undefined;
+      const beforeStock = row?.onHand ?? sku.stock;
       if (
         options?.expectedStock !== undefined &&
         beforeStock !== options.expectedStock
@@ -183,11 +195,19 @@ export const catalogApi: Pick<
       const delta = mode === "count" ? quantity - beforeStock : quantity;
       requireThat(delta > 0 || cost === 0, "库存减少不能记录采购支出");
       requireThat(
-        beforeStock + delta >= reservedStock(db, productId, skuId),
+        !!row || beforeStock + delta >= reservedStock(db, productId, skuId),
         "库存不能低于已预占数量",
       );
-      const movement = move(db, productId, skuId, delta, reason.trim());
-      Object.assign(movement, { beforeStock, afterStock: sku.stock, mode });
+      const movement = move(
+        db,
+        productId,
+        skuId,
+        delta,
+        reason.trim(),
+        warehouseId,
+      );
+      const afterStock = row?.onHand ?? sku.stock;
+      Object.assign(movement, { beforeStock, afterStock, mode });
       if (mode === "delta" && delta > 0 && cost > 0)
         Object.assign(ledger(db, "purchase", cost, skuId, reason.trim()), {
           inventoryMovementId: movement.id,
@@ -195,7 +215,7 @@ export const catalogApi: Pick<
       const result = {
         movementId: movement.id,
         beforeStock,
-        afterStock: sku.stock,
+        afterStock,
         delta,
       };
       if (options)

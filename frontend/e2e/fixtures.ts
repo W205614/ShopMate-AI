@@ -6,7 +6,7 @@ import {
 } from "../../backend/src/database";
 import { randomBytes, scryptSync } from "node:crypto";
 import { resolve } from "node:path";
-import { createSeed } from "../../shared/domain/seed";
+import { currentSeed } from "../../backend/test/support/warehouse-fixture";
 import { ensureAccountSchema } from "../../backend/src/production/accounts";
 
 export const TEST_USER_PASSWORD = "TestUser123!";
@@ -17,7 +17,12 @@ export const test = base.extend<{ isolatedDatabase: void }>({
     async ({ baseURL: _baseURL }, use) => {
       // Local full-suite fixtures only. An external deployment is never reset by tests.
       if (!process.env.PLAYWRIGHT_BASE_URL) {
-        const sql = openDatabase(resolve("../backend/.e2e/shopmate.sqlite"));
+        const sql = openDatabase(
+          resolve(
+            process.env.PLAYWRIGHT_DATABASE_PATH ||
+              "../backend/.e2e/shopmate.sqlite",
+          ),
+        );
         const salt = randomBytes(16).toString("hex");
         const hash = (password: string) =>
           `scrypt$${salt}$${scryptSync(password, salt, 64, { N: 131072, r: 8, p: 1, maxmem: 160 * 1024 * 1024 }).toString("hex")}`;
@@ -85,7 +90,7 @@ export const test = base.extend<{ isolatedDatabase: void }>({
                 .get()
             )
               sql.exec("DELETE FROM ai_daily_usage");
-            writeDatabase(sql, createSeed());
+            writeDatabase(sql, currentSeed());
             sql.exec(
               "DELETE FROM command_results; DELETE FROM job_queue; DELETE FROM operation_audit;",
             );

@@ -5,6 +5,7 @@ import type {
   CheckoutInput,
 } from "../../shared/domain/types";
 import { requireThat, productSku, integer, clone, now, id } from "./repository";
+import { allocateOrder, warehouseAvailability } from "./warehouse-stock";
 import {
   addressProvince,
   canonicalProvince,
@@ -37,7 +38,16 @@ export function availableStock(
   productId: string,
   skuId: string,
   excludeOrderId?: string,
+  address?: Pick<Order["address"], "region" | "province">,
 ) {
+  if (db.warehouses) {
+    const available = warehouseAvailability(db, excludeOrderId, address);
+    return db
+      .warehouseStocks!.filter(
+        (row) => row.productId === productId && row.skuId === skuId,
+      )
+      .reduce((total, row) => total + (available.get(row.id) ?? 0), 0);
+  }
   return (
     productSku(db, productId, skuId).sku.stock -
     reservedStock(db, productId, skuId, excludeOrderId)
@@ -280,6 +290,9 @@ export function checkoutSnapshot(
     ? { ruleId: rule.id, name: rule.name, fee: shippingFee }
     : { ruleId: "default", name: "默认免运费", fee: 0 };
   allocateDiscount(items, discount);
+  const allocations = db.warehouses
+    ? allocateOrder(db, items, address)
+    : undefined;
   // Stock is verified each time, but unrelated stock sales do not invalidate a quote.
   const fingerprint = JSON.stringify({
     input,
@@ -290,6 +303,7 @@ export function checkoutSnapshot(
     promotionState: usePromotion ? bestPromotion : undefined,
     shippingRule: rule,
     shippingFee,
+    allocations,
   });
   return {
     items,
@@ -302,6 +316,7 @@ export function checkoutSnapshot(
     shippingFee,
     coupon,
     fingerprint,
+    allocations,
   };
 }
 export function calculateDelivery(

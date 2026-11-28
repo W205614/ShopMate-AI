@@ -146,6 +146,11 @@ const router = createRouter({
           meta: { title: "库存管理" },
         },
         {
+          path: "warehouses",
+          component: () => import("./views/admin/WarehousesAdminView.vue"),
+          meta: { title: "多仓履约" },
+        },
+        {
           path: "orders",
           component: () => import("./views/admin/OrdersAdminView.vue"),
           meta: { title: "订单管理" },
@@ -256,6 +261,7 @@ export function canOpenAdminPath(path: string, permissions: string[]) {
     products: ["catalog"],
     categories: ["catalog"],
     inventory: ["warehouse"],
+    warehouses: ["warehouse"],
     orders: ["warehouse", "support", "finance"],
     "after-sales": ["warehouse", "support", "finance"],
     finance: ["finance"],

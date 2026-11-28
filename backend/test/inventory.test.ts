@@ -1,9 +1,9 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { beforeEach, expect, it, vi } from "vitest";
 import { catalogApi } from "../src/catalog";
 import { commerceApi } from "../src/commerce";
 import { context } from "../src/repository";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
-import { createSeed } from "../../shared/domain/seed";
 import { expireOrders } from "../src/commerce-rules";
 import { createApp } from "../src/app";
 import { createAccount } from "../src/auth";
@@ -11,7 +11,12 @@ import { methods } from "../src/validation";
 const sql = openDatabase(":memory:");
 const sessions = {
   user: { id: "u1", name: "用户", role: "user" as const },
-  admin: { id: "admin", name: "管理员", role: "admin" as const },
+  admin: {
+    id: "admin",
+    name: "管理员",
+    role: "admin" as const,
+    staffRole: "owner" as const,
+  },
 };
 async function adjust(...args: unknown[]) {
   return context.run({ sql, ...sessions }, () =>
@@ -22,7 +27,7 @@ const db = () => readDatabase(sql);
 const quantity = () => db().products[0]!.skus[0]!.stock;
 beforeEach(() => {
   vi.useRealTimers();
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
 });
 it("重试同一补货请求只增加一次库存和采购支出，结果关联精确变动", async () => {
   const before = db(),
@@ -140,7 +145,7 @@ it("销售后陈旧盘点被拒绝，已预占订单不能被盘点归零破坏"
     }),
   ]);
   expect(settled.map((r) => r.status)).toEqual(["fulfilled", "rejected"]);
-  expect(quantity()).toBe(stock - 1);
+  expect(quantity()).toBe(stock);
   const second = await order();
   const next = await Promise.allSettled([
     adjust("p01", "p01-s1", 0, 0, "盘点先归零", {
@@ -151,7 +156,10 @@ it("销售后陈旧盘点被拒绝，已预占订单不能被盘点归零破坏"
     context.run({ sql, ...sessions }, () => commerceApi.payOrder(second)),
   ]);
   expect(next.map((r) => r.status)).toEqual(["rejected", "fulfilled"]);
-  expect(quantity()).toBe(stock - 2);
+  expect(quantity()).toBe(stock);
+  expect(
+    db().warehouseStocks!.find((row) => row.skuId === "p01-s1")!.committed,
+  ).toBe(2);
   expect(db().orders.find((o) => o.id === second)!.status).toBe("paid");
   expect(db().ledger.filter((l) => l.reference === second)).toHaveLength(1);
 });
@@ -176,7 +184,7 @@ it("幂等记录 24 小时清理，历史变动和采购流水保留；管理员
   try {
     vi.setSystemTime(new Date("2026-10-17T10:00:00Z"));
     // Seed order expiries must share the test clock rather than the host's current day.
-    writeDatabase(sql, createSeed());
+    writeDatabase(sql, currentSeed());
     await adjust("p01", "p01-s1", 1, 100, "按管理员隔离", {
       requestId: "same-key",
     });

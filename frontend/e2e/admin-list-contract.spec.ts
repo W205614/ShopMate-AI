@@ -216,7 +216,11 @@ test("异步图片校验期间切换管理员会关闭旧草稿，旧任务不�
   page,
   context,
 }) => {
-  const sql = new DatabaseSync(resolve("../backend/.e2e/shopmate.sqlite"));
+  const sql = new DatabaseSync(
+    resolve(
+      process.env.PLAYWRIGHT_DATABASE_PATH || "../backend/.e2e/shopmate.sqlite",
+    ),
+  );
   try {
     sql
       .prepare(

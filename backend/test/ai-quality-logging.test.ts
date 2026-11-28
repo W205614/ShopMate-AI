@@ -1,6 +1,6 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { expect, it, vi } from "vitest";
 import { openDatabase, writeDatabase } from "../src/database";
-import { createSeed } from "../../shared/domain/seed";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
 import { processSupportRun } from "../src/ai/ai-support";
@@ -13,7 +13,7 @@ it("never logs a model-supplied unknown tool name containing private text", asyn
   const sql = openDatabase(":memory:");
   const logger = vi.spyOn(console, "info").mockImplementation(() => undefined);
   try {
-    writeDatabase(sql, createSeed());
+    writeDatabase(sql, currentSeed());
     ensureSupportSchema(sql);
     ensureKnowledgeSchema(sql);
     const asUser = <T>(work: () => T) =>

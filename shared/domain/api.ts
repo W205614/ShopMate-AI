@@ -13,6 +13,7 @@ import type {
   StockAdjustmentOptions,
   StockAdjustmentResult,
 } from "./types";
+import type { Parcel, StockTransfer, Warehouse } from "./warehouses";
 
 export interface ShopApi {
   register(input: {
@@ -44,7 +45,12 @@ export interface ShopApi {
   deleteReview(id: string): Promise<void>;
   moderateReview(id: string, hidden: boolean): Promise<void>;
   cancelAfterSale(id: string): Promise<void>;
-  submitReturn(id: string, carrier: string, tracking: string): Promise<void>;
+  submitReturn(
+    id: string,
+    carrier: string,
+    tracking: string,
+    returnParcelId?: string,
+  ): Promise<void>;
   addCart(productId: string, skuId: string, quantity: number): Promise<void>;
   updateCart(
     id: string,
@@ -65,7 +71,7 @@ export interface ShopApi {
   }): Promise<string | null>;
   payOrder(id: string): Promise<void>;
   cancelOrder(id: string): Promise<"cancelled" | "closing">;
-  confirmOrder(id: string): Promise<void>;
+  confirmOrder(id: string, parcelId?: string): Promise<void>;
   requestAfterSale(
     orderId: string,
     reason: string,
@@ -85,10 +91,50 @@ export interface ShopApi {
     options?: StockAdjustmentOptions,
   ): Promise<StockAdjustmentResult>;
   shipOrder(id: string, carrier: string, tracking: string): Promise<void>;
+  shipParcel(
+    id: string,
+    input: Pick<Parcel, "warehouseId" | "carrier" | "tracking" | "lines">,
+  ): Promise<Parcel>;
+  reassignWarehouse(
+    id: string,
+    allocationId: string,
+    warehouseId: string,
+    quantity: number,
+  ): Promise<void>;
+  saveWarehouse(
+    input: Omit<Warehouse, "id" | "version"> & {
+      id?: string;
+      version?: number;
+    },
+  ): Promise<Warehouse>;
+  assignWarehouses(staffId: string, warehouseIds: string[]): Promise<void>;
+  createStockTransfer(
+    fromWarehouseId: string,
+    toWarehouseId: string,
+    lines: Pick<
+      StockTransfer["lines"][number],
+      "productId" | "skuId" | "quantity"
+    >[],
+  ): Promise<StockTransfer>;
+  dispatchStockTransfer(id: string, version: number): Promise<StockTransfer>;
+  cancelStockTransfer(id: string, version: number): Promise<StockTransfer>;
+  receiveStockTransfer(
+    id: string,
+    version: number,
+    lines: { skuId: string; quantity: number; discrepancy?: number }[],
+    note?: string,
+  ): Promise<StockTransfer>;
+  returnStockTransfer(
+    id: string,
+    version: number,
+    lines: { skuId: string; quantity: number }[],
+    note: string,
+  ): Promise<StockTransfer>;
   processAfterSale(
     id: string,
     action: "approve" | "reject" | "receive" | "refund",
     note?: string,
+    returnParcelId?: string,
   ): Promise<void>;
   createConversation(context?: {
     productId?: string;

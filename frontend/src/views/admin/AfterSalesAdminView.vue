@@ -126,7 +126,10 @@ function open(a: AfterSale) {
   if (pending.value || confirming.value) return;
   selectedId.value = a.id;
 }
-async function action(type: "approve" | "reject" | "receive" | "refund") {
+async function action(
+  type: "approve" | "reject" | "receive" | "refund",
+  returnParcelId?: string,
+) {
   if (!selected.value || busy.value || confirming.value) return;
   if (!permitted(type))
     return void (await run(async () => {
@@ -194,7 +197,9 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
             );
           return;
         }
-        return api.processAfterSale(sale.id, type, inputNote);
+        return returnParcelId
+          ? api.processAfterSale(sale.id, type, inputNote, returnParcelId)
+          : api.processAfterSale(sale.id, type, inputNote);
       },
       labels[type] +
         (type === "refund" &&
@@ -386,6 +391,24 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
         <dt>当前处理说明</dt>
         <dd>{{ selected.note || "尚无处理说明" }}</dd>
       </dl>
+      <section v-if="selected.returnParcels?.length" class="admin-panel">
+        <h3>退货包裹</h3>
+        <p v-for="(parcel, index) in selected.returnParcels" :key="parcel.id">
+          包裹 {{ index + 1 }} · {{ parcel.carrier || "尚未填写承运商" }}
+          {{ parcel.tracking }}
+          <span v-if="parcel.receivedAt"> · 已签收</span>
+          <el-button
+            v-if="
+              allowedActions.receive && parcel.tracking && !parcel.receivedAt
+            "
+            link
+            type="primary"
+            :disabled="busy || confirming"
+            @click="action('receive', parcel.id)"
+            >确认收到退货</el-button
+          >
+        </p>
+      </section>
       <el-alert
         v-if="noteConflict"
         title="处理说明已被其他页面更新，当前草稿已保留"
@@ -455,7 +478,7 @@ async function action(type: "approve" | "reject" | "receive" | "refund") {
           >批准申请</el-button
         ></template
       ><el-button
-        v-if="allowedActions.receive"
+        v-if="allowedActions.receive && !selected?.returnParcels?.length"
         type="primary"
         :loading="pending"
         :disabled="busy || confirming"

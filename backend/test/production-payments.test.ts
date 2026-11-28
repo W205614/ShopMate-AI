@@ -1,3 +1,4 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
@@ -26,7 +27,6 @@ import {
 } from "../src/production/payment-providers";
 import type { Payment, Refund } from "../../shared/domain/production";
 import type { Database, Session } from "../../shared/domain/types";
-import { createSeed } from "../../shared/domain/seed";
 
 class Gateway implements PaymentGateway {
   provider = "wechatpay" as const;
@@ -164,7 +164,7 @@ async function approvedSale(orderId: string, quantity: number) {
 beforeEach(() => {
   vi.stubEnv("SHOP_MODE", "demo");
   sql = openDatabase(":memory:");
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   ensureRuntimeSchema(sql);
   ensureAccountSchema(sql);
   ensureExternalSchema(sql);
@@ -311,7 +311,8 @@ describe("production channel lifecycle", () => {
     service.receive("wechatpay", { ...event, id: "duplicate-with-new-event" });
     service.processWebhooks();
     expect(db().orders.find((order) => order.id === id)!.status).toBe("paid");
-    expect(db().products[0]!.skus[0]!.stock).toBe(initial - 1);
+    expect(db().products[0]!.skus[0]!.stock).toBe(initial);
+    expect(availableStock(db(), "p01", "p01-s1")).toBe(initial - 1);
     expect(
       db().ledger.filter(
         (entry) => entry.type === "payment" && entry.reference === id,

@@ -1,3 +1,4 @@
+import { currentSeed, setStock } from "./support/warehouse-fixture";
 import { beforeEach, describe, expect, it } from "vitest";
 import { commerceApi, expirePendingOrders } from "../src/commerce";
 import { catalogApi } from "../src/catalog";
@@ -5,7 +6,6 @@ import { marketingApi } from "../src/marketing";
 import { context } from "../src/repository";
 import { availableStock } from "../src/commerce-rules";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
-import { createSeed } from "../../shared/domain/seed";
 import type { Database, Session } from "../../shared/domain/types";
 const sql = openDatabase(":memory:");
 const services = { ...commerceApi, ...catalogApi, ...marketingApi };
@@ -17,7 +17,12 @@ const api = Object.fromEntries(
         {
           sql,
           user: { id: "u1", name: "user", role: "user" },
-          admin: { id: "admin", name: "admin", role: "admin" } as Session,
+          admin: {
+            id: "admin",
+            name: "admin",
+            role: "admin",
+            staffRole: "owner",
+          } as Session,
         },
         () => (fn as (...args: unknown[]) => Promise<unknown>)(...args),
       ),
@@ -58,7 +63,7 @@ async function refund(id: string, quantity: number, returned = false) {
   return sale.id;
 }
 beforeEach(() => {
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
 });
 describe("new commerce reliability policies", () => {
   it("snapshots a configured after-sale period without changing earlier orders", async () => {
@@ -82,11 +87,14 @@ describe("new commerce reliability policies", () => {
   });
   it("reserves at commit, protects count, releases cancel once, and legacy payment cannot steal reserved stock", async () => {
     change((d) => {
-      d.products[0]!.skus[0]!.stock = 2;
+      setStock(d, "p01", "p01-s1", 2);
     });
     const legacy = await order(1);
     change((d) => {
-      delete d.orders.find((o) => o.id === legacy)!.inventoryPolicy;
+      const oldOrder = d.orders.find((o) => o.id === legacy)!;
+      delete oldOrder.inventoryPolicy;
+      delete oldOrder.allocations;
+      delete oldOrder.parcels;
     });
     const reserved = await order(2);
     expect(availableStock(db(), "p01", "p01-s1")).toBe(0);
@@ -110,7 +118,7 @@ describe("new commerce reliability policies", () => {
   });
   it("competing quotes cannot overreserve and timeout preserves ledger stock", async () => {
     change((d) => {
-      d.products[0]!.skus[0]!.stock = 1;
+      setStock(d, "p01", "p01-s1", 1);
     });
     const q1 = await api.quoteCheckout(input()),
       q2 = await api.quoteCheckout(input());

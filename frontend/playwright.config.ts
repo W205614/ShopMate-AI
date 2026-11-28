@@ -34,7 +34,10 @@ export default defineConfig({
             LLM_API_KEY: "",
             EMBEDDING_API_KEY: "",
             RERANKER_API_KEY: "",
-            DATABASE_PATH: resolve("../backend/.e2e/shopmate.sqlite"),
+            DATABASE_PATH: resolve(
+              process.env.PLAYWRIGHT_DATABASE_PATH ||
+                "../backend/.e2e/shopmate.sqlite",
+            ),
             ADMIN_PASSWORD: "TestAdmin123!",
             APP_ORIGINS: "http://127.0.0.1:5173",
             ALLOW_LEGACY_COMMANDS: "true",

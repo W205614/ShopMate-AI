@@ -49,6 +49,7 @@ export interface PurchaseReceipt {
   movementIds: string[];
 }
 export interface PurchaseOrder {
+  warehouseId?: string;
   id: string;
   supplierId: string;
   status: "draft" | "ordered" | "partial" | "received" | "cancelled";
@@ -58,6 +59,7 @@ export interface PurchaseOrder {
   version: number;
 }
 export interface ReturnInspection {
+  warehouseId?: string;
   id: string;
   afterSaleId: string;
   orderItemId: string;

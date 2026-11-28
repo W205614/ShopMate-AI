@@ -97,7 +97,11 @@ test("结算新增非默认地址后自动选中，报价和订单使用新地�
 });
 
 test("订单跨页总数使用服务端总数，并随搜索条件更新", async ({ page }) => {
-  const sql = openDatabase(resolve("../backend/.e2e/shopmate.sqlite"));
+  const sql = openDatabase(
+    resolve(
+      process.env.PLAYWRIGHT_DATABASE_PATH || "../backend/.e2e/shopmate.sqlite",
+    ),
+  );
   try {
     sql.exec("BEGIN IMMEDIATE");
     const db = readDatabase(sql);

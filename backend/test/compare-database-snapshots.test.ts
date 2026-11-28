@@ -133,7 +133,7 @@ it("accepts a real legacy account and nonempty session schema after API migratio
   expect(Object.values(report.checks).every(Boolean)).toBe(true);
   expect(report.meta).toMatchObject({
     baselineVersion: 4,
-    live: { version: 5 },
+    live: { version: 6 },
   });
 });
 

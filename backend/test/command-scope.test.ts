@@ -1,3 +1,4 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import type { Session } from "../../shared/domain/types";
@@ -48,7 +49,7 @@ function run<T>(
 }
 beforeEach(() => {
   sql = openDatabase(":memory:");
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   ensureRuntimeSchema(sql);
 });
 afterEach(() => {

@@ -34,8 +34,10 @@ describe("offline migration rehearsal", () => {
       expect(Object.values(report.checks).every(Boolean)).toBe(true);
       expect(report.before.counts.orders).toBe(seed.orders.length);
       expect(report.after.orderTotal).toBe(report.before.orderTotal);
-      expect(report.after.stockTotal).toBe(report.before.stockTotal);
-      expect(report.after.version).toBe(5);
+      expect(
+        BigInt(report.after.stockTotal) - BigInt(report.after.committedStock),
+      ).toBe(BigInt(report.before.stockTotal));
+      expect(report.after.version).toBe(6);
       const migrated = new DatabaseSync(
         join(dir, "rehearsal", "migrated.sqlite"),
         { readOnly: true },

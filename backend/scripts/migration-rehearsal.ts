@@ -82,6 +82,12 @@ function businessFacts(db: Database) {
         .flatMap((product) => product.skus)
         .reduce((total, sku) => total + BigInt(sku.stock), 0n),
     ),
+    committedStock: String(
+      (db.warehouseStocks ?? []).reduce(
+        (total, row) => total + BigInt(row.committed),
+        0n,
+      ),
+    ),
     digest: digest(canonical(db)),
   };
 }
@@ -125,8 +131,21 @@ export async function rehearseMigration(source: string, directory: string) {
     migrated: Database;
   try {
     migrated = structuredClone(readDatabase(sql));
+    const comparable = structuredClone(migrated);
+    if (original.version < 6 && migrated.version === 6) {
+      const opening = new Map(
+        comparable.inventory
+          .filter((entry) => entry.id.startsWith("warehouse-v6-opening-"))
+          .map((entry) => [entry.skuId, entry.delta]),
+      );
+      for (const sku of comparable.products.flatMap((product) => product.skus))
+        sku.stock -= opening.get(sku.id) ?? 0;
+      comparable.inventory = comparable.inventory.filter(
+        (entry) => !entry.id.startsWith("warehouse-v6-opening-"),
+      );
+    }
     if (
-      digest(canonical(oldShape(migrated, original, true))) !==
+      digest(canonical(oldShape(comparable, original, true))) !==
       digest(canonical(oldShape(original, original, true)))
     )
       throw new Error("迁移改变了已有业务字段");

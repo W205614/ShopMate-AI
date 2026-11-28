@@ -81,6 +81,7 @@ export function renderGroundedAnswer(input: {
     total: number;
     createdAtDisplay?: string;
     carrier?: string;
+    parcels?: { shippedAt: string; receivedAt?: string }[];
     tracking?: string;
     expiresAtDisplay?: string;
     items: {
@@ -216,7 +217,14 @@ export function renderGroundedAnswer(input: {
       facts.push(
         `${item.name}／${item.skuName}，购买${item.quantity}件，已退${item.refundedQuantity}件，商品实付${yuan(item.total)}。`,
       );
-    if (["pending", "paid"].includes(order.status))
+    if (
+      order.parcels?.length &&
+      (order.parcels.length > 1 || order.status === "paid")
+    )
+      facts.push(
+        `订单已有 ${order.parcels.length} 个包裹发出，其中 ${order.parcels.filter((parcel) => parcel.receivedAt).length} 个已确认收货。${order.status === "paid" ? "还有商品待发货。" : ""}请在订单详情查看各包裹商品和物流。`,
+      );
+    else if (["pending", "paid"].includes(order.status))
       facts.push(
         `${order.transactionMode === "production" ? "" : "模拟"}物流尚未发货，无签收记录。`,
       );

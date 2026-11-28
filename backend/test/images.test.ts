@@ -1,5 +1,5 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { beforeEach, expect, it } from "vitest";
-import { createSeed } from "../../shared/domain/seed";
 import {
   validateImages,
   IMAGE_MAX_BYTES,
@@ -26,7 +26,7 @@ const admin = <T>(fn: () => T) =>
     { sql, user: null, admin: { id: "admin", name: "admin", role: "admin" } },
     fn,
   );
-beforeEach(() => writeDatabase(sql, createSeed()));
+beforeEach(() => writeDatabase(sql, currentSeed()));
 it("accepts exact byte/count boundaries and rejects excess without using base64 character limits", () => {
   const max = png(IMAGE_MAX_BYTES);
   expect(

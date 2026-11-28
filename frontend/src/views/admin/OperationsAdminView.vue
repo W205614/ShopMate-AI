@@ -18,6 +18,7 @@ import { useAdminAction } from "./useAdmin";
 import RuntimeMaintenancePanel from "./RuntimeMaintenancePanel.vue";
 import StaffManagementPanel from "./StaffManagementPanel.vue";
 import PurchaseOrdersPanel from "./PurchaseOrdersPanel.vue";
+import type { Warehouse } from "../../../../shared/domain/warehouses";
 const shop = useShop(),
   route = useRoute(),
   router = useRouter(),
@@ -234,6 +235,8 @@ async function save() {
 }
 const purchaseDialog = ref(false),
   supplierId = ref("");
+const purchaseWarehouses = ref<Warehouse[]>([]);
+const purchaseWarehouseId = ref("");
 const purchaseLines = ref([
   { productId: "", skuId: "", quantity: 1, unitCost: 0 },
 ]);
@@ -288,7 +291,13 @@ function lookupSuppliers(search: string) {
 async function openPurchase() {
   if (
     await runScoped(async () => {
-      await Promise.all([searchProducts(), searchSuppliers()]);
+      const [inventory] = await Promise.all([
+        request<{ warehouses: Warehouse[] }>("/api/admin/warehouses"),
+        searchProducts(),
+        searchSuppliers(),
+      ]);
+      purchaseWarehouses.value = inventory.warehouses;
+      purchaseWarehouseId.value = inventory.warehouses[0]?.id ?? "";
     }, "已加载采购选项")
   ) {
     supplierId.value = "";
@@ -304,6 +313,7 @@ async function createPurchase() {
       () =>
         commerceAction("createPurchaseOrder", {
           supplierId: supplierId.value,
+          warehouseId: purchaseWarehouseId.value,
           lines: purchaseLines.value,
         }),
       "采购草稿已创建",
@@ -822,6 +832,16 @@ onUnmounted(() => {
           >移除</el-button
         >
       </div>
+      <el-form-item label="收货仓" required>
+        <el-select v-model="purchaseWarehouseId">
+          <el-option
+            v-for="warehouse in purchaseWarehouses"
+            :key="warehouse.id"
+            :value="warehouse.id"
+            :label="warehouse.name"
+          />
+        </el-select>
+      </el-form-item>
       <p>可输入名称搜索商品和供应商；单件成本单位为分。</p>
       <el-button
         @click="

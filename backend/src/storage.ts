@@ -548,6 +548,7 @@ export function saveStoredDatabase(sql: DatabaseSync, db: Database) {
 }
 
 export interface PageOptions {
+  warehouseIds?: string[];
   transactionMode?: "demo" | "production";
   page?: number;
   pageSize?: number;
@@ -583,6 +584,15 @@ export interface PageOptions {
     | "asc"
     | "desc";
 }
+
+export const warehouseOrderFilter = (data: string) => `(
+  (json_type(${data},'$.allocations') IS NULL AND 'warehouse-default' IN (SELECT value FROM json_each(?)))
+  OR EXISTS (
+    SELECT 1 FROM json_each(${data},'$.allocations') a
+    WHERE json_extract(a.value,'$.warehouseId') IN (SELECT value FROM json_each(?))
+  )
+)`;
+
 export function queryPage<T>(
   sql: DatabaseSync,
   domain: keyof Database,
@@ -633,6 +643,24 @@ export function queryPage<T>(
   if (domain === "ledger" && options.transactionMode) {
     filters.push("coalesce(json_extract(data,'$.transactionMode'),'demo')=?");
     args.push(options.transactionMode);
+  }
+  if (options.warehouseIds) {
+    const scopes = JSON.stringify(options.warehouseIds);
+    if (domain === "orders" || domain === "afterSales") {
+      const orderData =
+        domain === "orders"
+          ? `${table}.data`
+          : `(SELECT o.data FROM biz_orders o WHERE o.key=${table}.order_id)`;
+      filters.push(warehouseOrderFilter(orderData));
+      args.push(scopes, scopes);
+    } else if (
+      ["inventory", "purchaseOrders", "returnInspections"].includes(domain)
+    ) {
+      filters.push(
+        "coalesce(json_extract(data,'$.warehouseId'),'warehouse-default') IN (SELECT value FROM json_each(?))",
+      );
+      args.push(scopes);
+    }
   }
   for (const [key, column] of [
     ["userId", "user_id"],

@@ -19,6 +19,7 @@ import { releaseSnapshot } from "../storage";
 import { HttpError, findSession, rateLimit } from "../auth";
 import { demand } from "../permissions";
 import { applyPaidOrder, applyRefund } from "../commerce";
+import { payableWarehouseStock } from "../warehouse-stock";
 import { releaseCoupon, availableStock } from "../commerce-rules";
 import { audit, enqueue } from "../runtime";
 import { requireVerifiedContact } from "./accounts";
@@ -276,11 +277,14 @@ export class PaymentService {
           );
           if (
             !product?.active ||
-            availableStock(db, item.productId, item.skuId, order.id) <
-              item.quantity
+            (!order.allocations &&
+              availableStock(db, item.productId, item.skuId, order.id) <
+                item.quantity)
           )
             throw new HttpError(409, "商品已下架或库存不足");
         }
+        if (order.allocations && !payableWarehouseStock(db, order))
+          throw new HttpError(409, "订单分仓库存已变化");
         const at = iso();
         const payment: StoredPayment = {
           id: `SMp${randomUUID().replaceAll("-", "").slice(0, 28)}`,

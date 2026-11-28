@@ -43,6 +43,10 @@ export function redactAccountDomain(db: Partial<Database>, userId: string) {
     delete order.address.province;
     delete order.tracking;
     delete order.carrier;
+    for (const parcel of order.parcels ?? []) {
+      parcel.tracking = "";
+      parcel.carrier = "";
+    }
     for (const event of order.events ?? []) delete event.note;
   }
   for (const quote of db.checkoutQuotes ?? []) {
@@ -63,6 +67,10 @@ export function redactAccountDomain(db: Partial<Database>, userId: string) {
     sale.note = "";
     delete sale.returnTracking;
     delete sale.returnCarrier;
+    for (const parcel of sale.returnParcels ?? []) {
+      delete parcel.tracking;
+      delete parcel.carrier;
+    }
     for (const event of sale.events ?? []) delete event.note;
   }
   for (const review of db.reviews ?? []) {

@@ -146,7 +146,7 @@ try {
   checks.readOnlySnapshot =
     sql.isTransaction &&
     sql.prepare("PRAGMA query_only").get().query_only === 1;
-  checks.storageV5 = meta.schema_version === 1 && meta.version === 5;
+  checks.storageV6 = meta.schema_version === 1 && meta.version === 6;
   checks.integrity = sql
     .prepare("PRAGMA integrity_check")
     .all()

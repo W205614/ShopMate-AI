@@ -1,3 +1,4 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { readSnapshot } from "./http-snapshot";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Server } from "node:http";
@@ -54,11 +55,16 @@ const coupon = () => ({
   validUntil: new Date(Date.now() + 86400000).toISOString(),
 });
 let user: Session | null;
-const administrator: Session = { id: "admin", role: "admin", name: "管理员" };
+const administrator: Session = {
+  id: "admin",
+  role: "admin",
+  name: "管理员",
+  staffRole: "owner",
+};
 const run = <T>(fn: () => T) =>
   context.run({ sql, user, admin: administrator }, fn);
 function seed() {
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   user = { id: "u1", role: "user", name: "林小满" };
 }
 

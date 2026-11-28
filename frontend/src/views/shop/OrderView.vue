@@ -22,6 +22,7 @@ import {
   paymentStatusText,
 } from "../../domain/paymentGuidance";
 import { useCommerceMode } from "../../services/commerceMode";
+import type { Order } from "../../domain/types";
 const { production } = useCommerceMode();
 const shop = useShop(),
   route = useRoute(),
@@ -64,6 +65,18 @@ const canReview = computed(() =>
 const remaining = computed(
   () => order.value?.items.filter((i) => i.quantity > i.refundedQuantity) ?? [],
 );
+function parcelItemName(order: Order, allocationId: string) {
+  const allocation = order.allocations?.find(
+    (entry) => entry.id === allocationId,
+  );
+  const item = order.items.find(
+    (entry) => entry.id === allocation?.orderItemId,
+  );
+  return item ? `${item.name} · ${item.skuName}` : "订单商品";
+}
+function confirmParcel(orderId: string, parcelId: string) {
+  return run(() => api.confirmOrder(orderId, parcelId), "包裹已确认收货");
+}
 function toggleAfterSale() {
   showForm.value = !showForm.value;
   if (showForm.value) {
@@ -245,7 +258,46 @@ async function request() {
           <p>{{ order.address.name }} · {{ order.address.phone }}</p>
           <p>{{ order.address.region }} {{ order.address.detail }}</p>
         </section>
-        <section v-if="order.carrier" class="checkout-section">
+        <section v-if="order.parcels?.length" class="checkout-section">
+          <h2>
+            {{
+              order.transactionMode === "production"
+                ? "包裹与物流"
+                : "模拟物流包裹"
+            }}
+          </h2>
+          <div
+            v-for="(parcel, index) in order.parcels"
+            :key="parcel.id"
+            class="checkout-section"
+          >
+            <h3>
+              包裹 {{ index + 1 }} ·
+              {{ parcel.receivedAt ? "已收货" : "已发货" }}
+            </h3>
+            <p>{{ parcel.carrier }} · {{ parcel.tracking }}</p>
+            <ul>
+              <li v-for="line in parcel.lines" :key="line.allocationId">
+                {{ parcelItemName(order, line.allocationId) }}
+                × {{ line.quantity }}
+              </li>
+            </ul>
+            <p class="secondary">{{ dateTime(parcel.shippedAt) }}</p>
+            <button
+              v-if="!parcel.receivedAt && order.status !== 'refunded'"
+              class="button button-secondary"
+              :disabled="busy"
+              @click="confirmParcel(order.id, parcel.id)"
+            >
+              确认此包裹收货
+            </button>
+          </div>
+          <ShipmentTracking
+            v-if="order.transactionMode === 'production'"
+            :order-id="order.id"
+          />
+        </section>
+        <section v-else-if="order.carrier" class="checkout-section">
           <h2>
             {{
               order.transactionMode === "production" ? "物流信息" : "模拟物流"

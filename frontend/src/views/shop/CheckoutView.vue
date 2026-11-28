@@ -613,6 +613,20 @@ watch(
               }}</span
             ><span>{{ money(quote.shippingFee ?? 0) }}</span>
           </div>
+          <p
+            v-if="
+              quote.allocations?.length &&
+              new Set(quote.allocations.map((line) => line.warehouseId)).size >
+                1
+            "
+            class="secondary"
+          >
+            商品预计由
+            {{
+              new Set(quote.allocations.map((line) => line.warehouseId)).size
+            }}
+            个仓库分批发出，按订单收取配送费。
+          </p>
           <div class="summary-total">
             <span>应付金额</span><strong>{{ money(quote.total) }}</strong>
           </div>

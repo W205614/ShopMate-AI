@@ -23,6 +23,10 @@ import {
   requestAfterSaleChange,
 } from "../commerce";
 import { availableStock } from "../commerce-rules";
+import {
+  addressProvince,
+  deliveryProvinces,
+} from "../../../shared/domain/delivery-province";
 import { aiConfig, chat, redactCustomerText } from "./ai-provider";
 import { retrieveKnowledge, sourcesStillValid } from "./ai-knowledge";
 import { cancelSupportWork, ensureSupportSchema } from "./ai-schema";
@@ -614,7 +618,11 @@ const toolDefinitions = [
   },
 }));
 
-function publicProduct(db: Database, productId: string) {
+function publicProduct(
+  db: Database,
+  productId: string,
+  deliveryProvince?: string,
+) {
   const p = db.products.find((p) => p.id === productId && p.active);
   if (!p) throw new HttpError(404, "商品不存在或已下架");
   return {
@@ -626,7 +634,13 @@ function publicProduct(db: Database, productId: string) {
       id: s.id,
       name: s.name,
       price: s.price,
-      availableStock: availableStock(db, p.id, s.id),
+      availableStock: availableStock(
+        db,
+        p.id,
+        s.id,
+        undefined,
+        deliveryProvince ? { region: deliveryProvince } : undefined,
+      ),
     })),
   };
 }
@@ -662,6 +676,10 @@ function publicOrder(order: Order) {
     createdAtDisplay: orderTimeDisplay(order.createdAt),
     expiresAtDisplay: orderTimeDisplay(order.expiresAt),
     carrier: order.carrier,
+    parcels: order.parcels?.map((parcel) => ({
+      shippedAt: parcel.shippedAt,
+      receivedAt: parcel.receivedAt,
+    })),
     shippingSimulated: order.transactionMode !== "production",
     items: order.items.map((i) => ({
       id: i.id,
@@ -703,6 +721,7 @@ export async function executeSupportTool(
     products: Set<string>;
     productCaps: Map<string, number | undefined>;
     budgetMatches?: Map<number, boolean>;
+    deliveryProvince?: string;
     orders: Set<string>;
     degraded: string[];
   },
@@ -780,7 +799,7 @@ export async function executeSupportTool(
         .object({ productId: identifier })
         .strict()
         .parse(raw);
-      const p = publicProduct(db, productId);
+      const p = publicProduct(db, productId, evidence.deliveryProvince);
       evidence.products.add(p.id);
       return p;
     }
@@ -811,7 +830,15 @@ export async function executeSupportTool(
             p.active &&
             p.skus.some(
               (s) =>
-                availableStock(db, p.id, s.id) > 0 &&
+                availableStock(
+                  db,
+                  p.id,
+                  s.id,
+                  undefined,
+                  evidence.deliveryProvince
+                    ? { region: evidence.deliveryProvince }
+                    : undefined,
+                ) > 0 &&
                 (maxPrice === undefined || s.price <= maxPrice),
             ),
         )
@@ -847,7 +874,7 @@ export async function executeSupportTool(
               ? maxPrice
               : Math.min(priorCap, maxPrice ?? priorCap),
           );
-          const product = publicProduct(db, p.id);
+          const product = publicProduct(db, p.id, evidence.deliveryProvince);
           if (maxPrice !== undefined)
             product.skus = product.skus.filter(
               (sku) => sku.availableStock > 0 && sku.price <= maxPrice,
@@ -928,6 +955,7 @@ async function processBudgetedSupportRun(
   cancelled.unref();
   const evidence = {
     statedBudget: undefined as number | undefined,
+    deliveryProvince: undefined as string | undefined,
     sources: [] as Source[],
     products: new Set<string>(),
     productCaps: new Map<string, number | undefined>(),
@@ -949,6 +977,14 @@ async function processBudgetedSupportRun(
     const msgIndex = c.messages.findIndex((m) => m.id === run.message_id);
     requireThat(msgIndex >= 0, "消息不存在");
     const question = c.messages[msgIndex]!.text.normalize("NFKC");
+    const destination = question.match(
+      /(?:寄到|送到|发到|配送到|收货地是|收货地址在)\s*([\p{Script=Han}]{2,30})/u,
+    )?.[1];
+    if (destination) {
+      const province = addressProvince({ region: destination });
+      if (deliveryProvinces.some((entry) => entry === province))
+        evidence.deliveryProvince = province;
+    }
     const selecting = /推荐|挑选|选购|想买/.test(question);
     const comparing = /对比|比较/.test(question);
     const previous = c.messages[msgIndex - 1];
@@ -970,10 +1006,12 @@ async function processBudgetedSupportRun(
     if (budgetAmount !== undefined)
       evidence.statedBudget = Math.round(Number(budgetAmount) * 100);
     const verifiedContext: Record<string, unknown> = {};
+    if (evidence.deliveryProvince)
+      verifiedContext.deliveryProvince = evidence.deliveryProvince;
     if (c.productId) {
       try {
         verifiedContext.product = withScopedDb(sql, (db) =>
-          publicProduct(db, c.productId!),
+          publicProduct(db, c.productId!, evidence.deliveryProvince),
         );
         evidence.products.add(c.productId);
       } catch {
@@ -1008,7 +1046,7 @@ async function processBudgetedSupportRun(
       {
         role: "system",
         content:
-          "相同参数的商品搜索只调用一次；已有结果足够答复时立即返回最终JSON，空结果选择handoff，不重复相同搜索。",
+          "相同参数的商品搜索只调用一次；已有结果足够答复时立即返回最终JSON，空结果选择handoff，不重复相同搜索。明确配送地的选购请求由服务端按配送地和预算筛选库存；search_products 的 query 只写商品名称或用途，省份和预算无需放进关键词。有符合条件的规格时返回其商品ID；仅咨询选购和可配送库存时无需查询政策。",
       },
       ...c.messages
         .slice(Math.max(0, msgIndex - 12), msgIndex + 1)
@@ -1207,13 +1245,26 @@ async function processBudgetedSupportRun(
         (evidence.budgetMatches.size
           ? Math.min(...evidence.budgetMatches.keys())
           : undefined);
+      const verifyDeliveryRecommendation =
+        selecting &&
+        !comparing &&
+        !!evidence.deliveryProvince &&
+        evidence.statedBudget !== undefined &&
+        final.replyKind !== "clarify" &&
+        !final.orderId &&
+        !sources.length;
+      const productIds = verifyDeliveryRecommendation
+        ? [
+            ...new Set([...final.productIds, ...evidence.productCaps.keys()]),
+          ].slice(0, 5)
+        : final.productIds;
       const presentation =
         final.replyKind === "clarify" &&
         selecting &&
         budget === undefined &&
         !final.presentation?.missingFields?.length
           ? { ...final.presentation, missingFields: ["budget" as const] }
-          : evidence.statedBudget !== undefined && final.productIds.length
+          : evidence.statedBudget !== undefined && productIds.length
             ? {
                 ...final.presentation,
                 productView: comparing
@@ -1226,33 +1277,38 @@ async function processBudgetedSupportRun(
                 ],
               }
             : final.presentation;
-      const products = factual
-        ? withScopedDb(sql, (db) =>
-            final.productIds
-              .map((productId) => {
-                const product = publicProduct(db, productId);
-                if (
-                  evidence.statedBudget !== undefined ||
-                  presentation?.productView === "recommend"
-                ) {
-                  const cap = Math.min(
-                    evidence.productCaps.get(productId) ?? Infinity,
-                    budget ?? Infinity,
+      const products =
+        factual || verifyDeliveryRecommendation
+          ? withScopedDb(sql, (db) =>
+              productIds
+                .map((productId) => {
+                  const product = publicProduct(
+                    db,
+                    productId,
+                    evidence.deliveryProvince,
                   );
-                  requireThat(
+                  if (
                     evidence.statedBudget !== undefined ||
-                      evidence.productCaps.has(productId),
-                    "推荐商品必须先按需求检索",
-                  );
-                  product.skus = product.skus.filter(
-                    (sku) => sku.availableStock > 0 && sku.price <= cap,
-                  );
-                }
-                return product;
-              })
-              .filter((product) => product.skus.length > 0),
-          )
-        : [];
+                    presentation?.productView === "recommend"
+                  ) {
+                    const cap = Math.min(
+                      evidence.productCaps.get(productId) ?? Infinity,
+                      budget ?? Infinity,
+                    );
+                    requireThat(
+                      evidence.statedBudget !== undefined ||
+                        evidence.productCaps.has(productId),
+                      "推荐商品必须先按需求检索",
+                    );
+                    product.skus = product.skus.filter(
+                      (sku) => sku.availableStock > 0 && sku.price <= cap,
+                    );
+                  }
+                  return product;
+                })
+                .filter((product) => product.skus.length > 0),
+            )
+          : [];
       const owned =
         factual && final.orderId
           ? queryRecord<Order>(sql, "orders", final.orderId)
@@ -1267,18 +1323,21 @@ async function processBudgetedSupportRun(
         )
         .all(run.id, run.user_id) as { summary: string }[];
       const replyKind =
-        factual &&
-        !sources.length &&
-        !products.length &&
-        !owned &&
-        !pending.length
-          ? "handoff"
-          : final.replyKind;
+        verifyDeliveryRecommendation && products.length
+          ? "grounded"
+          : factual &&
+              !sources.length &&
+              !products.length &&
+              !owned &&
+              !pending.length
+            ? "handoff"
+            : final.replyKind;
       const noBudgetMatch =
         replyKind === "handoff" &&
         budget !== undefined &&
         (evidence.budgetMatches.get(budget) === false ||
-          (evidence.statedBudget !== undefined &&
+          (factual &&
+            evidence.statedBudget !== undefined &&
             final.productIds.length > 0 &&
             !products.length)) &&
         !sources.length &&

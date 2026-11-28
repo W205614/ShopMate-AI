@@ -32,13 +32,23 @@ import type {
   PurchaseOrder,
 } from "../../shared/domain/operations";
 import { queryMemberSummary, type PageOptions } from "./storage";
-import { stockAvailabilityFrom, availableStockSql } from "./stock-availability";
+import {
+  stockAvailabilityFrom,
+  stockAvailabilityQuery,
+  availableStockSql,
+} from "./stock-availability";
 import { releaseSnapshot } from "./storage";
 import type {
   CustomerPaymentState,
   Refund,
 } from "../../shared/domain/production";
 import { taskQueue } from "./task-wait";
+import {
+  includesWarehouseOrder,
+  pendingStock,
+  warehouseScope,
+} from "./warehouse-stock";
+import { defaultWarehouseId } from "../../shared/domain/warehouses";
 
 const meta = (sql: DatabaseSync) =>
   sql.prepare("SELECT version,revision FROM storage_meta WHERE id=1").get() as {
@@ -112,20 +122,74 @@ function projectedProducts(
   sql: DatabaseSync,
   products: Product[],
   warehouse = false,
+  warehouseIds?: string[],
 ) {
   const db = readDatabase(sql, { pendingOnly: true });
   try {
+    const stocks = new Map<string, { stock: number; reserved: number }>();
+    if (warehouseIds) {
+      const pending = pendingStock(db);
+      for (const row of db.warehouseStocks!) {
+        if (!warehouseIds.includes(row.warehouseId)) continue;
+        const total = stocks.get(row.skuId) ?? { stock: 0, reserved: 0 };
+        total.stock += row.onHand;
+        total.reserved +=
+          row.committed + row.transferLocked + (pending.get(row.id) ?? 0);
+        stocks.set(row.skuId, total);
+      }
+    }
     return products.map((p) => ({
       ...p,
       skus: p.skus.map((s) => ({
         ...s,
-        stock: warehouse ? s.stock : availableStock(db, p.id, s.id),
-        reserved: reservedStock(db, p.id, s.id),
+        stock: warehouseIds
+          ? (stocks.get(s.id)?.stock ?? 0)
+          : warehouse
+            ? s.stock
+            : availableStock(db, p.id, s.id),
+        reserved: warehouseIds
+          ? (stocks.get(s.id)?.reserved ?? 0)
+          : reservedStock(db, p.id, s.id),
       })),
     }));
   } finally {
     releaseSnapshot(db);
   }
+}
+function projectWarehouseSale(
+  sql: DatabaseSync,
+  sale: AfterSale,
+  warehouseIds: string[],
+) {
+  const order = queryRecord<Order>(sql, "orders", sale.orderId);
+  if (!order?.allocations) return sale;
+  const allowed = new Set(
+    order.allocations
+      .filter((line) => warehouseIds.includes(line.warehouseId))
+      .map((line) => line.id),
+  );
+  const returnParcels = sale.returnParcels?.filter((parcel) =>
+    warehouseIds.includes(parcel.warehouseId),
+  );
+  const lines = sale.lines.flatMap((line) => {
+    const fulfillments =
+      line.fulfillments?.filter((entry) => allowed.has(entry.allocationId)) ??
+      [];
+    const quantity = fulfillments.reduce(
+      (sum, entry) => sum + entry.quantity,
+      0,
+    );
+    return quantity ? [{ ...line, fulfillments, quantity }] : [];
+  });
+  return {
+    ...sale,
+    returnParcels,
+    returnTracking: returnParcels?.find((parcel) => parcel.tracking)?.tracking,
+    returnCarrier: returnParcels?.find((parcel) => parcel.tracking)?.carrier,
+    returnAddress: returnParcels?.[0]?.address,
+    events: sale.events.filter((event) => event.action !== "returning"),
+    lines,
+  };
 }
 /** Related review/claim context carries eligibility only when this employee cannot read orders. */
 function orderEligibility(order: Order): Order {
@@ -294,7 +358,11 @@ function relatedRecords(
       .map((key) => queryRecord<Order>(sql, "orders", key))
       .filter(
         (o): o is Order =>
-          !!o && (role === "admin" || o.userId === session?.id),
+          !!o &&
+          (role === "admin" || o.userId === session?.id) &&
+          (role !== "admin" ||
+            warehouseScope(sql, session) === undefined ||
+            includesWarehouseOrder(o, warehouseScope(sql, session)!)),
       )
       .map((order) => {
         if (role === "user") return order;
@@ -304,7 +372,11 @@ function relatedRecords(
           )
         )
           return orderEligibility(order);
-        return projectOrderForStaff(order, session);
+        return projectOrderForStaff(
+          order,
+          session,
+          warehouseScope(sql, session),
+        );
       });
   for (const order of related.orders ?? [])
     for (const item of order.items) productIds.add(item.productId);
@@ -316,6 +388,13 @@ function relatedRecords(
         .map((key) => queryRecord<Product>(sql, "products", key))
         .filter((p): p is Product => !!p),
       role === "admin",
+      role === "admin" ? warehouseScope(sql, session) : undefined,
+    );
+  const warehouseIds =
+    role === "admin" ? warehouseScope(sql, session) : undefined;
+  if (warehouseIds && related.afterSales)
+    related.afterSales = related.afterSales.map((sale) =>
+      projectWarehouseSale(sql, sale, warehouseIds),
     );
   if (
     role === "admin" &&
@@ -334,8 +413,15 @@ function relatedRecords(
 }
 /** Warehouse rows are SKUs, so page SKUs before grouping them back into product snapshots. */
 function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
-  const where: string[] = [],
-    args: (string | number)[] = [new Date().toISOString()];
+  const scope = options.warehouseIds
+    ? options.warehouseIds.filter((id) => id === defaultWarehouseId)
+    : [defaultWarehouseId];
+  const from = stockAvailabilityQuery(true);
+  const where = ["stocks.sku_id IS NOT NULL"],
+    args: (string | number)[] = [
+      new Date().toISOString(),
+      JSON.stringify(scope),
+    ];
   if (options.search) {
     where.push(
       "instr(lower(p.key||' '||s.id||' '||p.name||' '||json_extract(s.data,'$.name')),lower(?))>0",
@@ -354,7 +440,7 @@ function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
   const predicate = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const total = (
     sql
-      .prepare(`SELECT count(*) AS total ${stockAvailabilityFrom} ${predicate}`)
+      .prepare(`SELECT count(*) AS total ${from} ${predicate}`)
       .get(...args) as { total: number }
   ).total;
   const pageSize = options.pageSize ?? 10,
@@ -366,20 +452,24 @@ function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
       : "p.position,s.id";
   const rows = sql
     .prepare(
-      `SELECT p.data AS product,s.data AS sku ${stockAvailabilityFrom} ${predicate} ORDER BY ${sort} LIMIT ? OFFSET ?`,
+      `SELECT p.data AS product,s.data AS sku,stocks.on_hand AS stock,stocks.on_hand-${availableStockSql} AS reserved ${from} ${predicate} ORDER BY ${sort} LIMIT ? OFFSET ?`,
     )
     .all(...args, pageSize, (page - 1) * pageSize) as {
     product: string;
     sku: string;
+    stock: number;
+    reserved: number;
   }[];
   const products = new Map<string, Product>();
   for (const row of rows) {
     const product = JSON.parse(row.product) as Product;
     if (!products.has(product.id))
       products.set(product.id, { ...product, skus: [] });
-    products
-      .get(product.id)!
-      .skus.push(JSON.parse(row.sku) as Product["skus"][number]);
+    products.get(product.id)!.skus.push({
+      ...JSON.parse(row.sku),
+      stock: row.stock,
+      reserved: row.reserved,
+    } as Product["skus"][number]);
   }
   return {
     items: [...products.values()] as unknown[],
@@ -390,6 +480,66 @@ function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
   };
 }
 export function registerReadRoutes(app: Express, sql: DatabaseSync) {
+  app.get("/api/admin/warehouses", (req, res) => {
+    const actor = signed(sql, req, "admin");
+    demand(actor, "warehouse");
+    const scope = warehouseScope(sql, actor);
+    const canRead = (warehouseId: string) =>
+      scope?.includes(warehouseId) ?? true;
+    const db = readDatabase(sql, { pendingOnly: true });
+    try {
+      const pending = pendingStock(db);
+      const catalog = new Map(
+        db.products.flatMap((product) =>
+          product.skus.map(
+            (sku) =>
+              [sku.id, { product: product.name, sku: sku.name }] as const,
+          ),
+        ),
+      );
+      const warehouse = z
+        .string()
+        .max(100)
+        .optional()
+        .parse(req.query.warehouse);
+      res.json({
+        warehouses: db.warehouses!.filter((record) => canRead(record.id)),
+        destinations: db.warehouses!.map(({ id, name }) => ({ id, name })),
+        stocks: db
+          .warehouseStocks!.filter(
+            (stock) =>
+              canRead(stock.warehouseId) &&
+              (!warehouse || stock.warehouseId === warehouse),
+          )
+          .map((stock) => ({
+            ...stock,
+            ...catalog.get(stock.skuId),
+            reserved: pending.get(stock.id) ?? 0,
+            available:
+              stock.onHand -
+              stock.committed -
+              stock.transferLocked -
+              (pending.get(stock.id) ?? 0),
+          })),
+        transfers: db
+          .stockTransfers!.filter(
+            (transfer) =>
+              canRead(transfer.toWarehouseId) ||
+              canRead(transfer.fromWarehouseId),
+          )
+          .map((transfer) => ({
+            ...transfer,
+            lines: transfer.lines.map((line) => ({
+              ...line,
+              ...catalog.get(line.skuId),
+            })),
+          })),
+        assignments: scope === undefined ? db.warehouseAssignments : [],
+      });
+    } finally {
+      releaseSnapshot(db);
+    }
+  });
   app.get("/api/products/:id/delivery-estimate", (req, res) => {
     const { sku, province, quantity } = z
       .object({
@@ -414,6 +564,13 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
       throw new HttpError(400, "商品金额无效");
     const db = readDatabase(sql);
     try {
+      if (
+        quantity >
+        availableStock(db, String(req.params.id), sku, undefined, {
+          region: province,
+        })
+      )
+        throw new HttpError(409, "该地区可配送库存不足，请调整数量");
       const { rule, fee } = calculateDelivery(
         db.shippingRules ?? [],
         province,
@@ -586,6 +743,7 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
       pageSize: size,
       sort: "newest",
     };
+    if (role === "admin") options.warehouseIds = warehouseScope(sql, session);
     if (role === "user" && privateCollections.has(collection))
       options.userId = session!.id;
     if (collection === "users" && role === "user") {
@@ -702,21 +860,27 @@ export function registerReadRoutes(app: Express, sql: DatabaseSync) {
     }
     if (!req.query.sort && collection === "categories") options.sort = "asc";
     if (!req.query.sort && collection === "faqs") options.sort = "position";
-    const result =
+    const inventoryView =
       collection === "products" &&
       req.query.view === "inventory" &&
-      role === "admin"
-        ? (demand(session, "warehouse"), stockPage(sql, req, options))
-        : queryPage<unknown>(sql, collection, options);
-    if (collection === "products")
+      role === "admin";
+    const result = inventoryView
+      ? (demand(session, "warehouse"), stockPage(sql, req, options))
+      : queryPage<unknown>(sql, collection, options);
+    if (collection === "products" && !inventoryView)
       result.items = projectedProducts(
         sql,
         result.items as Product[],
         role === "admin",
+        options.warehouseIds,
       );
     if (collection === "orders" && role === "admin")
       result.items = (result.items as Order[]).map((order) =>
-        projectOrderForStaff(order, session),
+        projectOrderForStaff(order, session, options.warehouseIds),
+      );
+    if (collection === "afterSales" && options.warehouseIds)
+      result.items = (result.items as AfterSale[]).map((sale) =>
+        projectWarehouseSale(sql, sale, options.warehouseIds!),
       );
     if (collection === "orders" && role === "user") {
       const paymentForOrder = sql.prepare(

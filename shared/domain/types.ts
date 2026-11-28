@@ -1,4 +1,14 @@
 import type {
+  AllocationLine,
+  OrderAllocation,
+  Parcel,
+  ReturnParcel,
+  StockTransfer,
+  Warehouse,
+  WarehouseAssignment,
+  WarehouseStock,
+} from "./warehouses";
+import type {
   ShippingRule,
   Promotion,
   PointsEntry,
@@ -90,6 +100,8 @@ export interface OrderItem {
   quantity: number;
 }
 export interface Order {
+  allocations?: OrderAllocation[];
+  parcels?: Parcel[];
   channelPayment?: import("./production").CustomerPaymentState;
   transactionMode?: "demo" | "production";
   paymentHold?: boolean;
@@ -136,8 +148,14 @@ export interface AfterSaleLine {
   orderItemId: string;
   quantity: number;
   amount: number;
+  fulfillments?: {
+    allocationId: string;
+    parcelId?: string;
+    quantity: number;
+  }[];
 }
 export interface AfterSale {
+  returnParcels?: ReturnParcel[];
   returnAddress?: string;
   channelRefund?: Pick<
     import("./production").Refund,
@@ -161,6 +179,7 @@ export interface AfterSale {
   note: string;
 }
 export interface InventoryMovement {
+  warehouseId?: string;
   id: string;
   productId: string;
   skuId: string;
@@ -172,6 +191,7 @@ export interface InventoryMovement {
   mode?: "delta" | "count";
 }
 export interface StockAdjustmentOptions {
+  warehouseId?: string;
   requestId: string;
   mode?: "delta" | "count";
   expectedStock?: number;
@@ -311,6 +331,7 @@ export interface CheckoutInput {
   couponClaimId?: string;
 }
 export interface CheckoutQuote {
+  allocations?: AllocationLine[];
   shipping?: { ruleId: string; name: string; fee: number };
   shippingFee?: number;
   promotion?: { id: string; name: string; discount: number };
@@ -341,6 +362,10 @@ export interface ReorderResult {
   skipped: string[];
 }
 export interface Database {
+  warehouses?: Warehouse[];
+  warehouseStocks?: WarehouseStock[];
+  warehouseAssignments?: WarehouseAssignment[];
+  stockTransfers?: StockTransfer[];
   shippingRules?: ShippingRule[];
   promotions?: Promotion[];
   pointsEntries?: PointsEntry[];

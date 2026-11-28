@@ -1,6 +1,6 @@
+import { currentSeed } from "./support/warehouse-fixture";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
-import { createSeed } from "../../shared/domain/seed";
 import { openDatabase, readDatabase, writeDatabase } from "../src/database";
 import { context } from "../src/repository";
 import { supportApi } from "../src/support";
@@ -43,7 +43,7 @@ const last = (conversation: unknown) =>
 beforeEach(() => {
   vi.stubEnv("AI_ENABLED", "true");
   sql = openDatabase(":memory:");
-  writeDatabase(sql, createSeed());
+  writeDatabase(sql, currentSeed());
   ensureKnowledgeSchema(sql);
 });
 afterEach(() => {

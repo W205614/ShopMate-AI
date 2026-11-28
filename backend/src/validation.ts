@@ -213,7 +213,10 @@ export const methods = {
   deleteReview: { role: "user", args: z.tuple([id]) },
   moderateReview: { role: "admin", args: z.tuple([id, z.boolean()]) },
   cancelAfterSale: { role: "user", args: z.tuple([id]) },
-  submitReturn: { role: "user", args: z.tuple([id, text(60), text(80)]) },
+  submitReturn: {
+    role: "user",
+    args: z.tuple([id, text(60), text(80), id.optional()]),
+  },
   addCart: { role: "user", args: z.tuple([id, id, integer.positive()]) },
   updateCart: {
     role: "user",
@@ -237,7 +240,7 @@ export const methods = {
   },
   payOrder: { role: "user", args: z.tuple([id]) },
   cancelOrder: { role: "user", args: z.tuple([id]) },
-  confirmOrder: { role: "user", args: z.tuple([id]) },
+  confirmOrder: { role: "user", args: z.tuple([id, id.optional()]) },
   requestAfterSale: {
     role: "user",
     args: z.tuple([
@@ -295,6 +298,7 @@ export const methods = {
       z
         .object({
           requestId: id,
+          warehouseId: id.optional(),
           mode: z.enum(["delta", "count"]).optional(),
           expectedStock: integer.nonnegative().optional(),
         })
@@ -303,12 +307,104 @@ export const methods = {
     ]),
   },
   shipOrder: { role: "admin", args: z.tuple([id, text(60), text(80)]) },
+  shipParcel: {
+    role: "admin",
+    args: z.tuple([
+      id,
+      z.strictObject({
+        warehouseId: id,
+        carrier: text(60),
+        tracking: text(80),
+        lines: z
+          .array(
+            z.strictObject({ allocationId: id, quantity: integer.positive() }),
+          )
+          .min(1)
+          .max(100),
+      }),
+    ]),
+  },
+  reassignWarehouse: {
+    role: "admin",
+    args: z.tuple([id, id, id, integer.positive()]),
+  },
+  saveWarehouse: {
+    role: "admin",
+    args: z.tuple([
+      z.strictObject({
+        id: id.optional(),
+        version: integer.positive().optional(),
+        name: text(60),
+        priority: integer.nonnegative(),
+        provinces: z.array(text(30)).max(40),
+        acceptsOrders: z.boolean(),
+        returnAddress: text(300).optional(),
+      }),
+    ]),
+  },
+  assignWarehouses: { role: "admin", args: z.tuple([id, z.array(id).max(50)]) },
+  createStockTransfer: {
+    role: "admin",
+    args: z.tuple([
+      id,
+      id,
+      z
+        .array(
+          z.strictObject({
+            productId: id,
+            skuId: id,
+            quantity: integer.positive(),
+          }),
+        )
+        .min(1)
+        .max(100),
+    ]),
+  },
+  dispatchStockTransfer: {
+    role: "admin",
+    args: z.tuple([id, integer.positive()]),
+  },
+  cancelStockTransfer: {
+    role: "admin",
+    args: z.tuple([id, integer.positive()]),
+  },
+  receiveStockTransfer: {
+    role: "admin",
+    args: z.tuple([
+      id,
+      integer.positive(),
+      z
+        .array(
+          z.strictObject({
+            skuId: id,
+            quantity: integer.nonnegative(),
+            discrepancy: integer.nonnegative().optional(),
+          }),
+        )
+        .min(1)
+        .max(100),
+      text(300).optional(),
+    ]),
+  },
+  returnStockTransfer: {
+    role: "admin",
+    args: z.tuple([
+      id,
+      integer.positive(),
+      z
+        .array(z.strictObject({ skuId: id, quantity: integer.positive() }))
+        .min(1)
+        .max(100),
+      text(300),
+    ]),
+  },
   processAfterSale: {
     role: "admin",
     args: z.tuple([
       id,
       z.enum(["approve", "reject", "receive", "refund"]),
       z.string().max(500).optional(),
+      id.optional(),
     ]),
   },
   replyConversation: {
@@ -390,6 +486,7 @@ export const methods = {
       z
         .object({
           supplierId: id,
+          warehouseId: id.optional(),
           lines: z
             .array(
               z

@@ -262,7 +262,11 @@ test("跨标签管理员切换清空私有草稿并取消旧身份关闭确认",
   page,
   context,
 }) => {
-  const sql = new DatabaseSync(resolve("../backend/.e2e/shopmate.sqlite"));
+  const sql = new DatabaseSync(
+    resolve(
+      process.env.PLAYWRIGHT_DATABASE_PATH || "../backend/.e2e/shopmate.sqlite",
+    ),
+  );
   try {
     sql
       .prepare(
@@ -343,7 +347,11 @@ test("旧回复跨管理员及页面返回后不能清除新实例草稿", async
   context,
 }) => {
   test.setTimeout(60000);
-  const sql = new DatabaseSync(resolve("../backend/.e2e/shopmate.sqlite"));
+  const sql = new DatabaseSync(
+    resolve(
+      process.env.PLAYWRIGHT_DATABASE_PATH || "../backend/.e2e/shopmate.sqlite",
+    ),
+  );
   try {
     sql
       .prepare(

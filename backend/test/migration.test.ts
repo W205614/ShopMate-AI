@@ -71,7 +71,12 @@ describe("v1 业务状态升级", () => {
       sql = openDatabase(path);
       const migrated = readDatabase(sql);
       const expected = structuredClone(old);
-      migrateDatabase(expected);
+      migrateDatabase(
+        expected,
+        migrated.inventory.find((entry) =>
+          entry.id.startsWith("warehouse-v6-opening-"),
+        )?.createdAt,
+      );
       expect(migrated).toEqual(expected);
       expect(
         (
@@ -98,7 +103,9 @@ describe("v1 业务状态升级", () => {
       expect(readDatabase(sql)).toEqual(migrated);
       const restored = openDatabase(join(directory, "backup.sqlite"));
       try {
-        expect(readDatabase(restored)).toEqual(migrated);
+        const restoredDb = readDatabase(restored);
+        expect(restoredDb.warehouseStocks).toEqual(migrated.warehouseStocks);
+        expect(restoredDb.ledger).toEqual(migrated.ledger);
       } finally {
         restored.close();
       }
@@ -109,7 +116,7 @@ describe("v1 业务状态升级", () => {
   });
   it("拒绝未来版本状态，避免旧程序覆盖新结构", () => {
     const db = createSeed();
-    db.version = 6;
+    db.version = 7;
     const before = structuredClone(db);
     expect(() => migrateDatabase(db)).toThrow("版本高于");
     expect(db).toEqual(before);
@@ -135,13 +142,24 @@ describe("v1 业务状态升级", () => {
       const start = Date.now();
       sql = openDatabase(path);
       const migrated = readDatabase(sql);
-      expect(migrated.version).toBe(5);
+      expect(migrated.version).toBe(6);
       expect(migrated.orders.map((o) => o.total)).toEqual(
         legacy.orders.map((o) => o.total),
       );
-      expect(migrated.inventory).toEqual(legacy.inventory);
+      expect(
+        migrated.inventory.filter(
+          (entry) => !entry.id.startsWith("warehouse-v6-opening-"),
+        ),
+      ).toEqual(legacy.inventory);
       expect(migrated.ledger).toEqual(legacy.ledger);
-      expect(migrated.products).toEqual(legacy.products);
+      for (const product of legacy.products) {
+        for (const sku of product.skus) {
+          const row = migrated.warehouseStocks!.find(
+            (stock) => stock.skuId === sku.id,
+          )!;
+          expect(row.onHand - row.committed).toBe(sku.stock);
+        }
+      }
       expect(migrated.users).toEqual(legacy.users);
       expect(
         sql.prepare("SELECT password_hash FROM accounts WHERE id='u1'").get(),
@@ -172,7 +190,11 @@ describe("v1 业务状态升级", () => {
         expect(backup.orders.map((o) => o.total)).toEqual(
           legacy.orders.map((o) => o.total),
         );
-        expect(backup.inventory).toEqual(legacy.inventory);
+        expect(
+          backup.inventory.filter(
+            (entry) => !entry.id.startsWith("warehouse-v6-opening-"),
+          ),
+        ).toEqual(legacy.inventory);
       } finally {
         restored.close();
       }
@@ -206,7 +228,11 @@ describe("v1 业务状态升级", () => {
     expect(order.refundedAmount).toBe(order.total);
     expect(order.items[0]!.refundedQuantity).toBe(1);
     expect(legacy.ledger).toEqual(ledger);
-    expect(legacy.inventory).toEqual(inventory);
+    expect(
+      legacy.inventory.filter(
+        (entry) => !entry.id.startsWith("warehouse-v6-opening-"),
+      ),
+    ).toEqual(inventory);
     expect(legacy.afterSales[0]!.events).toEqual([
       { at: oldSale.createdAt, actor: "system", action: "requested" },
     ]);

@@ -5,6 +5,8 @@ import {
   transaction,
 } from "../src/database";
 import { createAccount } from "../src/auth";
+import { defaultWarehouseId } from "../../shared/domain/warehouses";
+import { stockRow } from "../src/warehouse-stock";
 if (
   process.env.SHOPMATE_ENV !== "acceptance" ||
   process.env.LOAD_TEST_ALLOWED !== "1"
@@ -29,6 +31,7 @@ transaction(sql, () => {
     at = "2026-01-01T00:00:00.000Z";
   const before = sku.stock;
   sku.stock = 1_000_000;
+  stockRow(db, defaultWarehouseId, product.id, sku.id).onHand = sku.stock;
   db.inventory.unshift({
     id: "load-initial-adjustment",
     productId: product.id,

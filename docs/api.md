@@ -41,6 +41,8 @@
 
 现有商城命令使用 `POST /api/actions/:method`，正文 `{args,requestId}`，允许的方法与输入校验在 `backend/src/validation.ts`、`app.ts`，共享方法签名在 `shared/domain/api.ts`。涵盖报价下单、购物车、地址、收货售后、商品、库存、营销、采购与员工等领域。生产禁用演示付款、演示退款和演示数据初始化；真实资金调用下表专用支付接口。
 
+`GET /api/admin/warehouses` 返回仓库员工有权限使用的仓库、库存和关联调拨单。分仓发货使用 `shipParcel`，对未发货数量改派使用 `reassignWarehouse`。顾客用 `confirmOrder` 指定包裹确认收货。调拨命令在出库、收货、退回和撤销时校验单据版本及操作仓权限。工作台说明见[多仓库存与履约](warehouses.md)。
+
 | 接口组                                                                                   | 用途与权限                                             |
 | ---------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | `POST /api/payments`；`GET /api/payments/:id`；`POST /api/payments/:id/refresh`、`close` | 本人创建、查询、刷新或关闭支付；金额及归属由服务端决定 |

@@ -6,6 +6,7 @@ export function stockAvailabilityQuery(scoped = false) {
   LEFT JOIN (
     SELECT json_extract(w.data,'$.skuId') AS sku_id,
       sum(json_extract(w.data,'$.onHand')) AS on_hand,
+      sum(coalesce(r.reserved,0)) AS reserved,
       sum(json_extract(w.data,'$.onHand') - json_extract(w.data,'$.committed')
         - json_extract(w.data,'$.transferLocked') - coalesce(r.reserved,0)) AS available
     FROM biz_warehouse_stocks w

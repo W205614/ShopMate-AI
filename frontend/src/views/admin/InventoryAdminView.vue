@@ -72,14 +72,20 @@ const form = reactive({
 });
 const stockRows = computed(() =>
   shop.db.products.flatMap((p) =>
-    p.skus.map((s) => ({
-      ...s,
-      reserved: (s as SKU & { reserved?: number }).reserved ?? 0,
-      available: s.stock - ((s as SKU & { reserved?: number }).reserved ?? 0),
-      productId: p.id,
-      product: p.name,
-      image: p.images[0],
-    })),
+    p.skus.map((sku) => {
+      const s = sku as SKU & { reserved?: number; available?: number };
+      const reserved = s.reserved ?? 0;
+      const available = s.available ?? s.stock - reserved;
+      return {
+        ...s,
+        reserved,
+        available,
+        locked: s.stock - reserved - available,
+        productId: p.id,
+        product: p.name,
+        image: p.images[0],
+      };
+    }),
   ),
 );
 const match = (...values: string[]) =>
@@ -362,6 +368,11 @@ async function save() {
           ><el-tag :type="row.available <= 5 ? 'danger' : 'info'" effect="plain"
             >{{ row.available }} 件</el-tag
           ></template
+        ></el-table-column
+      >
+      <el-table-column label="待发及调拨锁定" width="136"
+        ><template #default="{ row }"
+          >{{ row.locked }} 件</template
         ></el-table-column
       >
       <el-table-column label="操作" width="150"

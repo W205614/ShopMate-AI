@@ -126,15 +126,24 @@ function projectedProducts(
 ) {
   const db = readDatabase(sql, { pendingOnly: true });
   try {
-    const stocks = new Map<string, { stock: number; reserved: number }>();
+    const stocks = new Map<
+      string,
+      { stock: number; reserved: number; available: number }
+    >();
     if (warehouseIds) {
       const pending = pendingStock(db);
       for (const row of db.warehouseStocks!) {
         if (!warehouseIds.includes(row.warehouseId)) continue;
-        const total = stocks.get(row.skuId) ?? { stock: 0, reserved: 0 };
+        const total = stocks.get(row.skuId) ?? {
+          stock: 0,
+          reserved: 0,
+          available: 0,
+        };
+        const reserved = pending.get(row.id) ?? 0;
         total.stock += row.onHand;
-        total.reserved +=
-          row.committed + row.transferLocked + (pending.get(row.id) ?? 0);
+        total.reserved += reserved;
+        total.available +=
+          row.onHand - row.committed - row.transferLocked - reserved;
         stocks.set(row.skuId, total);
       }
     }
@@ -150,6 +159,9 @@ function projectedProducts(
         reserved: warehouseIds
           ? (stocks.get(s.id)?.reserved ?? 0)
           : reservedStock(db, p.id, s.id),
+        ...(warehouseIds
+          ? { available: stocks.get(s.id)?.available ?? 0 }
+          : {}),
       })),
     }));
   } finally {
@@ -452,13 +464,14 @@ function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
       : "p.position,s.id";
   const rows = sql
     .prepare(
-      `SELECT p.data AS product,s.data AS sku,stocks.on_hand AS stock,stocks.on_hand-${availableStockSql} AS reserved ${from} ${predicate} ORDER BY ${sort} LIMIT ? OFFSET ?`,
+      `SELECT p.data AS product,s.data AS sku,stocks.on_hand AS stock,stocks.reserved,${availableStockSql} AS available ${from} ${predicate} ORDER BY ${sort} LIMIT ? OFFSET ?`,
     )
     .all(...args, pageSize, (page - 1) * pageSize) as {
     product: string;
     sku: string;
     stock: number;
     reserved: number;
+    available: number;
   }[];
   const products = new Map<string, Product>();
   for (const row of rows) {
@@ -469,6 +482,7 @@ function stockPage(sql: DatabaseSync, req: Request, options: PageOptions) {
       ...JSON.parse(row.sku),
       stock: row.stock,
       reserved: row.reserved,
+      available: row.available,
     } as Product["skus"][number]);
   }
   return {

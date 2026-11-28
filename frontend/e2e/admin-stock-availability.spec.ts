@@ -63,7 +63,8 @@ test("库存区分实物、待付款预占和可售，低库存预警及盘点�
   ).toBeVisible();
   await expect(row.locator("td").nth(2)).toContainText("10 件");
   await expect(row.locator("td").nth(3)).toContainText("8 件");
-  await expect(row.locator("td").nth(4)).toContainText("2 件");
+  await expect(row.locator("td").nth(4)).toContainText("1 件");
+  await expect(row.locator("td").nth(5)).toContainText("1 件");
   await row.getByRole("button", { name: "补货 / 调整" }).click();
   const dialog = page.getByRole("dialog", { name: "调整库存", exact: true });
   await dialog.getByText("盘点实际库存", { exact: true }).click();
@@ -79,7 +80,7 @@ test("库存区分实物、待付款预占和可售，低库存预警及盘点�
   await dialog.getByRole("button", { name: "确认调整", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(row.locator("td").nth(2)).toContainText("12 件");
-  await expect(row.locator("td").nth(4)).toContainText("4 件");
+  await expect(row.locator("td").nth(4)).toContainText("3 件");
   await page.goto("/admin");
   const warning = page.locator("section").filter({
     has: page.getByRole("heading", { name: "低库存提醒", exact: true }),
@@ -91,5 +92,6 @@ test("库存区分实物、待付款预占和可售，低库存预警及盘点�
   await page.goto("/admin/inventory?q=p05-s1");
   await expect(row.locator("td").nth(2)).toContainText("12 件");
   await expect(row.locator("td").nth(3)).toContainText("0 件");
-  await expect(row.locator("td").nth(4)).toContainText("12 件");
+  await expect(row.locator("td").nth(4)).toContainText("11 件");
+  await expect(row.locator("td").nth(5)).toContainText("1 件");
 });

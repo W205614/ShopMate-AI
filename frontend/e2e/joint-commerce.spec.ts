@@ -506,7 +506,7 @@ test("双独立身份真实界面完成用券购买、故障恢复、分批退�
         .filter((m) => m.skuId === product.skus[0]!.id)
         .map((m) => m.delta)
         .sort((a, b) => a - b),
-    ).toEqual([-3, 1, 7]);
+    ).toEqual([-2, 7]);
     const privateUser = await read(user, "user");
     for (const records of [
       privateUser.ledger,

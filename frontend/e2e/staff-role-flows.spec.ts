@@ -146,7 +146,7 @@ for (const role of ["support", "warehouse", "finance"] as const) {
         await dialog.getByRole("textbox").nth(0).fill("角色模拟物流");
         await dialog.getByRole("textbox").nth(1).fill(`ROLES-${suffix}`);
         const shipped = staff.waitForResponse((r) =>
-          r.url().endsWith("/api/actions/shipOrder"),
+          r.url().endsWith("/api/actions/shipParcel"),
         );
         await dialog
           .getByRole("button", { name: "确认模拟发货", exact: true })

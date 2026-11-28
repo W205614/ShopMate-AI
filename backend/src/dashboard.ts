@@ -99,7 +99,7 @@ export function dashboard(sql: DatabaseSync, session: Session) {
       ? (
           sql
             .prepare(
-              `SELECT s.id,s.product_id,s.stock,s.data,s.stock-${availableStockSql} AS reserved,${availableStockSql} AS available ${stockAvailabilityFrom} WHERE ${availableStockSql}<=5 ORDER BY ${availableStockSql},s.id LIMIT 100`,
+              `SELECT s.id,s.product_id,s.stock,s.data,coalesce(stocks.reserved,0) AS reserved,${availableStockSql} AS available ${stockAvailabilityFrom} WHERE ${availableStockSql}<=5 ORDER BY ${availableStockSql},s.id LIMIT 100`,
             )
             .all(new Date().toISOString()) as {
             id: string;
@@ -177,8 +177,7 @@ function scopedWarehouseStock(sql: DatabaseSync, warehouseIds: string[]) {
           (entry) => entry.id === row.productId,
         )!;
         const sku = product.skus.find((entry) => entry.id === row.skuId)!;
-        const reserved =
-          row.committed + row.transferLocked + (pending.get(row.id) ?? 0);
+        const reserved = pending.get(row.id) ?? 0;
         return {
           productId: product.id,
           name: product.name,
@@ -186,7 +185,7 @@ function scopedWarehouseStock(sql: DatabaseSync, warehouseIds: string[]) {
           skuName: sku.name,
           stock: row.onHand,
           reserved,
-          available: row.onHand - reserved,
+          available: row.onHand - row.committed - row.transferLocked - reserved,
         };
       })
       .filter((row) => row.available <= 5)

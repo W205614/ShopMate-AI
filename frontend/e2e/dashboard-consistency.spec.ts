@@ -6,6 +6,7 @@ import {
   writeDatabase,
 } from "../../backend/src/database";
 import { resolve } from "node:path";
+import { setStock } from "../../backend/test/support/warehouse-fixture";
 import type { Database } from "../../shared/domain/types";
 import {
   test,
@@ -112,9 +113,12 @@ test("手机顾客按可买规格筛选并试算配送", async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 390, height: 844 });
   fixture((db) => {
-    const [cheap, available] = db.products[0]!.skus;
-    Object.assign(cheap!, { price: 8_900, stock: 0 });
-    Object.assign(available!, { price: 11_900, stock: 8 });
+    const product = db.products[0]!;
+    const [cheap, available] = product.skus;
+    cheap!.price = 8_900;
+    available!.price = 11_900;
+    setStock(db, product.id, cheap!.id, 0);
+    setStock(db, product.id, available!.id, 8);
     db.addresses.push({
       ...db.addresses.find((address) => address.userId === "u1")!,
       id: "legacy-zhejiang-address",
@@ -226,7 +230,8 @@ test("待办和低库存跳转携带对应条件，最近订单可精确定位�
   const chat = await action(page, "createConversation", {});
   await action(page, "transferConversation", chat);
   fixture((db) => {
-    db.products[0]!.skus[0]!.stock = 0;
+    const product = db.products[0]!;
+    setStock(db, product.id, product.skus[0]!.id, 0);
     db.conversations.find((item) => item.id === chat)!.waitingSince = new Date(
       Date.now() - 31 * 60_000,
     ).toISOString();

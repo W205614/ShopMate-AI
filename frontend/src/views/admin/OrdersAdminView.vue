@@ -542,6 +542,21 @@ async function submitReassignment() {
         {{ parcel.tracking }} · {{ parcel.receivedAt ? "已收货" : "已发货" }}
       </p>
     </section>
+    <section
+      v-else-if="
+        selected?.parcels?.length &&
+        shop.adminSession?.permissions?.includes('finance')
+      "
+      class="admin-panel"
+    >
+      <h3>履约明细</h3>
+      <p v-for="(parcel, index) in selected.parcels" :key="parcel.id">
+        包裹 {{ index + 1 }} ·
+        {{ parcel.lines.reduce((sum, line) => sum + line.quantity, 0) }} 件 ·
+        {{ dateTime(parcel.shippedAt) }} ·
+        {{ parcel.receivedAt ? "已收货" : "已发货" }}
+      </p>
+    </section>
     <template #footer
       ><el-button :disabled="pending" @click="detail = false">关闭</el-button
       ><el-button

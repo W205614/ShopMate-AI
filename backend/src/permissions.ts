@@ -66,6 +66,18 @@ export function projectOrderForStaff(
     parcels: _parcels,
     ...transaction
   } = order;
+  if (permits(session, "finance") && order.parcels?.length)
+    return {
+      ...transaction,
+      parcels: order.parcels.map((parcel) => ({
+        ...parcel,
+        carrier: "",
+        tracking: "",
+      })),
+      events: order.events.map(({ note, ...event }) =>
+        event.action === "shipped" ? event : { ...event, note },
+      ),
+    };
   return transaction;
 }
 export function demand(session: Session | null, permission: string) {

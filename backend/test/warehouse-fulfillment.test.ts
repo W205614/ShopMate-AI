@@ -59,6 +59,7 @@ beforeEach(async () => {
     ["buyer", "user"],
     ["owner", "admin"],
     ["east-staff", "admin"],
+    ["finance", "admin"],
   ]) {
     sql
       .prepare(
@@ -73,7 +74,7 @@ beforeEach(async () => {
   }
   sql
     .prepare(
-      "INSERT INTO staff_access VALUES('owner','owner',1),('east-staff','warehouse',1)",
+      "INSERT INTO staff_access VALUES('owner','owner',1),('east-staff','warehouse',1),('finance','finance',1)",
     )
     .run();
   server = app.listen(0, "127.0.0.1");
@@ -220,6 +221,18 @@ it("scopes stock and shipments, settles split-order refunds and reconciles physi
     ),
   ).toEqual(parcel);
   expect(getOrder().parcels).toHaveLength(1);
+  const financePage = await get(
+    `/api/collections/orders?role=admin&id=${orderId}`,
+    "finance",
+  );
+  const financeOrder = (await financePage.json()).items[0] as Partial<Order>;
+  expect(financeOrder.address).toBeUndefined();
+  expect(financeOrder.parcels?.[0]).toMatchObject({
+    id: parcel.id,
+    carrier: "",
+    tracking: "",
+  });
+  expect(JSON.stringify(financeOrder.events)).not.toContain("SPLIT-DEFAULT-1");
 
   await action(
     "requestAfterSale",

@@ -109,7 +109,7 @@ docker compose --env-file .env.production -f deploy/compose.production.yaml --pr
 
 ## 开发验证入口
 
-HTTPS 入口使用[依赖更新版 Caddy 构建与原始扫描](security/production-edge-security.md)，先构建本地 edge 镜像，再运行上述命令或维护发布脚本。该修复属于当前源码，已发布的 v0.1.4 不含此入口；API/Web 的已验证镜像可继续使用原版本。API、Web、edge 均对所有严重级别执行原始扫描门禁，不使用 VEX 或忽略规则获得通过。
+为 v0.2.0 配置 HTTPS 时，先用对应源码构建本地 edge 镜像，再运行上述命令或维护发布脚本。API 和 Web 使用[同版本镜像](releases/release-v0.2.0.md#镜像与对应源码)。发布 CI 对 API、Web 和 edge 执行全严重级别原始扫描，入口构建及依赖修复见 [HTTPS 入口安全说明](security/production-edge-security.md)。
 
 账号、支付、回调、存储等确定性 HTTP／协议验证进入现有后端测试；`deploy/compose.external-acceptance.yaml` 用独立的 18125/18126/18127 端口提供 Mailpit SMTP、邮件 API 和 Adobe S3Mock。后端设置 `MAILPIT_SMTP_PORT=18125`、`MAILPIT_API_URL=http://127.0.0.1:18126`、`S3MOCK_ENDPOINT=http://127.0.0.1:18127` 后运行本地服务测试。未提供这些变量时相关用例会跳过；完成适配器验收需启动上述服务并补跑。
 

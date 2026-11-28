@@ -1,6 +1,6 @@
 # HTTP 接口总览
 
-本文按调用方整理接口入口。准确输入、返回值及状态取 `shared/domain/`、服务端路由与对应测试为准；前端调用见 `frontend/src/services/`。[认证](authentication.md)、[经营规则](commerce-v4.md)、[AI 接入](ai-support.md)和[供应商指南](integrations.md)包含专项说明。
+本文按调用方整理接口入口。准确输入、返回值及状态以 `shared/domain/`、服务端路由与对应测试为准，前端调用见 `frontend/src/services/`。专项说明见[认证](authentication.md)、[多仓库存与履约](warehouses.md)、[AI 接入](ai-support.md)和[供应商指南](integrations.md)。
 
 ## 通用约定
 

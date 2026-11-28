@@ -2,7 +2,7 @@
 
 验证日期：2026-10-17（Asia/Shanghai）。本次将纯前端测试身份改为真实服务端账号与会话；支付、物流、退款和客服仍是业务模拟。
 
-本页保留认证首版的实现及验证记录，后续已增加昵称维护、用户改密与员工权限。当前操作说明见 [开发与运维](development.md#账号维护)，当前权限与业务规则见 [业务接口](commerce-v4.md)，近期验证见 [角色验收](acceptance/role-acceptance-20261020.md)；早期演进见 [传统电商归档](archive/traditional-commerce.md)。
+本页保留认证首版的实现及验证记录，后续增加了昵称维护、用户改密与员工权限。现行操作见[账号维护](development.md#账号维护)，接口权限及仓储范围见 [API 说明](api.md)和[多仓库存与履约](warehouses.md)。早期验证见[角色验收](acceptance/role-acceptance-20261020.md)和[传统电商归档](archive/traditional-commerce.md)。
 
 ## 实现范围
 

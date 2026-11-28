@@ -23,7 +23,7 @@ git clone https://github.com/W205614/ShopMate-AI.git
 cd ShopMate-AI
 ```
 
-以下命令使用 v0.2.0 的公开 API 和 Web 镜像。镜像摘要和对应源码见 [v0.2.0 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.2.0)。如需查看匹配的源码，执行 `git switch --detach v0.2.0`。已有环境升级前请保留原配置和业务卷，并按[生产指南](docs/production.md)准备可验证的恢复资料。
+以下命令使用 v0.2.0 的公开 API 和 Web 镜像。固定部署可使用[镜像摘要](docs/releases/release-v0.2.0.md#镜像与对应源码)，对应源码附件见 [v0.2.0 Release](https://github.com/W205614/ShopMate-AI/releases/tag/v0.2.0)。如需查看匹配的源码，执行 `git switch --detach v0.2.0`。已有环境升级前请保留原配置和业务卷，并按[生产指南](docs/production.md)准备可验证的恢复资料。
 
 在项目根目录复制配置模板。Windows PowerShell：
 
@@ -96,7 +96,7 @@ docker compose up -d --build --wait
 
 本地协议与功能验证已完成，真实平台接入按[验收清单](docs/integrations.md#本地验证与实网验收)进行。后台“接入状态”展示配置和运行数据。首次运行使用下面的演示流程；生产环境使用独立 `.env.production` 和生产 Compose，本机备份配置单独保留。
 
-Caddy 入口的依赖修复、构建与全部严重级别扫描见[HTTPS 入口安全说明](docs/security/production-edge-security.md)。当前源码提供修复构建入口；已发布 v0.1.4 的历史镜像与说明仍保留原版本边界。
+v0.2.0 源码提供生产用 Caddy 的构建入口。依赖修复、构建与镜像扫描见 [HTTPS 入口安全说明](docs/security/production-edge-security.md)。
 
 微信 H5 支付链接遵循官方五分钟有效期；到期后先查单，再按原支付单号恢复链接，跳转前重新确认状态，详见[H5 链接刷新与限制](docs/integrations.md#h5-支付链接刷新)。
 

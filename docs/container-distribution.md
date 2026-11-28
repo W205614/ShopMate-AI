@@ -1,6 +1,6 @@
 # 容器分发与第三方源码
 
-API 和 Web 镜像适用于 Linux/amd64，分别发布到 `ghcr.io/w205614/shopmate-ai-api` 和 `ghcr.io/w205614/shopmate-ai-web`。版本使用不可覆盖的 `vX.Y.Z` 标签；部署时可进一步固定为 Release 中记录的摘要。不发布 npm 包，也不重新分发 Caddy。
+API 和 Web 镜像适用于 Linux/amd64，分别发布到 `ghcr.io/w205614/shopmate-ai-api` 和 `ghcr.io/w205614/shopmate-ai-web`。版本使用不可覆盖的 `vX.Y.Z` 标签，部署时可固定到 [v0.2.0 的 Registry 摘要](releases/release-v0.2.0.md#镜像与对应源码)。本项目发布 API 和 Web 容器包，生产 Caddy 入口从源码构建。
 
 ## 获取和启动
 

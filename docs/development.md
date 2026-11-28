@@ -119,7 +119,7 @@ npm --prefix frontend run test:e2e
 
 本地范围包含未暂存和未忽略的新文件，并显式包含已存在的本机 `compose.override.yaml`。CI 使用 `--tracked`，只验证版本库中的文件。历史报告、测试样例、运行数据、第三方素材文件和凭据不参与格式化，排除项见[格式排除清单](../.prettierignore)。
 
-完整依赖审计使用 `npm --prefix backend audit` 和 `npm --prefix frontend audit`，包含开发依赖。当前 CI 对所有严重级别设门禁，并对实际 API/Web 镜像执行全严重级别扫描；免费的 CodeQL `security-and-quality` 覆盖 JavaScript/TypeScript、Python 和 Actions。实际修复、误报处置及仅引用上游镜像的边界见[v0.1.4 维护记录](releases/release-v0.1.4.md)。
+完整依赖审计使用 `npm --prefix backend audit` 和 `npm --prefix frontend audit`，包含开发依赖。当前 CI 对所有严重级别设门禁，并对实际 API、Web 和生产 HTTPS 入口镜像执行全严重级别扫描。CodeQL `security-and-quality` 覆盖 JavaScript/TypeScript、Python 和 Actions。生产入口的依赖修复见 [HTTPS 入口安全说明](security/production-edge-security.md)。
 
 容器系统包和 Node.js 内置组件不属于项目 npm 锁文件的审计范围。更新 Dockerfile 中的官方基础镜像摘要后，应重新构建并扫描实际镜像；运行时安全公告还需核对对应 Node.js 补丁版本，不能只比较其内置库显示的版本号，因为安全修复可能回移植而不改库版本号。
 
@@ -141,7 +141,7 @@ CI 使用 Trivy 扫描 API/Web 镜像中的系统包和应用库，所有等级�
 
 Compose 项目名为 `shopmate-ai`，SQLite 文件位于 API 容器 `/app/data/shopmate.sqlite`，挂载卷为 `shopmate-ai_api_data`。不要执行 `docker compose down -v`。备份应使用 SQLite 在线备份机制，或停服后备份完整数据；不能只复制运行中的主文件而忽略 WAL。
 
-当前业务状态版本为 v5，存储版本为 1，启动时自动迁移。v4→v5 不重放历史库存和金额，旧版程序不能直接读取 v5 库；降级须使用匹配的升级前恢复集并核对外部渠道资金。升级前保留一致数据库备份和旧镜像；维护停机、备份及恢复命令见 [可靠性与运维](reliability.md)。业务存储已拆为分领域记录表及 SKU／订单行关系表，历史快照保留 JSON 字段，旧 `state` 只读保留为迁移证据。当前仍为单实例，尚未实现多实例扩展。
+当前业务版本为 6，存储版本为 1，启动时自动迁移。5→6 的库存转换见[多仓库存与履约](warehouses.md)，升级及回退使用匹配的镜像与一致恢复集。维护停机、备份和恢复命令见 [可靠性与运维](reliability.md)。业务存储分为领域记录表及 SKU、订单行关系表，历史快照保留 JSON 字段，旧 `state` 只读保留为迁移证据。运行架构为单 API、SQLite 单写入节点。
 
 网页“恢复演示数据”默认关闭，不用于日常排查。需要恢复数据时执行停写、备份、离线恢复与核验流程，不能删除数据卷重来。
 
